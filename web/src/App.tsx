@@ -1,6 +1,7 @@
 import { useStore, type Tab } from "./bus";
 import { Canvas } from "./components/Canvas";
 import { CopilotHandleProvider, CopilotRail } from "./copilot";
+import { RailResizer, useRailWidth } from "./components/RailResizer";
 
 const tabs: readonly { id: Tab; label: string; enabled: boolean }[] = [
   { id: "portfolio", label: "Portfolio", enabled: false },
@@ -12,6 +13,7 @@ const tabs: readonly { id: Tab; label: string; enabled: boolean }[] = [
 export function App() {
   const { state, store } = useStore();
   const active = state.selection.tab;
+  const [railWidth, setRailWidth] = useRailWidth();
   return (
     <div className="app">
       <header className="topbar">
@@ -36,8 +38,9 @@ export function App() {
         <div className="selector">Site: {state.plan?.meta?.siteName ?? "—"}</div>
       </header>
       <CopilotHandleProvider>
-        <div className="bodyrow">
+        <div className="bodyrow" style={{ "--rail-width": `${railWidth}px` } as React.CSSProperties}>
           <CopilotRail />
+          <RailResizer width={railWidth} onResize={setRailWidth} />
           <Canvas />
         </div>
       </CopilotHandleProvider>
