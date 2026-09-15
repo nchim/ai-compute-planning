@@ -1,0 +1,17 @@
+# What `gcloud run deploy --source .` uploads. Keep it to the Docker build inputs (deploy/Dockerfile):
+# Go sources, web/, docs/, research/*.md, fixtures/. Note research/**/*.md and docs/agent-system-prompt.md
+# are bundled into the SPA, so only research's binary sources are excluded.
+.git
+.gitignore
+.gcloudignore
+.github
+.claude
+design
+harness
+research/sources
+node_modules
+**/node_modules
+web/dist
+web/public/engine.wasm
+web/public/wasm_exec.js
+**/.DS_Store
