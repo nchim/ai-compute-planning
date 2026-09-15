@@ -15,6 +15,7 @@ const (
 	codeFloorLoadInsufficient = "FLOOR_LOAD_INSUFFICIENT"
 	codePhaseBeforePower      = "PHASE_BEFORE_POWER"
 	codePowerUndersupply      = "POWER_UNDERSUPPLY"
+	codeSourceOverloaded      = "SOURCE_OVERLOADED"
 	codeFootprintOverParcel   = "FOOTPRINT_OVER_PARCEL"
 	codeUseOptimize           = "USE_OPTIMIZE"
 	codePhasesNeTarget        = "PHASES_NE_TARGET"

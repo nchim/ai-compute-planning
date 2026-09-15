@@ -51,6 +51,10 @@ func TestValidateDiagnosticsPerCode(t *testing.T) {
 			p.Phasing.Phases[1].PowerSourceId = "" // pooled: gas 130 MW < 240 MW cumulative at m30? grid adds 260 → fine; move earlier
 			p.Phasing.Phases[1].EnergizeMonth = 20
 		}, codePowerUndersupply, "phasing.phases[1].energize_month"},
+		{"source overloaded", func(p *pb.SitePlan) {
+			*p = *explicitTwoPhase(p)
+			p.Phasing.Phases[1].PowerSourceId = "gas" // 240 MW facility on a 130 MW source; pooled supply is fine
+		}, codeSourceOverloaded, "phasing.phases[1].power_source_id"},
 		{"phase energize before start", func(p *pb.SitePlan) {
 			*p = *explicitTwoPhase(p)
 			p.Phasing.Phases[1].StartMonth = 40

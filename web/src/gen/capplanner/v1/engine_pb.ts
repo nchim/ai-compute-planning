@@ -502,7 +502,8 @@ export type PhasingPolicy = Message<"capplanner.v1.PhasingPolicy"> & {
   minMonthsBetweenPhases: number;
 
   /**
-   * never be short of demand by more than this
+   * Applied to the hold-average shortfall: shortfall_mw_months / hold_period_months ≤ this. An
+   * instantaneous cap is unsatisfiable when demand precedes the earliest power source.
    *
    * @generated from field: double max_shortfall_mw = 5;
    */
