@@ -1,9 +1,16 @@
 # Agent System Prompt (source of truth)
 
-**Status:** v0.1 — 2026-09-15. The Copilot's system prompt. It is the **stable, cached prefix**
-(placed before the `cache_control` breakpoint). Volatile context — the current **ViewContext** (active
-tab, selected site, current `SitePlan`, last `Result`) and the user's message — is injected *after* the
-breakpoint each turn, never edited into this text. See `agent-integration.md`.
+**Status:** v0.2 — 2026-09-15. The Copilot's system prompt. It is the **stable, cached prefix**
+(one `system` block with the `cache_control` breakpoint). Volatile context — the current
+**ViewContext** (active tab, selected site, plan summary, last `Result` summary + diagnostics,
+baseline label + summary, compare flag, pending proposals) and the user's message — is injected
+*after* the breakpoint each turn as a `<view_context>` block, never edited into this text. See
+`agent-integration.md`.
+
+**Build-time import:** `web/src/copilot/prompt.ts` imports this file with `?raw` and uses everything
+after the `## PROMPT TEXT` heading verbatim (trimmed). Edit the prompt here and only here; keep the
+heading text exactly as it is, and keep the tool names in sync with `web/src/copilot/tools.ts`
+(`client.test.ts` pins the list).
 
 **Knowledge-access strategy (hybrid):** the strategic digest + research index below live in this cached
 prompt, so the agent can orient and "continue the conversation" with zero file reads. The
