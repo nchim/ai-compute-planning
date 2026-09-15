@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { clone, create, fromBinary, fromJsonString, toBinary } from "@bufbuild/protobuf";
 import { beforeAll, describe, expect, test } from "vitest";
 
-import { PhasingMode, PhasingSchema, ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingSchema, PowerSourceSchema, PowerType, ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createEngine, type WorkerLike } from "./client";
 import { serve, type EngineOps, type Reply, type Request } from "./protocol";
 
@@ -54,7 +54,11 @@ describe.skipIf(!built)("compiled engine.wasm", () => {
   });
 
   test("optimize designs phases for an OPTIMIZE-mode plan through serve", () => {
+    // Grid-only supply cannot meet the shortfall cap (grid arrives at m30); add the T3 gas bridge.
     const toOptimize = clone(SitePlanSchema, plan);
+    toOptimize.power?.sources.push(
+      create(PowerSourceSchema, { id: "gas", type: PowerType.BTM_GAS, capacityMw: 80, availableMonth: 12, costPerMwh: 85, capexPerKw: 1200, leadTimeMonths: 12 }),
+    );
     toOptimize.phasing = create(PhasingSchema, {
       mode: PhasingMode.OPTIMIZE,
       policy: { maxPhases: 3, minPhaseMw: 25, maxPhaseMw: 100, minMonthsBetweenPhases: 6, maxShortfallMw: 20 },
