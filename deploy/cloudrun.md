@@ -70,9 +70,15 @@ Then share the service URL (printed by the deploy) and the password. Rotate the 
 `gcloud secrets versions add app-password --data-file=-` followed by `make deploy` (Cloud Run pins the
 secret version at deploy time when using `:latest`).
 
+**Revision history.** `capplanner-00001` was the WS13 deploy (PR #32; its login failure from a
+newline in the secret is #38); PR #43 added `POST /api/session`; every UX PR since (#41–#52) and the
+WS10 merge (#54) was rolled out with `make deploy` right after merging, so the live revision tracks
+`main` — `gcloud run revisions list --service capplanner --region us-central1` shows the sequence.
+
 ## Operate
 ```sh
 gcloud run services logs read capplanner --region us-central1 --limit 100
+gcloud run revisions list --service capplanner --region us-central1
 gcloud run services describe capplanner --region us-central1 --format 'value(status.url)'
 gcloud run services update capplanner --region us-central1 --update-env-vars DAILY_REQUEST_CAP=200
 curl -sS https://<url>/healthz          # no auth needed
@@ -98,9 +104,10 @@ Not sent: the API key or anything from the key panel; the client also scrubs `sk
 body and the server masks it again. A failed post is reported once with `console.warn` and otherwise
 ignored, so sharing can never break the app.
 
-Read them back with the transcript printer (standard-library Python; groups by session, sorts by `seq`):
+Read them back with the transcript printer (standard-library Python; groups by session, sorts by `seq`;
+needs `gcloud` authenticated for the project):
 ```sh
-make sessions                      # last 4 hours
+make sessions                      # last 4 hours (HOURS defaults to 4 in the Makefile)
 make sessions HOURS=24
 deploy/sessions.py --hours 24 --session 3f2a9c1e     # one session
 gcloud logging read 'jsonPayload.session_event=true' --project ai-compute-planner --freshness 4h --format json \

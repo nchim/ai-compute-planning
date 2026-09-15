@@ -10,7 +10,7 @@ between all three is one protobuf: `SitePlan → Result`.
 | `proto/` | buf module; `capplanner/v1/engine.proto` is **the** contract |
 | `engine/` | Go engine: `pb/` (generated), `core/` (pure model + conservation), `risk/` (Monte Carlo + sensitivity), `optimize/` (phasing search), `bridge/` + `wasm/` (JS boundary); `engine.go` composes them |
 | `web/` | Vite + React 18 + TypeScript SPA: `src/bus` (command bus), `src/engine` (worker client), `src/views/site` (Site Feasibility), `src/copilot`, `src/harness`; `src/gen/` is generated |
-| `harness/` | Playwright remote-control harness: `src/session.ts` + `tests/smoke.spec.ts`; `acceptance/` (the T1–T8 session) arrives with the WS10 PR |
+| `harness/` | Playwright remote-control harness: `src/session.ts`, `tests/` (smoke, schematic screenshots), `acceptance/` (the T1–T8 session, scripted in CI / live by hand), `runs/` (per-run artifacts; one reviewed live run committed) |
 | `deploy/` | Cloud Run host: Go static server + Basic Auth + Anthropic relay + session-event sink (`server/`), `Dockerfile`, `sessions.py` transcript printer, `cloudrun.md` runbook |
 | `fixtures/` | Shared protojson `SitePlan`s: three grounding scenarios — `abilene-1.json` (acceptance reference), `nova-colo.json` (A.CRE colo development), `epoch-100mw.json` (Epoch AI 100 MW campus) |
 | `docs/`, `research/` | Design docs (start at `docs/README.md`) and the research corpus the Copilot is grounded in |
@@ -26,7 +26,8 @@ make check   # lint + tests, Go (engine + deploy) and web — what CI runs
 make wasm    # web/public/engine.wasm + wasm_exec.js (both gitignored build artifacts)
 make gen     # regenerate engine/pb + web/src/gen after editing the proto; commit the output
 make web     # production build of the SPA (web/dist)
-make harness # harness typecheck + every Playwright spec against the dev server
+make harness # harness typecheck + the Playwright smoke against the dev server
+make acceptance # the scripted acceptance session (CI gate; no key needed) — see harness/README.md
 ```
 
 Generated code is committed so nothing beyond `buf` (with remote plugins) is needed to build; CI fails
@@ -60,6 +61,13 @@ a plain `npm run build` produces the BYO-key dev build, which must never be depl
 build, persisted per browser) posts command batches, Copilot turn summaries, Result summaries and errors
 to `POST /api/session`, which the server logs as JSON lines into Cloud Logging. `make sessions`
 (`HOURS=24` to look further back) prints them as per-session transcripts; see `deploy/cloudrun.md`.
+
+**Notes for testers.** Pick a fixture from "Load fixture…"; every control is live and re-analyzes as
+you move it; the Copilot's material changes arrive as Accept/Undo cards in the thread (the newest also
+shows above the canvas). **Reset** (rail header) forgets the conversation and every edit, result,
+proposal and baseline and reloads the fixture fresh — use it to start a clean session. The Copilot
+panel is resizable (drag the divider; double-click resets). Sharing is on by default in the tester
+build; the "?" next to the toggle lists exactly what is sent.
 
 ## Fixtures
 `fixtures/*.json` are protojson `SitePlan`s; every file is listed in the Canvas "Load fixture"
@@ -180,11 +188,17 @@ the residual is Epoch's higher implied $/MWh) — and total opex $87.7M vs $92.3
 ~10% of revenue for bandwidth/support/G&A).
 
 ## Status
-WS1–WS9 (scaffold, engine core, risk, optimizer, WASM bridge, SPA + bus, site view, Copilot, harness),
-WS11 (baseline pin + compare), WS12 (grounding scenarios + reconciliation) and WS13 (Cloud Run deploy +
-relay) are merged. Open PRs: WS10 (acceptance session T1–T8, scripted + live) and the fidelity
-follow-ups #28–#30 (energy at utilization, colo escalation/opex growth, cap-rate terminal value).
-Workstream table, merge process and deferred list: `docs/implementation-plan.md`.
+Every workstream is merged: WS1–WS9 (scaffold, engine core, risk, optimizer, WASM bridge, SPA + bus,
+site view, Copilot, harness), WS10 (acceptance session — scripted mode is the CI gate; the archived
+live run passes T1–T3b, T4–T8 are tracked in #53), WS11 (baseline pin + compare), WS12 (grounding
+scenarios + reconciliation) and WS13 (Cloud Run deploy + relay). Since then: the fidelity follow-ups
+#28–#30 (energy at utilization, per-lease escalation + opex growth, income-based colo exit; PR #35),
+the schematic row layout (#40), and the UX feedback loop from the first tester sessions (#41–#52:
+real basemap, block cards, activity and engine indicators, session sharing, markdown chat, resizable
+rail, phase delete, Reset, candidate-only optimize, proposal cards in the thread). Open follow-ups:
+#23 (instantaneous shortfall), #33 (prompt refinement), #38 (deploy secrets/healthz), #42 (map
+cosmetics), #53 (live T4–T8). Workstream table, process and deferred list:
+`docs/implementation-plan.md`.
 
 ## Docs
 - Process: `.claude/skills/development/SKILL.md` (read first)

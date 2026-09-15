@@ -11,7 +11,7 @@ current with what is built (see the status line in each doc).
 4. `engine-design.md` — Go/WASM engine as built: pipeline, conservation checks, diagnostic codes,
    Monte Carlo + two-target sensitivity, the staged optimizer, stubs, grounding fixtures.
 5. `ui-spec.md` — the Site Feasibility view, toolbar, compare mode, Copilot rail, harness surface.
-6. `agent-integration.md` — the embedded Copilot: model, SDK, the nine tools, caching, transport.
+6. `agent-integration.md` — the embedded Copilot: model, SDK, the ten tools, caching, transport.
    - `agent-system-prompt.md` — the Copilot's cached system prompt (imported verbatim at build time).
 7. `acceptance-session.md` — **the acceptance criterion**: one continuous planning session (T1–T7 + T3b).
    - `validation-cases.md` — the 3 unit-level cases it embeds (superseded as the top-level gate).
@@ -29,6 +29,7 @@ current with what is built (see the status line in each doc).
 - Wireframe (Claude Design): https://claude.ai/artifact/6zTYP87uDYJ6MW25Tw9M4G
 
 ## Status
-WS1–WS9, WS11 (baseline/compare) and WS13 (Cloud Run deploy + relay) are merged; WS10 (acceptance
-session) and WS12 (grounding scenarios) are open PRs; fidelity follow-ups #28–#30 are in flight.
-Progress is tracked in GitHub issues (one per workstream, `follow-up` label for the rest) and PRs.
+Every workstream (WS1–WS13) is merged, as are the fidelity follow-ups (#35), the schematic fix (#40)
+and the UX feedback-loop PRs #41–#52; the scripted acceptance session runs in CI and the live run's
+remaining gaps are #53. Progress is tracked in GitHub issues (one per workstream, `follow-up` label
+for the rest) and PRs; see `implementation-plan.md`.

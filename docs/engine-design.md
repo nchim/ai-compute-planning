@@ -1,8 +1,8 @@
 # Engine Design — Go / WASM Analytical Core
 
-**Status:** v0.2 — 2026-09-15. Updated to the engine as built (WS2–WS5, PR #26). Implements the
-`SitePlan → Result` contract in `proto/capplanner/v1/engine.proto`. Scope: single site, deterministic
-core + Monte Carlo + sensitivity + phasing-to-demand optimizer.
+**Status:** v0.3 — 2026-09-15. Updated to the engine as built (WS2–WS5, PRs #26, #31, #35, #40).
+Implements the `SitePlan → Result` contract in `proto/capplanner/v1/engine.proto`. Scope: single
+site, deterministic core + Monte Carlo + sensitivity + phasing-to-demand optimizer.
 
 ## Principles
 1. **Pure function.** `Analyze(*SitePlan) *Result` and `Optimize(*SitePlan) *Result` have no I/O, no
@@ -23,18 +23,18 @@ engine/
   engine.go         // public entry: Analyze = core, then risk (MC + sensitivity) on a valid plan; Optimize
   pb/               // generated from proto/capplanner/v1/engine.proto (buf; committed)
   core/             // pure analytical model
-    doc.go          // model notes: LCOC formula + worked example, other metrics, the STUBS list
+    doc.go          // model notes: LCOC formula + worked example, §Energy, §Trending, §Terminal value, the STUBS list
     validate.go     // input validation → ERROR diagnostics (collect all, then stop)
     sizing.go       // power/cooling/rack/space sizing
     schedule.go     // phasing + energization; construction lead time
     demand.go       // DemandAt: linear interpolation of the demand ramp (exported for the optimizer)
     capex.go / opex.go / revenue.go / cashflow.go / metrics.go
-    schematic.go    // block layout for Result.schematic
+    schematic.go    // row-wrapped block layout for Result.schematic
     conserve.go     // the fourteen conservation checks
     render.go       // Tables, Charts assembly
     analyze.go      // orchestrates the pipeline
     diag.go         // diagnostic codes + helpers
-    testdata/       // golden Results (abilene-1; nova-colo + epoch-100mw in PR #31)
+    testdata/       // golden Results (abilene-1, nova-colo, epoch-100mw)
   risk/
     risk.go         // Validate, MonteCarlo, Sensitivity entry points + codes
     sample.go       // seeded inverse-CDF samplers (NORMAL/TRIANGULAR/UNIFORM)
@@ -62,21 +62,59 @@ percents (`80` = 80%); discount and cap rates are fractions.
    `interconnection.grid_energize_month`) or the first month pooled firm supply covers the cumulative
    load; per-source load is validated in EXPLICIT mode (`SOURCE_OVERLOADED`).
 4. **capex** — per-MW components × MW (+ land + GPUs + agility premium) → phase capex → total.
-5. **opex** — staffing/maintenance/insurance/mgmt-fee/tax over time.
-6. **revenue** — colo ($/kW/mo × online MW) or compute (gpu_hour_price × GPU-hours × utilization),
-   phased by energization; decay/escalation applied.
-7. **cashflow** — monthly net ledger incl. terminal value → NPV/IRR at `discount_rate` (IRR by bisection).
+5. **opex** — staffing/maintenance/insurance/mgmt-fee/tax/energy over time. **Energy is billed at
+   utilization** under `COMPUTE_SALES` (load = IT online × utilization × PUE — the operator pays for
+   what its GPUs draw; no idle-draw fraction, a visible STUB) and on the whole leased load under
+   `COLO_LEASE` (IT × PUE, a pass-through as A.CRE bills it), dispatched cheapest-first across the
+   firm sources that are ready. **Trending** (#29): every opex rate — staffing, maintenance,
+   insurance, property tax and energy $/MWh — steps once per year of operations by
+   `costs.opex.opex_growth_pct_yr` from the first energization (rates are year-1-of-operations
+   dollars); the management fee follows revenue.
+6. **revenue** — colo ($/kW/mo × online MW, escalating **per phase on its own lease anniversaries
+   from that phase's energize month**, not by calendar year from t0) or compute (gpu_hour_price ×
+   GPU-hours × utilization, price decaying continuously from t0 — a market curve, not a contract
+   escalator), phased by energization.
+7. **cashflow** — monthly net ledger incl. the exit value → NPV/IRR at `discount_rate` (IRR by bisection).
 8. **metrics** — `SummaryMetrics` incl. **LCOC**, yield-on-cost, dev spread, demand capture,
    stranded/shortfall MW-months, composite risk score, utilization breakeven (`core/doc.go` has the
-   formulas and a worked example on `abilene-1`).
-9. **layout** — `Result.schematic` blocks.
+   formulas and a worked example on `abilene-1`). Because cost now moves with utilization, the
+   breakeven is **exact**: `breakeven = assumed × (PV(cost) − PV(variable)) / (PV(revenue) −
+   PV(variable))`, with the variable lines (compute-sales energy, the revenue-share mgmt fee, the
+   occupancy-linear colo exit) discounted separately; exact up to the dispatch kinks where the load
+   crosses a source's capacity.
+9. **layout** — `Result.schematic` blocks (see Schematic layout).
 10. **conserve** — run all checks; attach the report; downgrade status if any fail.
 11. **render** — assemble Tables and Charts.
 
 **LCOC (anchor metric):** `PV(lifecycle cost) / PV(delivered GPU-hours)` — capex + opex + power,
-less terminal value, both sides discounted at the monthly equivalent of `discount_rate` (LCOE
+less the exit value, both sides discounted at the monthly equivalent of `discount_rate` (LCOE
 convention: earlier energization earns a lower LCOC for the same spend). GPU capex is only incurred
-under `COMPUTE_SALES`.
+under `COMPUTE_SALES`; a colo LCOC is small because the exit repays most of the shell.
+
+**Exit value (`metrics.go exitValue`, #30)** — booked in the final month; both bases are reported in
+`summary.extra` (`exit_value_asset_basis`, `exit_value_cap_rate`) beside the one used (`terminal_value`):
+- `COLO_LEASE`: **income-based**, `max(0, NOI over the final 12 months of the hold ÷
+  finance.exit_cap_rate)` — a developer sells a leased building on its income; the GPUs are the
+  tenant's. `exit_cap_rate = 0` falls back to the asset basis with an `EXIT_CAP_RATE_UNSET` INFO on
+  `finance.exit_cap_rate`. No selling costs (STUB; A.CRE deducts 2%); A.CRE capitalizes the 12 months
+  *after* the sale, we the 12 before (+1.6% on the mirror).
+- `COMPUTE_SALES`: **asset basis** — GPUs at `costs.gpu.residual_curve[years online]`, facility capex
+  straight-line over a 25-year shell life, land at cost. Capitalizing GPU-hour income at a real-estate
+  cap rate would treat a 5-year asset as a perpetuity (abilene-1: $17.7B vs $3.1B), so the cap-rate
+  figure is reported, not used.
+
+## Schematic layout (`core/schematic.go`, #39)
+The parcel is a square; the setback ring is whatever land is not usable. Blocks are placed in phase
+order — substation, gas pads (BTM gas), then each phase's hall + cooling yard — into **rows that fill
+the usable rectangle top to bottom**, so the time scrubber reveals them in order. Each block keeps its
+acreage (the acre rules are unchanged, so `footprint_used_pct` is unchanged too) and is a 2:1
+rectangle when its row has room, narrowed together with its row-mates (down to 1:1) when it has not;
+a phase's hall and yard never split across rows. The gap scales with the parcel (`min(20 m,
+side/40)`). Free space right of the last row and below it becomes expansion pads (`expansion_e`,
+`expansion`). When the blocks still cannot fit, a `SCHEMATIC_OVERFLOW` WARNING is raised on
+`site.usable_acres` (expected/actual/hint) and the spilling blocks are clamped inside the parcel
+rather than drawn outside it; the `blocks_within_parcel` conservation check then reports the overflow
+acres as its residual. Deterministic by construction.
 
 ## Conservation checks (`core/conserve.go`) — model-correctness invariants
 Each returns a `ConservationCheck{name, passed, residual, tolerance}`; residual must be ~0.
@@ -106,7 +144,7 @@ Stable strings; the agent and the harness match on them.
 
 | Package | Codes |
 |---|---|
-| `core` | `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_POWER_SOURCE`, `DENSITY_EXCEEDS_COOLING`, `FLOOR_LOAD_INSUFFICIENT`, `PHASE_BEFORE_POWER`, `POWER_UNDERSUPPLY`, `SOURCE_OVERLOADED`, `FOOTPRINT_OVER_PARCEL`, `USE_OPTIMIZE`, `PHASES_NE_TARGET`, `ENERGIZE_AFTER_HOLD`, `IRR_UNDEFINED` (INFO), `STORAGE_NOT_FIRM` (INFO), `CONSERVATION_FAILED`, `SCHEMATIC_OVERFLOW` (WARNING: the blocks do not fit the usable rectangle even wrapped into rows; they are clamped to the parcel) |
+| `core` | `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_POWER_SOURCE`, `DENSITY_EXCEEDS_COOLING`, `FLOOR_LOAD_INSUFFICIENT`, `PHASE_BEFORE_POWER`, `POWER_UNDERSUPPLY`, `SOURCE_OVERLOADED`, `FOOTPRINT_OVER_PARCEL`, `USE_OPTIMIZE`, `PHASES_NE_TARGET`, `ENERGIZE_AFTER_HOLD`, `IRR_UNDEFINED` (INFO), `STORAGE_NOT_FIRM` (INFO), `EXIT_CAP_RATE_UNSET` (INFO: a COLO_LEASE plan with `exit_cap_rate` 0 exits on the asset basis), `CONSERVATION_FAILED`, `SCHEMATIC_OVERFLOW` (WARNING: the blocks do not fit the usable rectangle even wrapped into rows; they are clamped to the parcel) |
 | `risk` | `UNKNOWN_INPUT_PATH`, `OUT_OF_RANGE`, `MC_INVALID_DRAWS`, `MC_NO_DISTRIBUTIONS`, `SENSITIVITY_INVALID_DRAW` |
 | `optimize` | `USE_ANALYZE`, `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_METRIC`, `NO_FEASIBLE_CANDIDATE`, `OBJECTIVE_DEFAULTED` (INFO), `DECISION_VARS_IGNORED` (INFO, STUB), `PHASE_COUNT_SKIPPED`, `SEARCH_TRUNCATED` |
 | `bridge` | `MALFORMED_INPUT`, `UNKNOWN_OP`, `INTERNAL_ERROR` |
@@ -175,22 +213,22 @@ by |high − low|. The UI renders both tornados; T4 asserts price and utilizatio
 - 100% equity (`capital_uses_eq_sources` is equity = uses).
 - Storage (BESS) is not firm supply (`STORAGE_NOT_FIRM` INFO).
 - PPAs count at nameplate.
-- Land at cost at exit; terminal value is asset-based (#30: `exit_cap_rate` only feeds dev spread).
+- Land at cost at exit (no appreciation); no selling costs at exit; no idle energy draw (a hall at
+  0% utilization bills zero energy — the corpus has no idle-power figure to anchor one on).
 - Schematic is a row-wrapped block layout inside the usable rectangle (2:1 blocks, narrowed to 1:1 when a row is crowded), not a site plan.
-- Energy billed at nameplate facility load, not utilization (#28); colo escalation compounds from t0
-  and opex never grows (#29). The fidelity PR for #28–#30 is in flight.
 
-## Grounding fixtures and reconciliation (WS12, PR #31)
+## Grounding fixtures and reconciliation (WS12, PR #31; tightened by #35)
 Three fixtures ground the engine against external models:
 - `fixtures/abilene-1.json` — the acceptance reference plan (ERCOT, 200 MW, `COMPUTE_SALES`, grid at m30,
   demand ramp 40→200 MW). Golden `core/testdata/abilene-1.result.json`.
 - `fixtures/nova-colo.json` — A.CRE's data-center development model (L0 lens, `COLO_LEASE`, PJM/NoVA,
   EXPLICIT 2 × 10 MW phases on a BTM gas bridge then grid). Reconciled on the workbook's untrended
-  basis: total capex exact, stabilized NOI and yield-on-cost within 1%, dev spread ±5 bps; the trended
-  gap (+25%) is pinned as a band (#29).
+  basis: total capex exact, stabilized NOI −0.03%, yield-on-cost within 1%, dev spread ±5 bps;
+  trended NOI +1.7% (±5%) with per-lease escalation and `opex_growth_pct_yr` 2.5; exit value +1.6%
+  (±5%) on NOI ÷ cap rate.
 - `fixtures/epoch-100mw.json` — Epoch AI's 100 MW GB200 campus reconstruction (`COMPUTE_SALES`,
-  SINGLE_SHOT, grid + nuclear PPA). Capex lines within 1–2%, non-energy opex exact; energy is +21%
-  unadjusted because the engine bills nameplate (#28), pinned as a +10..+30% band.
+  SINGLE_SHOT, grid + nuclear PPA). Capex lines within 1–2%, non-energy opex exact; with energy
+  billed at utilization, energy is −7.7% and total opex −5.0% unadjusted (±10%).
 **Method:** mirror the source's *inputs* field by field (a source cell → our field → value → note
 table in the README), compare outputs on the basis the source itself computes, restate each structural
 difference explicitly rather than tuning inputs, and pin every known gap's direction and band so the

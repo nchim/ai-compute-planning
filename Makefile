@@ -54,6 +54,10 @@ web:
 harness:
 	cd harness && npm run typecheck && npm test
 
+## acceptance: the scripted acceptance session (docs/acceptance-session.md T1–T8) — the POC's CI gate; no API key needed
+acceptance:
+	cd harness && npm run acceptance
+
 ## serve: run the deployed configuration locally (relay build + Go server) — needs ANTHROPIC_API_KEY and APP_PASSWORD
 serve: wasm
 	cd web && VITE_COPILOT_RELAY=/api/anthropic VITE_ENGINE=wasm npm run build

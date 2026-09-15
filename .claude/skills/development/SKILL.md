@@ -90,6 +90,27 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
    branch to move up the queue; expect conflicts only in the Playbook below — keep both sides in
    date order.
 10. If the orchestrator requests changes, push follow-up commits to the same branch and reply.
+11. **Fail fast in orchestration chains.** Any chain of checks — in a Bash call, a Makefile recipe or a
+    PR-verification script — joins its steps with `&&`, never `;`. PR #50 merged with three unused
+    imports and a stray `});` in a test because `typecheck; lint; test` reported the last step's exit
+    code only; #51 had to repair it. The canonical local verify is
+    `cd web && npm run typecheck && npm run lint && npm test && npm run build` (plus `make check` when
+    Go or the deploy server changed).
+
+### UX feedback loop (the small-change process, used from PR #41 on)
+For feedback from the tester deployment, the full workstream ceremony is too heavy; use this instead:
+one item (or a small batch of related items) → a `ux-<slug>` branch from `main` → a PR whose body
+states the user feedback, the change and the checks → the fail-fast local verify above on the branch
+→ merge (merge commit) → `make deploy` immediately, so the next tester session runs the fix →
+`make sessions` to read what testers did next. Docs are synced at stopping points (a `docs-sync`
+PR that describes the code as it is), not per UX PR.
+
+### Copilot tool schemas
+- Tool input schemas (`web/src/copilot/tools.ts`) must not carry integer bounds: zod's `.int()`,
+  `.min()`, `.max()` on numbers emit `minimum`/`maximum`/`type: integer` that the API rejects with a
+  400 on strict schemas. Declare `z.number()` with an "Integer" description and let the bus reject a
+  non-integer write with its precise `PathError`. Keep `strict: true` on the plan-writing tools only
+  (every strict schema joins one compiled grammar with a size cap); `client.test.ts` pins both lists.
 
 ## Definition of Done
 - [ ] Tests written first and passing; `go test -race` clean; coverage not reduced.
@@ -252,3 +273,12 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   default) while `getResult()` is snake_case — convert before comparing. Every `.tile` renders a Δ in
   compare mode, so `.tile .delta` count == `.tile` count is the "every tile" assertion. Live runs: read
   `runs/<ts>/transcript.md` before touching the prompt; `HARNESS_VIDEO=1` adds `run.mp4` + `trace.zip`.
+- 2026-09-15 (docs sync 2) — Twelve UX PRs in one day drifted the specs again, and three lessons are now
+  rules in the body: chains of checks use `&&` (PR #50 merged red because of a `;`), Copilot tool schemas
+  carry no integer bounds (the API 400s on `.int()`/`.min()`), and small UX fixes go branch → PR →
+  fail-fast verify → merge → `make deploy`. Engine activity belongs in `state.engine` (derived, never in
+  the command log) — a flag inside a command would have polluted every shared session transcript.
+  `store.optimize(overrides)` is the pattern for "settings that must not touch the live plan": apply
+  them to the candidate clone, never dispatch them. When cleaning up, grep `term="…"` / `metricKey="…"`
+  / `id="…"` against `glossary.ts` before deleting an entry, and grep `className="seg"` before deleting
+  CSS — `.seg` (the removed overlay toggles) was dead, `.seg-N` (stack-bar segments) was not.
