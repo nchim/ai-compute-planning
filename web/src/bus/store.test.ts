@@ -230,7 +230,7 @@ describe("store", () => {
     const pending = store.optimize();
     const sent = engine.calls[1]!.plan;
     expect(sent.phasing?.policy?.maxPhases).toBe(4);
-    expect(sent.phasing?.policy?.maxShortfallMw).toBe(20);
+    expect(sent.phasing?.policy?.maxShortfallMw).toBe(200); // = target MW: permissive by default
     expect(store.getState().plan?.phasing?.policy).toBeUndefined(); // the live plan is not touched
 
     const refused = create(ResultSchema, {

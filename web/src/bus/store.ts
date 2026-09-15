@@ -2,12 +2,20 @@ import { clone, create } from "@bufbuild/protobuf";
 
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, SitePlanSchema, Status, type Result } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, SitePlanSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type EngineActivity, type LogEntry, type PatchOp, type State } from "./types";
 
-/** Policy used when a plan has none: up to 4 phases of 25–100 MW, 6 months apart, ≤ 20 MW average shortfall. */
-export const defaultPhasingPolicy = { maxPhases: 4, minPhaseMw: 25, maxPhaseMw: 100, minMonthsBetweenPhases: 6, maxShortfallMw: 20 } as const;
+/**
+ * Policy used when a plan has none: up to 4 phases of 25–100 MW, 6 months apart. The shortfall cap is
+ * left permissive (= the site's target MW, i.e. no cap) so "Optimize" always yields a plan; tightening
+ * it is the user's or the Copilot's call.
+ */
+export const defaultPhasingPolicy = { maxPhases: 4, minPhaseMw: 25, maxPhaseMw: 100, minMonthsBetweenPhases: 6 } as const;
+
+export function defaultPolicyFor(plan: SitePlan) {
+  return { ...defaultPhasingPolicy, maxShortfallMw: plan.compute?.targetItLoadMw ?? 0 };
+}
 
 /** One line for the banner: the first ERROR diagnostic (code, message, hint), else the status. */
 function optimizeFailureMessage(result: Result): string {
@@ -148,7 +156,7 @@ export function createStore(options: StoreOptions): Store {
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
     // The optimizer needs a policy; a plan without one gets the default so "Optimize" always works.
-    candidate.phasing.policy ??= create(PhasingPolicySchema, defaultPhasingPolicy);
+    candidate.phasing.policy ??= create(PhasingPolicySchema, defaultPolicyFor(candidate));
     setEngine({ optimizing: true });
     const request = ++latestRequest;
     return guarded(request, engine.optimize(candidate), (result) => {

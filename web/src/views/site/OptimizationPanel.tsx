@@ -1,4 +1,4 @@
-import { defaultPhasingPolicy, useStore, type PatchOp } from "../../bus";
+import { defaultPolicyFor, useStore, type PatchOp } from "../../bus";
 import {
   CompareOpSchema,
   ObjectiveTypeSchema,
@@ -50,13 +50,16 @@ export function patchFromBestPlan(best: SitePlan): PatchOp[] {
 }
 
 /** The store's default policy as an atomic patch, for when the user wants it written into the plan. */
-export const defaultPolicyPatch: readonly PatchOp[] = [
-  { path: "phasing.policy.max_phases", value: defaultPhasingPolicy.maxPhases },
-  { path: "phasing.policy.min_phase_mw", value: defaultPhasingPolicy.minPhaseMw },
-  { path: "phasing.policy.max_phase_mw", value: defaultPhasingPolicy.maxPhaseMw },
-  { path: "phasing.policy.min_months_between_phases", value: defaultPhasingPolicy.minMonthsBetweenPhases },
-  { path: "phasing.policy.max_shortfall_mw", value: defaultPhasingPolicy.maxShortfallMw },
-];
+export function defaultPolicyPatch(plan: SitePlan): PatchOp[] {
+  const d = defaultPolicyFor(plan);
+  return [
+    { path: "phasing.policy.max_phases", value: d.maxPhases },
+    { path: "phasing.policy.min_phase_mw", value: d.minPhaseMw },
+    { path: "phasing.policy.max_phase_mw", value: d.maxPhaseMw },
+    { path: "phasing.policy.min_months_between_phases", value: d.minMonthsBetweenPhases },
+    { path: "phasing.policy.max_shortfall_mw", value: d.maxShortfallMw },
+  ];
+}
 
 export function OptimizationPanel() {
   const { state, store } = useStore();
@@ -100,8 +103,13 @@ export function OptimizationPanel() {
           <div className="phase-list" data-policy={policy === undefined ? "unset" : "set"}>
             <Explainer term="phasing.policy">Phasing policy</Explainer>
             {policy === undefined ? (
-              <button type="button" className="mini" disabled={state.plan === null} onClick={() => store.dispatch({ type: "applyPatch", patch: defaultPolicyPatch })}>
-                Set default policy (4 phases · 25–100 MW · ≥6 mo apart · ≤20 MW short)
+              <button
+                type="button"
+                className="mini"
+                disabled={state.plan === null}
+                onClick={() => state.plan !== null && store.dispatch({ type: "applyPatch", patch: defaultPolicyPatch(state.plan) })}
+              >
+                Set default policy (4 phases · 25–100 MW · ≥6 mo apart · shortfall uncapped)
               </button>
             ) : (
               <fieldset className="row3">
