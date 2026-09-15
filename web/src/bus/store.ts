@@ -18,6 +18,8 @@ export interface Store {
   /** Convenience over `proposeChange`: mints the proposal id and returns it. */
   proposeChange(summary: string, patch: readonly PatchOp[]): string;
   getLog(): readonly LogEntry[];
+  /** Resolves once no analyze is debounced or in flight (also after a failed analyze). */
+  whenIdle(): Promise<void>;
   dispose(): void;
 }
 
@@ -35,6 +37,8 @@ export function createStore(options: StoreOptions): Store {
   let latestRequest = 0;
   let proposalCounter = 0;
   let debounce: ReturnType<typeof setTimeout> | null = null;
+  let inFlight = 0;
+  const idleWaiters: (() => void)[] = [];
   let disposed = false;
 
   const notify = () => listeners.forEach((l) => l());
@@ -54,22 +58,39 @@ export function createStore(options: StoreOptions): Store {
     debounce = setTimeout(runAnalyze, debounceMs);
   };
 
+  const isIdle = () => debounce === null && inFlight === 0;
+
+  const settleIfIdle = () => {
+    if (!isIdle()) return;
+    idleWaiters.splice(0).forEach((resolve) => resolve());
+  };
+
   const runAnalyze = () => {
     debounce = null;
     const plan = state.plan;
-    if (plan === null) return;
+    if (plan === null) {
+      settleIfIdle();
+      return;
+    }
     const request = ++latestRequest;
-    engine.analyze(plan).then(
-      (result) => {
-        if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
-      },
-      (err: unknown) => {
-        if (request !== latestRequest || disposed) return;
-        const kind = isEngineError(err) ? err.kind : "internal";
-        const message = err instanceof Error ? err.message : String(err);
-        dispatch({ type: "errorRaised", error: { kind, message } });
-      },
-    );
+    inFlight++;
+    engine
+      .analyze(plan)
+      .then(
+        (result) => {
+          if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
+        },
+        (err: unknown) => {
+          if (request !== latestRequest || disposed) return;
+          const kind = isEngineError(err) ? err.kind : "internal";
+          const message = err instanceof Error ? err.message : String(err);
+          dispatch({ type: "errorRaised", error: { kind, message } });
+        },
+      )
+      .finally(() => {
+        inFlight--;
+        settleIfIdle();
+      });
   };
 
   return {
@@ -85,6 +106,11 @@ export function createStore(options: StoreOptions): Store {
       return id;
     },
     getLog: () => log,
+    whenIdle: () =>
+      new Promise((resolve) => {
+        if (isIdle()) resolve();
+        else idleWaiters.push(resolve);
+      }),
     dispose() {
       disposed = true;
       if (debounce !== null) clearTimeout(debounce);
