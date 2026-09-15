@@ -101,3 +101,9 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
   Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
   Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
+- 2026-09-15 (WS3) — Risk composes over the core without hooks: `risk.SetNumeric` writes dotted
+  `input_path`s via protoreflect (`Mutable` creates unset parents; int fields are rounded). Draw from
+  `(0,1)` open (`uniform01`) so `math.Erfinv` never returns ±Inf. 1k Monte Carlo iterations cost ~125 ms
+  native and are dominated by `core.Analyze` rendering tables/charts every draw — a render-free core
+  entry point would roughly halve it if WASM needs the headroom. LCOC is a *cost* metric: a tornado on
+  `gpu_hour_price` is ~flat (only the EGR-linked mgmt fee moves); use NPV if price sensitivity matters.
