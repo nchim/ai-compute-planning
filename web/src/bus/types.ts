@@ -78,6 +78,7 @@ export type Command =
     }
   | { readonly type: "acceptProposal"; readonly id: string }
   | { readonly type: "rejectProposal"; readonly id: string }
+  | { readonly type: "reset" }
   | { readonly type: "undo" }
   | { readonly type: "redo" }
   | { readonly type: "setBaseline"; readonly label: string }
