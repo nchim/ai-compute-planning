@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, type Browser, type Page } from "@playwright/test";
 
-import type { CommandLogEntry, Control, ControlValue, HarnessApi, Json } from "../../web/src/harness/api";
+import type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, HarnessApi, Json } from "../../web/src/harness/api";
 
-export type { CommandLogEntry, Control, ControlValue, Json } from "../../web/src/harness/api";
+export type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, Json } from "../../web/src/harness/api";
 
 export interface LaunchOptions {
   /** Where the SPA is served (default http://localhost:5173). */
@@ -97,6 +97,18 @@ export class Session {
   }
   redo(): Promise<void> {
     return this.call("redo");
+  }
+  setBaseline(label?: string): Promise<void> {
+    return label === undefined ? this.call("setBaseline") : this.call("setBaseline", label);
+  }
+  clearBaseline(): Promise<void> {
+    return this.call("clearBaseline");
+  }
+  toggleCompare(): Promise<void> {
+    return this.call("toggleCompare");
+  }
+  getBaseline(): Promise<BaselineSnapshot | null> {
+    return this.call("getBaseline");
   }
   getViewContext(): Promise<Json> {
     return this.call("getViewContext");

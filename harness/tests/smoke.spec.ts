@@ -43,6 +43,25 @@ test("smoke: load abilene-1, move depreciation, undo restores the plan byte-for-
       expect(await s.getPlan()).toBe(baseline);
     });
 
+    await session.step("pin baseline, compare, undo leaves it", async (s) => {
+      await expect(s.toggleCompare(), "compare before a baseline").rejects.toThrow("no baseline");
+      await s.setBaseline("single-shot");
+      expect((await s.getBaseline())?.label).toBe("single-shot");
+      await s.setControl(depreciation, 4);
+      await s.waitIdle();
+      await s.toggleCompare();
+      const ctx = (await s.getViewContext()) as { compare: boolean; baselineSummary: unknown };
+      expect(ctx.compare).toBe(true);
+      expect(ctx.baselineSummary).not.toBeNull();
+      expect(await s.page.locator(".tile .delta").count()).toBeGreaterThan(0);
+      expect(await s.page.locator(".step-chart .line.baseline").count()).toBe(2);
+      await s.undo();
+      await s.waitIdle();
+      expect(await s.getPlan()).toBe(baseline);
+      expect((await s.getBaseline())?.label).toBe("single-shot");
+      expect(((await s.getViewContext()) as { compare: boolean }).compare).toBe(true);
+    });
+
     await session.screenshot("final");
     expect(await session.getConsoleErrors()).toEqual([]);
   } finally {

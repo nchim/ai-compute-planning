@@ -100,3 +100,22 @@ describe("propose_change and run_optimize", () => {
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });
   });
 });
+
+describe("set_baseline and toggle_compare", () => {
+  test("pin with the default label, toggle, and surface reducer rejections as tool errors", async () => {
+    const h = harness();
+    expect(await failure(h.run("toggle_compare", {}))).toContain("no baseline");
+    expect(await failure(h.run("set_baseline", { label: "x" }))).toContain("no result");
+
+    await h.run("run_analyze", {});
+    const pinned = JSON.parse(String(await h.run("set_baseline", { label: null }))) as { label: string; baseline_summary: { lcoc_per_gpu_hour: number } };
+    expect(pinned.label).toBe("Grid-only single shot");
+    expect(pinned.baseline_summary.lcoc_per_gpu_hour).toBe(h.store.getState().result?.summary?.lcocPerGpuHour);
+
+    const on = JSON.parse(String(await h.run("toggle_compare", {}))) as { compare: boolean; baseline_label: string };
+    expect(on).toEqual({ compare: true, baseline_label: "Grid-only single shot" });
+    expect(h.store.getLog().filter((e) => e.command.type === "toggleCompare")).toHaveLength(2);
+    expect(JSON.parse(String(await h.run("set_baseline", { label: "custom" }))).label).toBe("custom");
+    expect(h.events.filter((e) => e.status === "error")).toHaveLength(2);
+  });
+});
