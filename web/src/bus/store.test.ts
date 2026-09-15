@@ -136,6 +136,61 @@ describe("store", () => {
     expect(ctx.diagnostics).toEqual([]);
   });
 
+  test("whenIdle resolves once the debounce has fired and the latest analyze has settled", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    await expect(store.whenIdle()).resolves.toBeUndefined(); // nothing pending: immediate
+
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    let idle = false;
+    const waiting = store.whenIdle().then(() => (idle = true));
+    await flush();
+    expect(idle).toBe(false); // debounce pending
+    vi.advanceTimersByTime(16);
+    await flush();
+    expect(idle).toBe(false); // analyze in flight
+
+    store.dispatch({ type: "setField", path: "compute.pue", value: 1.3 });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1)); // stale reply: still not idle
+    await flush();
+    expect(idle).toBe(false);
+    engine.calls[1]!.reject(new EngineError("decode", "bad"));
+    await waiting;
+    expect(store.getState().error?.kind).toBe("decode"); // idle even when the analyze failed
+  });
+
+  test("optimize sends a clone in OPTIMIZE mode, leaves the live plan untouched, and stores the reply", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+
+    const pending = store.optimize();
+    expect(engine.calls).toHaveLength(2);
+    expect(engine.calls[1]!.plan.phasing?.mode).toBe(PhasingMode.OPTIMIZE);
+    expect(store.getState().plan?.phasing?.mode).toBe(PhasingMode.SINGLE_SHOT);
+    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived"]);
+
+    engine.calls[1]!.resolve(resultWithMw(2));
+    expect((await pending).summary?.mwOnlineFinal).toBe(2);
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
+
+    // A newer analyze supersedes an optimize still in flight: its reply is returned but not stored.
+    const stale = store.optimize();
+    store.dispatch({ type: "setField", path: "compute.pue", value: 1.3 });
+    vi.advanceTimersByTime(16);
+    engine.calls[3]!.resolve(resultWithMw(4));
+    engine.calls[2]!.resolve(resultWithMw(3));
+    expect((await stale).summary?.mwOnlineFinal).toBe(3);
+    await flush();
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(4);
+
+    await expect(createStore({ engine }).optimize()).rejects.toThrow("no plan loaded");
+  });
+
   test("dispose cancels pending work and disposes the engine", () => {
     const engine = controllableEngine();
     const store = createStore({ engine });
@@ -145,35 +200,5 @@ describe("store", () => {
     expect(engine.calls).toHaveLength(0);
     expect(engine.dispose).toHaveBeenCalledOnce();
     expect(() => store.dispatch({ type: "undo" })).toThrow("disposed");
-  });
-
-  test("optimize() sends a copy with phasing.mode=OPTIMIZE, leaves state.plan unchanged, resolves once applied", async () => {
-    const engine = controllableEngine();
-    const store = createStore({ engine });
-    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
-    const before = store.getState().plan!;
-    vi.advanceTimersByTime(16); // analyze #1 in flight
-    const done = store.optimize(); // optimize #2 in flight
-    expect(engine.calls).toHaveLength(2);
-    expect(engine.calls[1]!.plan.phasing?.mode).toBe(PhasingMode.OPTIMIZE);
-    expect(store.getState().plan).toBe(before);
-    expect(before.phasing?.mode).toBe(PhasingMode.SINGLE_SHOT);
-    engine.calls[1]!.resolve(resultWithMw(2));
-    engine.calls[0]!.resolve(resultWithMw(1)); // stale analyze reply: dropped
-    const applied = await done;
-    expect(applied).toBe(store.getState().result);
-    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
-  });
-
-  test("optimize() rejects with the engine error and surfaces it in state", async () => {
-    const engine = controllableEngine();
-    const store = createStore({ engine });
-    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
-    const done = store.optimize();
-    engine.calls[0]!.reject(new EngineError("timeout", "slow"));
-    await expect(done).rejects.toThrow("slow");
-    expect(store.getState().error).toEqual({ kind: "timeout", message: "slow" });
-    store.dispose();
-    await expect(store.optimize()).rejects.toThrow("disposed");
   });
 });

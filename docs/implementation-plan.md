@@ -33,7 +33,7 @@ WS1 scaffold+proto ─┬─▶ WS2 engine core ─┬─▶ WS3 risk ───�
                                                ├─▶ WS8 copilot   ┤
                                                └─▶ WS9 harness ──┘
 ```
-Waves: **W0** WS1 (serial) → **W1** WS2 ‖ WS5 ‖ WS6 → **W2** WS3 ‖ WS4 ‖ WS7 ‖ WS8 ‖ WS9 → **W3** WS10.
+Waves: **W0** WS1 (serial) → **W1** WS2 ‖ WS5 ‖ WS6 → **W2** WS3 ‖ WS4 ‖ WS7 ‖ WS8 ‖ WS9 → **W2b** WS11 → **W3** WS10.
 
 ## Workstreams
 
@@ -106,6 +106,12 @@ every tool error returned to the model as a `tool_result` error, never swallowed
 Implement `docs/acceptance-session.md` T1–T7 as a harness script with `scripted` and `live` modes;
 iterate engine/UI/agent until it passes; archive a reviewed `live` run.
 **DoD:** `scripted` green in CI; `live` run archived and reviewed by the orchestrator.
+
+### WS11 — Baseline pin + comparison mode  *(UI; after WS7; user request 2026-09-15)*
+Snapshot the current plan + Result as a **baseline** (button), then a **Compare** toggle juxtaposes the
+current Result against it: Δ on every metric tile, ghosted baseline series on the charts, baseline
+summary in ViewContext so the Copilot narrates deltas; harness hooks; acceptance T3b.
+**DoD:** T3b passes in scripted mode.
 
 ### Deferred (tracked, not in POC)
 Inference relay replacing BYO-key; conversation compaction; portfolio views; real map tiles.

@@ -1,8 +1,8 @@
-import type { Engine } from "../engine/client";
-import { EngineError } from "../engine/protocol";
 import { clone, create } from "@bufbuild/protobuf";
 
-import { PhasingMode, PhasingSchema, SitePlanSchema, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import type { Engine } from "../engine/client";
+import { EngineError } from "../engine/protocol";
+import { PhasingMode, PhasingSchema, SitePlanSchema, type Result } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -21,13 +21,14 @@ export interface Store {
   /** Convenience over `proposeChange`: mints the proposal id and returns it. */
   proposeChange(summary: string, patch: readonly PatchOp[]): string;
   /**
-   * Runs the optimizer on a copy of the current plan with `phasing.mode = OPTIMIZE` (the plan in state
-   * is untouched — optimize is an action, not a plan state). The reply lands as `resultReceived`
-   * through the same stale-reply guard as analyze; the promise resolves with that Result once applied,
-   * and rejects with the engine error (or a "superseded" error if a newer request overtook it).
+   * Runs the optimizer on a clone of the current plan with `phasing.mode=OPTIMIZE` — the live plan is
+   * untouched. The reply is stored via `resultReceived` under the same stale-reply guard as analyze,
+   * and returned.
    */
   optimize(): Promise<Result>;
   getLog(): readonly LogEntry[];
+  /** Resolves once no analyze is debounced or in flight (also after a failed analyze). */
+  whenIdle(): Promise<void>;
   dispose(): void;
 }
 
@@ -45,6 +46,8 @@ export function createStore(options: StoreOptions): Store {
   let latestRequest = 0;
   let proposalCounter = 0;
   let debounce: ReturnType<typeof setTimeout> | null = null;
+  let inFlight = 0;
+  const idleWaiters: (() => void)[] = [];
   let disposed = false;
 
   const notify = () => listeners.forEach((l) => l());
@@ -64,34 +67,56 @@ export function createStore(options: StoreOptions): Store {
     debounce = setTimeout(runAnalyze, debounceMs);
   };
 
+  const isIdle = () => debounce === null && inFlight === 0;
+
+  const settleIfIdle = () => {
+    if (!isIdle()) return;
+    idleWaiters.splice(0).forEach((resolve) => resolve());
+  };
+
   const runAnalyze = () => {
     debounce = null;
     const plan = state.plan;
-    if (plan === null) return;
-    runEngine(plan, (p) => engine.analyze(p)).catch(() => undefined); // failures are already in state.error
+    if (plan === null) {
+      settleIfIdle();
+      return;
+    }
+    // Fire-and-forget: the guarded handler already reported any failure to the UI.
+    guarded(engine.analyze(plan)).catch(() => undefined);
   };
 
-  /**
-   * Analyze and optimize share one request counter, so whichever reply is newest wins. Resolves with
-   * the Result only if it was applied; rejects with the (Engine)Error otherwise so callers can await it.
-   */
-  const runEngine = (plan: SitePlan, call: (plan: SitePlan) => Promise<Result>): Promise<Result> => {
+  /** Tracks an engine reply as in flight and applies it only while it is still the latest request. */
+  const guarded = (reply: Promise<Result>): Promise<Result> => {
     const request = ++latestRequest;
-    return call(plan).then(
-      (result) => {
-        if (request !== latestRequest || disposed) throw new Error("engine reply superseded by a newer request");
-        dispatch({ type: "resultReceived", result });
-        return result;
-      },
-      (err: unknown) => {
-        if (request === latestRequest && !disposed) {
-          const kind = err instanceof EngineError ? err.kind : "worker";
-          const message = err instanceof Error ? err.message : String(err);
-          dispatch({ type: "errorRaised", error: { kind, message } });
-        }
-        throw err;
-      },
-    );
+    inFlight++;
+    return reply
+      .then(
+        (result) => {
+          if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
+          return result;
+        },
+        (err: unknown) => {
+          if (request === latestRequest && !disposed) {
+            const kind = err instanceof EngineError ? err.kind : "worker";
+            const message = err instanceof Error ? err.message : String(err);
+            dispatch({ type: "errorRaised", error: { kind, message } });
+          }
+          throw err;
+        },
+      )
+      .finally(() => {
+        inFlight--;
+        settleIfIdle();
+      });
+  };
+
+  const optimize = (): Promise<Result> => {
+    if (disposed) return Promise.reject(new Error("store is disposed"));
+    if (state.plan === null) return Promise.reject(new Error("no plan loaded"));
+    const candidate = clone(SitePlanSchema, state.plan);
+    candidate.phasing ??= create(PhasingSchema);
+    candidate.phasing.mode = PhasingMode.OPTIMIZE;
+    return guarded(engine.optimize(candidate));
   };
 
   return {
@@ -106,15 +131,13 @@ export function createStore(options: StoreOptions): Store {
       dispatch({ type: "proposeChange", id, summary, patch });
       return id;
     },
-    optimize() {
-      if (disposed) return Promise.reject(new Error("store is disposed"));
-      if (state.plan === null) return Promise.reject(new Error("no plan loaded"));
-      const candidate = clone(SitePlanSchema, state.plan);
-      candidate.phasing ??= create(PhasingSchema);
-      candidate.phasing.mode = PhasingMode.OPTIMIZE;
-      return runEngine(candidate, (p) => engine.optimize(p));
-    },
+    optimize,
     getLog: () => log,
+    whenIdle: () =>
+      new Promise((resolve) => {
+        if (isIdle()) resolve();
+        else idleWaiters.push(resolve);
+      }),
     dispose() {
       disposed = true;
       if (debounce !== null) clearTimeout(debounce);

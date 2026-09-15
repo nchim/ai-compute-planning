@@ -2,9 +2,16 @@
   "name": "capplanner-harness",
   "private": true,
   "version": "0.0.0",
-  "description": "Playwright remote-control harness + acceptance scripts (WS9/WS10). Placeholder until WS9 lands.",
+  "description": "Playwright remote-control harness for the capacity planner SPA: a Session helper over window.__harness plus the smoke test (WS9) and, later, the acceptance session (WS10).",
   "type": "module",
   "scripts": {
-    "test": "echo 'harness: no tests yet (WS9)' && exit 0"
+    "test": "playwright test",
+    "smoke": "playwright test tests/smoke.spec.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.13.4",
+    "typescript": "5.9.3"
   }
 }
