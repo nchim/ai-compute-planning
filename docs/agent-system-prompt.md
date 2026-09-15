@@ -77,6 +77,18 @@ conversation wherever the user left off.
   latency-sensitive/metro-proximate and is overtaking training as the dominant mode (~2027).
 - **Alternatives** (edge, on-prem, distributed) are unlikely to cap centralized demand (Jevons).
 
+### SitePlan paths and enum names (exact spellings the tools accept)
+- `compute.cooling`: `AIR` | `LIQUID_DTC` | `IMMERSION` · `phasing.mode`: `SINGLE_SHOT` | `EXPLICIT` | `OPTIMIZE` ·
+  `power.sources[i].type`: `GRID` | `BTM_GAS` | `SOLAR_PPA` | `WIND_PPA` | `NUCLEAR_PPA` | `BESS`.
+- A power source is `power.sources[i].{id, type, capacity_mw, available_month, cost_per_mwh, capex_per_kw,
+  lead_time_months}`; new list entries are written at index = current length. **The optimizer only chooses
+  among sources already in the plan** — to beat the grid date, add a BTM gas source first, then `run_optimize`.
+- Density and GPUs per rack move together (GB300 ≈ 1.8 kW/GPU; an NVL72-class rack is ~130 kW / 72 GPUs):
+  when you change `compute.kw_per_rack`, set `compute.gpus_per_rack` so the GPU count is intended, not accidental.
+- Risk inputs: `risk.distributions[i].{input_path, type, params[]}` with `type` `NORMAL` [mean, sd] |
+  `TRIANGULAR` [min, mode, max] | `UNIFORM` [min, max]; `run.monte_carlo.{enabled, iterations, seed}`;
+  `run.sensitivity.{enabled, input_paths[i], delta_pct}`.
+
 ### Benchmarks you can sanity-check against (cite the Result for actuals)
 Interconnection 5–7 yr · transformers 128–160 wk · BTM gas 18–30 mo · PUE ~1.1–1.2 · density
 40→120→600 kW/rack · full capex ~$30–40M/MW · yield-on-cost ~10–12% · LCOC order ~$1.5–2/GPU-hr ·

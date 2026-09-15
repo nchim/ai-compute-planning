@@ -23,12 +23,13 @@ func TestSetNumeric(t *testing.T) {
 		{"power.sources[0].available_month", 18.2, func(t *testing.T, p *pb.SitePlan) float64 {
 			return float64(p.GetPower().GetSources()[0].GetAvailableMonth())
 		}},
-		{"costs.gpu.residual_curve[1]", 0.5, func(t *testing.T, p *pb.SitePlan) float64 { return p.GetCosts().GetGpu().GetResidualCurve()[1] }},
+		{"costs.gpu.residual_curve[1]", 0.5, func(t *testing.T, p *pb.SitePlan) float64 { return p.GetCosts().GetGpu().GetResidualCurve()[1] }}, // indexed scalar list
 		{"run.monte_carlo.seed", 7, func(t *testing.T, p *pb.SitePlan) float64 { return float64(p.GetRun().GetMonteCarlo().GetSeed()) }},
 	}
 	for _, c := range cases {
 		t.Run(c.path, func(t *testing.T) {
 			plan := loadFixture(t)
+			plan.Costs.Gpu.ResidualCurve = []float64{0.8, 0.65} // the fixture has no curve (straight-line); give the indexed case one
 			if err := SetNumeric(plan, c.path, c.v); err != nil {
 				t.Fatal(err)
 			}

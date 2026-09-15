@@ -26,11 +26,12 @@
 //	Facility capex (shell+electrical+cooling+network) $10M/MW × 200 = $2.0B at m0; grid capex $104M;
 //	land $20M; GPUs 110,000 × $40k = $4.4B at energize (m30, when the grid arrives). Total $6.52B.
 //	Delivered GPU-hours: 110,000 × 80% × 730 h × 54 months online ≈ 3.47B GPU-h; PV ≈ 2.23B.
-//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.34B power − $3.07B terminal (GPUs at 35% residual
-//	after 4 full years, shell 82% undepreciated, land at cost) → PV ≈ $4.83B.
-//	LCOC = 4.83B / 2.23B ≈ $2.16 per GPU-hour, against a $3.25 GB300-class opening price decaying
-//	8%/yr; breakeven utilization 77% vs. 80% assumed — thin, because an air-cooled 22-GPU rack carries
-//	the same shell and power as a dense one. T2's move to NVL72 racks is the fix the session finds.
+//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.34B power − $2.41B terminal (GPUs at 20% residual
+//	after 4 of 5 straight-line years — the fixture sets no residual_curve so depreciation_years is a
+//	live lever; shell 82% undepreciated, land at cost) → PV ≈ $5.17B.
+//	LCOC = 5.17B / 2.23B ≈ $2.32 per GPU-hour, against a $3.25 GB300-class opening price decaying
+//	8%/yr; breakeven utilization 83% vs. 80% assumed — underwater, because an air-cooled 22-GPU rack
+//	carries the same shell and power as a dense one. T2's move to NVL72 racks is the fix the session finds.
 //
 // The exact figures are in testdata/abilene-1.result.json (summary.lcoc_per_gpu_hour, summary.extra).
 //

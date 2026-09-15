@@ -64,10 +64,10 @@ Order matters for cache reuse (prefix match: `tools` → `system` → `messages`
    turn, so they must sit *after* the cached prefix — `client.test.ts` asserts
    `usage.cache_read_input_tokens > 0` on the second turn.
 
-## Request features
-- `stream: true` (responsive chat; `.finalMessage()` per iteration after wiring the text/stream events
-  that drive the rail's activity indicator).
-- `thinking: {type: "adaptive"}` (Sonnet 5's on-mode); `max_tokens` 32k; `max_iterations` 16.
+## Request features (as sent by `client.ts`)
+- `stream: true`; text deltas and `tool_use` starts drive the rail's activity indicator;
+  `.finalMessage()` per iteration.
+- `thinking: {type: "adaptive"}` (Sonnet 5's on-mode); `max_tokens` 32,000; `max_iterations` 16.
 - **Strict tools** (`strict: true`) on the plan-writing tools only (`edit_site_plan`, `set_control`,
   `remove_list_item`, `propose_change`): every strict schema joins one compiled grammar with a size cap
   — nine strict tools returned 400 "compiled grammar is too large". The rest are validated by the zod
@@ -79,7 +79,8 @@ Order matters for cache reuse (prefix match: `tools` → `system` → `messages`
 - `eager_input_streaming: true` on `edit_site_plan` (large patches) — then validate the parsed input.
   Eager streaming can hand the SDK unparseable JSON, which rejects the iteration without a `tool_use`
   id to answer; the client re-issues the turn once (API errors are never retried).
-- Parallel tool use: return all `tool_result` blocks in one user message.
+- Parallel tool use is handled by the runner (all `tool_result` blocks in one user message).
+- `stop_reason` `max_tokens` → notice; `refusal` → error; abort → "Stopped."
 
 ## Conversation persistence & context (POC)
 - Store the transcript/history in **localStorage** (per-browser), keyed per plan/session. Wrap every

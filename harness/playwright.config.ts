@@ -11,7 +11,8 @@ const wasmBuilt = existsSync(fileURLToPath(new URL("../web/public/engine.wasm", 
 export const engine = process.env.VITE_ENGINE ?? (wasmBuilt ? "wasm" : "fake");
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: ".",
+  testMatch: ["tests/**/*.spec.ts", "acceptance/**/*.spec.ts"],
   timeout: 90_000,
   fullyParallel: false,
   workers: 1,

@@ -61,6 +61,7 @@ jobs:
       - run: make wasm   # the smoke drives the real engine when it is built
       - run: cd harness && npx playwright install --with-deps chromium
       - run: make harness
+      - run: make acceptance   # scripted mode: no API key; live mode is run manually and archived
 
       - name: Upload run artifacts
         if: always()

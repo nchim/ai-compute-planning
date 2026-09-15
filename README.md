@@ -82,7 +82,10 @@ dropdown and reachable as `__harness.loadFixture(name)`. Each has a golden Resul
 ### abilene-1 — GB300 compute-sales campus, ERCOT (acceptance reference)
 200 MW IT of air-cooled 22-GPU racks selling GPU-hours at $3.25, grid-only at m30, single shot. It is
 the plan the acceptance session (`docs/acceptance-session.md`) starts from and the worked LCOC example
-in `engine/core/doc.go`. Reconciliation: plausibility bands only ($25–45M/MW, LCOC $1.5–2.5).
+in `engine/core/doc.go`. It deliberately sets no `costs.gpu.residual_curve`: GPUs then depreciate
+straight-line over `depreciation_years`, so that master lever (acceptance T6) actually moves the terminal
+value (baseline LCOC $2.32/GPU-hr, NPV −$177M, breakeven utilization 83% vs 80% assumed).
+Reconciliation: plausibility bands only ($25–45M/MW, LCOC $1.5–2.5).
 
 ### nova-colo — A.CRE-style colo development, PJM / Northern Virginia (L0 lens)
 `revenue.mode=COLO_LEASE`. The operating assumptions are the sample deal shipped in the A.CRE Data
