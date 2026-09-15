@@ -115,6 +115,22 @@
 .site-view .map .ov-water circle { fill: #4f83a8; } .map .ov-water text { fill: #4f83a8; }
 .site-view .map .ov-latency circle { fill: none; stroke: var(--time); stroke-dasharray: 5 4; stroke-width: 1.5; } .map .ov-latency text { fill: var(--time); }
 
+/* Leaflet basemap: the container needs a fixed height for tiles to lay out. */
+.site-view .leaflet-map { width: 100%; height: 300px; border-radius: 4px; border: 1px solid #ececee; background: #eef0ec; }
+.site-view .leaflet-container { font: inherit; font-size: 11px; }
+.site-view .leaflet-control-attribution { font-size: 9px; }
+.site-view .map-label { font-size: 10.5px; font-weight: 600; color: var(--ink); background: rgba(255,255,255,.9); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.15); padding: 1px 5px; }
+.site-view .map-label::before { display: none; }
+.site-view .map-notice { margin: 6px 0 0; font-size: 11px; color: #9c3b3b; }
+.site-view .map-legend { margin: 6px 0 2px; }
+.site-view .swatch.latency { background: transparent; border: 1.5px solid var(--time); border-radius: 50%; }
+.site-view .swatch.water { background: #4f83a8; }
+.site-view .swatch.power { background: var(--space); }
+@media (prefers-color-scheme: dark) {
+  .site-view .leaflet-map { background: #26262b; border-color: #3f3f46; }
+  .site-view .map-label { background: rgba(31,31,35,.9); color: #f4f4f5; }
+}
+
 .site-view .schematic { width: 100%; height: auto; font-size: 26px; }
 .site-view .schematic .parcel { fill: #f3f4f1; stroke: var(--line); stroke-dasharray: 8 6; stroke-width: 3; }
 .site-view .schematic .block rect { stroke: #fff; stroke-width: 3; }
