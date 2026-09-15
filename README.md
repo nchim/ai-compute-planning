@@ -88,8 +88,9 @@ sample's: it is a NoVA site with a 60-month grid interconnection, a 15 MW BTM ga
 phase 1 from m24, an explicit second 10 MW phase on the grid at m60, liquid-cooled 125 kW racks on a
 300 psf slab (so the 12% agility premium applies) and expensive land. Exercises: colo revenue with
 escalation and vacancy, `mgmt_fee_pct_of_egr`, EXPLICIT phasing with per-phase power sources, a gas
-pad in the schematic, energy dispatch across two sources with different prices, yield-on-cost and
-development spread against an exit cap.
+pad in the schematic, energy dispatch across two sources with different prices, opex growth, yield-on-cost
+and development spread against an exit cap, and an income-based exit (NOI ÷ `exit_cap_rate`, which is
+what turns its NPV positive: breakeven occupancy 83% vs 95% assumed).
 
 | A.CRE cell (Underwriting) | Value | Our field | Value | Note |
 |---|---|---|---|---|
@@ -108,8 +109,9 @@ development spread against an exit cap.
 | H156 insurance | $0.5/kW/mo = $0.12M/yr | `costs.opex.insurance_pct_of_capex` | 0.082 | same base |
 | I158 management fee | 3% of EGR | `costs.opex.mgmt_fee_pct_of_egr` | 3 | |
 | K159 property taxes | $1.1M/yr | `costs.opex.property_tax_per_yr` | 1,100,000 | ours runs from t0 (land owned); A.CRE from operations |
+| G153–G159 expense growth | 2.5% | `costs.opex.opex_growth_pct_yr` | 2.5 | every cost rate incl. utilities, stepping per year of operations (both) |
 | I121–I126 rent | $285/kW/mo | `revenue.colo.rate_per_kw_month` | 285 | |
-| J121–J126 rent growth | 2% | `revenue.colo.annual_escalation_pct` | 2 | ours compounds from t0 (#29); A.CRE per tenant from lease start |
+| J121–J126 rent growth | 2% | `revenue.colo.annual_escalation_pct` | 2 | per phase from its energize month (A.CRE: per tenant from lease start + 3-month ramp) |
 | I147 general vacancy | 5% | `revenue.colo.vacancy_pct` | 5 | |
 | K176 cap rate at sale | 6.75% | `finance.exit_cap_rate` | 0.0675 | K175 "cap rate today" (6.0%) has no field |
 | D178 sale month | 72 | `finance.hold_period_months` | 72 | |
@@ -124,13 +126,15 @@ Untrended (escalation 0, as A.CRE's column I): stabilized NOI $18.606M vs I195 $
 yield-on-cost 11.78% vs I195/K68 (−0.03%). A.CRE's headline yield I233 = 8.73% divides by K76
 ($213.1M), which adds $20.4M capitalized construction interest and a $34.7M operating-shortfall reserve
 that our 100%-equity STUB does not book; restated on K76 our yield is 8.732% (−0.02%) and the
-development spread over the sale cap rate 198 bps vs 198 bps. Tolerance 1%. Trended (fixture escalation
-2%): our NOI is **+24.8%** above J195 because escalation compounds from t0 and opex never grows (#29);
-the test pins the direction and a 0..+30% band rather than claiming agreement. Other structural
+development spread over the sale cap rate 198 bps vs 198 bps. Tolerance 1%. Trended (2% rent
+escalation per lease, 2.5% growth on every opex rate from operations start): stabilized NOI $18.31M vs
+J195 $18.01M (**+1.7%**, tolerance 5%); the residual is the window (ours m37–48 from the last
+energization, A.CRE's months 46–57 after absorption) and A.CRE's 3-month ramp before each tenant's
+escalation clock starts. Exit: NOI at exit ÷ K176 gives $275.2M vs K207 $271.0M (**+1.6%**, tolerance
+5%; A.CRE capitalizes the 12 months after the sale, ours the 12 before it). Other structural
 differences that do not touch stabilized NOI: no S-curve (capex lumped at construction start, which
 also starts maintenance/insurance early), no debt, no tenant absorption ramp (417 kW/mo in A.CRE),
-asset-based terminal value instead of NOI ÷ exit cap (#30 — the reason nova-colo's breakeven occupancy
-is above 100% on a 72-month hold).
+no 2% selling costs at exit.
 
 ### epoch-100mw — Epoch AI 100 MW GB200 campus, MISO / Illinois (compute sales)
 `revenue.mode=COMPUTE_SALES`, SINGLE_SHOT, PUE 1.14, 125 kW NVL72 racks (72 GPUs), 71% utilization,
@@ -161,11 +165,11 @@ insurance/mgmt-fee lines, a stranded-vs-shortfall ramp and GPU-heavy capex.
 Reconciliation (`TestEpochReconciliation`): total capex $3.7878B vs $3.788B (**−0.00%**, tolerance 5%),
 $37.86M per facility MW; each component line within 1% (utility works +1.0%). Note
 `summary.capex_per_mw` is per *IT* MW ($43.2M) — Epoch quotes per gross MW. Stabilized year (year 4):
-non-energy opex $32.9M vs $32.9M (**0.0%**); energy $78.96M vs $59.4M (+33%) because the engine bills
-the full facility load every hour while Epoch's line is at 71% utilization (#28). Restated at 71%,
-energy is −5.6% and total opex $89.0M vs $92.3M (**−3.6%**, tolerance 10%); the unadjusted total is
-+21% and the test pins that band so it flips when #28 lands. Cross-check: our yield-on-cost 21.9% vs
-the reconstruction's 19.7% EBITDA yield (which adds ~10% of revenue for bandwidth/support/G&A).
+non-energy opex $32.9M vs $32.9M (**0.0%**); energy $54.8M vs $59.4M (−7.7%) — both at 71%
+utilization, since COMPUTE_SALES bills energy on IT × utilization × PUE (`engine/core/doc.go` §Energy;
+the residual is Epoch's higher implied $/MWh) — and total opex $87.7M vs $92.3M (**−5.0%**, tolerance
+10%). Cross-check: our yield-on-cost 22.6% vs the reconstruction's 19.7% EBITDA yield (which adds
+~10% of revenue for bandwidth/support/G&A).
 
 ## Status
 WS1–WS9 (scaffold, engine core, risk, optimizer, WASM bridge, SPA + bus, site view, Copilot, harness),

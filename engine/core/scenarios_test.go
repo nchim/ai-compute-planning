@@ -84,6 +84,7 @@ const (
 	acreNoiTrended          = 18_005_843.62  // J195 stabilized NOI over months 46–57 with 2% rent / 2.5% opex growth
 	acreYieldOnCost         = 0.08734        // I233 = I195 / K76
 	acreExitCap             = 0.0675         // K176 market cap rate at sale
+	acreSaleValue           = 270_979_557.37 // K207 gross sale proceeds: NOI over months 72–83 ÷ K176 (before 2% selling costs)
 )
 
 // acreMirror is the A.CRE sample deal in our proto: the nova-colo operating assumptions (which are
@@ -111,14 +112,17 @@ func acreMirror(t *testing.T) *pb.SitePlan {
 //     construction interest and operating-shortfall reserve. Our 100%-equity STUB books neither, so
 //     our cost basis is K68 and our yield is higher by K76/K68 − 1 = +34.9%. The test compares on
 //     K68 (both are workbook cells) and checks the restated yield against the headline I233.
-//   - Trending: our colo escalation compounds from t0 by calendar year (3 steps by the m37 stabilization
-//     window) and opex does not grow; A.CRE escalates each tenant from its lease start and grows opex
-//     2.5%/yr. On the trended basis our NOI is therefore ~25% above J195 (follow-up issue in the PR);
-//     the untrended comparison (escalation 0, growth 0 on both sides) is the like-for-like one.
+//   - Trending: both escalate each tenant's rent per lease year from its start and grow every opex
+//     rate (utilities included, G153:G159) 2.5%/yr per year of operations. What differs is the
+//     stabilized window — ours is the 12 months from the last energization (m37–48), A.CRE's J195 is
+//     months 46–57 (after tenant absorption) — and A.CRE's 3-month ramp before each escalation clock
+//     starts, so the trended NOI is compared within ±5%; the untrended (escalation 0, growth 0 on
+//     both sides) within ±1%.
 func TestAcreReconciliation(t *testing.T) {
 	t.Run("untrended", func(t *testing.T) {
 		p := acreMirror(t)
 		p.Revenue.Colo.AnnualEscalationPct = 0
+		p.Costs.Opex.OpexGrowthPctYr = 0
 		res := requireOK(t, Analyze(p))
 		s := res.GetSummary()
 		if !approxEq(s.GetTotalCapex(), acreCostBeforeFinancing, 1e-6) {
@@ -141,11 +145,10 @@ func TestAcreReconciliation(t *testing.T) {
 		res := requireOK(t, Analyze(acreMirror(t)))
 		s := res.GetSummary()
 		noi := s.GetYieldOnCostPct() / 100 * s.GetTotalCapex()
-		gap := noi/acreNoiTrended - 1
-		t.Logf("trended NOI vs J195: got %.4g, want %.4g (gap %+.1f%%, structural)", noi, acreNoiTrended, gap*100)
-		if gap < 0 || gap > 0.30 {
-			t.Errorf("trended NOI %.0f is %+.1f%% vs J195: expected 0..+30%% (escalation from t0, no opex growth); if the revenue model changed, revisit", noi, gap*100)
-		}
+		requireWithin(t, "trended NOI vs J195 (2% rent escalation per lease, 2.5% opex growth)", noi, acreNoiTrended, 0.05)
+		// Exit: A.CRE capitalizes the 12 months after the sale month; ours is the 12 months before it,
+		// so the gap is one year of trending.
+		requireWithin(t, "exit value vs K207 (NOI at exit ÷ cap rate)", s.GetExtra()["terminal_value"], acreSaleValue, 0.05)
 	})
 }
 
@@ -167,10 +170,8 @@ const (
 )
 
 // TestEpochReconciliation: capex reproduces Epoch's stack line by line; non-energy opex reproduces
-// Epoch's lines; energy differs structurally — the engine bills the full facility load every hour
-// (opex.go energyCost) while Epoch's energy line is at 71% utilization — so the unadjusted total
-// sits ~20% above $92.3M and the restated total (energy × utilization) is within 10%. The
-// energy-at-utilization change is filed as a follow-up (PR); when it lands, tighten the total to ±10%.
+// Epoch's lines; energy is billed at the utilized IT load × PUE (opex.go), the same basis as Epoch's
+// $59.4M line at 71% utilization, so the total reconciles unadjusted within ±10%.
 func TestEpochReconciliation(t *testing.T) {
 	res := requireOK(t, Analyze(loadFixtureNamed(t, "epoch-100mw")))
 	s := res.GetSummary()
@@ -194,11 +195,8 @@ func TestEpochReconciliation(t *testing.T) {
 		year := firstFullYearOnline(int(s.GetTimeToEnergizeMonths()))
 		opex, power := annualOpex(t, res, year)
 		requireWithin(t, "non-energy opex", opex, epochOpexOther, 0.10)
-		requireWithin(t, "energy × utilization vs Epoch energy", power*epochUtilization, epochOpexEnergy, 0.10)
-		requireWithin(t, "total opex with energy restated at utilization", opex+power*epochUtilization, epochOpexTotal, 0.10)
-		if gap := (opex+power)/epochOpexTotal - 1; gap < 0.10 || gap > 0.30 {
-			t.Errorf("unadjusted total opex %.1fM is %+.1f%% vs Epoch: expected +10..+30%% while energy is billed at nameplate; if energy now scales with utilization, compare within ±10%% instead", (opex+power)/1e6, gap*100)
-		}
+		requireWithin(t, "energy vs Epoch energy (both at 71% utilization)", power, epochOpexEnergy, 0.10)
+		requireWithin(t, "total opex", opex+power, epochOpexTotal, 0.10)
 	})
 }
 

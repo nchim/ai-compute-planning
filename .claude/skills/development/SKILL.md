@@ -207,3 +207,15 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   "Docs current" DoD box: fix the doc in the PR that changes the fact, and check every documented
   command against the Makefile / package.json before committing. `git show origin/<branch>:<path>` is
   enough to describe an in-flight PR's design without claiming it is merged.
+- 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
+  per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
+  optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
+  diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
+- 2026-09-15 (#28–#30) — `go test -update` rewrites every golden with protojson's deliberately randomized
+  whitespace, so `git checkout` the goldens whose numbers did not change before committing (compare
+  `jq .summary`, not the diff size). A.CRE trends everything: rent per tenant from lease start
+  (+3-month ramp) and *every* opex line incl. utilities with `(1+g)^(ROUNDUP(op_month/12)−1)` from the
+  first tenant's month — inputs are year-1-of-operations dollars, so growth anchored at the first
+  energization (not t0) is what reconciles; its sale value is forward-12 NOI ÷ cap (`K207`). When the
+  cost side moves with utilization, keep the breakeven exact by discounting the variable lines
+  separately (`opexSeries.variable`, `exit.variable`) rather than assuming cost is fixed.

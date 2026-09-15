@@ -21,14 +21,50 @@ type riskComponent struct {
 	score float64
 }
 
-// presentValues are the discounted totals LCOC and breakeven are built from.
+// presentValues are the discounted totals LCOC and breakeven are built from. variable is the part of
+// cost that scales with utilization (opexSeries.variable).
 type presentValues struct {
-	cost, gpuHours, revenue float64
+	cost, variable, gpuHours, revenue float64
 }
 
-// terminalValue is what the assets are worth at the end of the hold: GPUs at their residual-curve
-// fraction, facility capex straight-line over shellLifeMonths, land at cost (STUB: no appreciation).
-func terminalValue(plan *pb.SitePlan, capex capexBuild, phases []phase, months int) float64 {
+// exit is the terminal value booked in the final month. variable is the part of it that scales
+// with utilization (occupancy for colo), for the breakeven; both valuation bases are kept for
+// summary.extra.
+type exit struct {
+	value, variable, assetBasis, capRateValue float64
+}
+
+// exitValue prices the plan at the end of the hold. COLO_LEASE sells a leased building on its
+// income — NOI at exit capitalized at finance.exit_cap_rate (the GPUs are the tenant's) — floored at
+// zero and falling back to the asset basis, with an INFO, when no cap rate is given. COMPUTE_SALES
+// keeps the asset basis: a compute operator's exit is the hardware and shell it owns, not a
+// leased-NOI multiple; the cap-rate value is still reported for comparison.
+func exitValue(m *model, d *diags) exit {
+	e := exit{assetBasis: assetResidual(m.plan, m.capex, m.months)}
+	noi, noiVariable := exitNoi(m)
+	cap := m.plan.GetFinance().GetExitCapRate()
+	if cap > 0 {
+		e.capRateValue = maxf(0, noi/cap)
+	}
+	e.value = e.assetBasis
+	switch {
+	case m.plan.GetRevenue().GetMode() != pb.RevenueMode_COLO_LEASE:
+	case cap <= 0:
+		d.infof(codeExitCapRateUnset, "finance.exit_cap_rate", "> 0", num(cap),
+			"set finance.exit_cap_rate to value the colo exit on its stabilized NOI",
+			"exit_cap_rate is unset: the colo terminal value falls back to the asset basis (GPUs, shell, land)")
+	case noi > 0:
+		e.value, e.variable = e.capRateValue, noiVariable/cap
+	default:
+		e.value = 0
+	}
+	return e
+}
+
+// assetResidual is what the owned assets are worth at the end of the hold: GPUs at their
+// residual-curve fraction, facility capex straight-line over shellLifeMonths, land at cost
+// (STUB: no appreciation).
+func assetResidual(plan *pb.SitePlan, capex capexBuild, months int) float64 {
 	var tv float64
 	for _, l := range capex.lines {
 		if l.month >= months {
@@ -44,6 +80,22 @@ func terminalValue(plan *pb.SitePlan, capex capexBuild, phases []phase, months i
 		}
 	}
 	return tv
+}
+
+// exitNoi is the annualized net operating income a buyer capitalizes at exit: the final 12 months
+// of the hold, or from the last energization if that is later (zero if nothing is online). variable
+// is the occupancy-linear part (revenue net of the management fee).
+func exitNoi(m *model) (noi, variable float64) {
+	start := maxInt(lastEnergize(m.phases), m.months-12)
+	if start >= m.months {
+		return 0, 0
+	}
+	scale := 12 / float64(m.months-start)
+	for t := start; t < m.months; t++ {
+		noi += m.rev.revenue[t] - m.opex.opex[t] - m.opex.power[t]
+		variable += m.rev.revenue[t] - m.opex.mgmtFee[t]
+	}
+	return noi * scale, variable * scale
 }
 
 // gpuResidualFraction reads the residual curve after `years` full years in service (1.0 before the
@@ -63,13 +115,16 @@ func gpuResidualFraction(g *pb.GpuCost, years int) float64 {
 
 // discount computes the present values behind LCOC: lifecycle cost net of terminal value, delivered
 // GPU-hours and revenue, all at the monthly equivalent of finance.discount_rate.
-func discount(plan *pb.SitePlan, cf cashflow, rev revenueSeries) presentValues {
-	r := monthlyRate(plan.GetFinance().GetDiscountRate())
-	cost := make([]float64, cf.months)
+func discount(m *model) presentValues {
+	r := monthlyRate(m.plan.GetFinance().GetDiscountRate())
+	cf := m.cf
+	cost, variable := make([]float64, cf.months), make([]float64, cf.months)
 	for t := range cost {
 		cost[t] = cf.capex[t] + cf.opex[t] + cf.power[t] - cf.terminal[t]
+		variable[t] = m.opex.variable[t]
 	}
-	return presentValues{cost: npv(r, cost), gpuHours: npv(r, rev.gpuHours), revenue: npv(r, cf.revenue)}
+	variable[cf.months-1] -= m.exit.variable
+	return presentValues{cost: npv(r, cost), variable: npv(r, variable), gpuHours: npv(r, m.rev.gpuHours), revenue: npv(r, cf.revenue)}
 }
 
 // lcoc is PV(lifecycle cost) / PV(delivered GPU-hours); see doc.go for the formula and worked example.
@@ -81,9 +136,11 @@ func lcoc(pv presentValues) float64 {
 }
 
 // utilizationBreakeven is the utilization (occupancy for colo) at which PV(revenue) = PV(cost).
-// Revenue is linear in utilization, so breakeven = assumed × PV(cost)/PV(revenue).
+// Revenue and the variable cost (management fee, compute-sales energy) are linear in utilization and
+// the rest of cost is fixed, so breakeven = assumed × (PV(cost) − PV(variable)) / (PV(revenue) − PV(variable)).
 func utilizationBreakeven(plan *pb.SitePlan, pv presentValues) float64 {
-	if pv.revenue <= 0 {
+	margin := pv.revenue - pv.variable
+	if margin <= 0 {
 		return 0
 	}
 	rev := plan.GetRevenue()
@@ -91,23 +148,27 @@ func utilizationBreakeven(plan *pb.SitePlan, pv presentValues) float64 {
 	if rev.GetMode() == pb.RevenueMode_COLO_LEASE {
 		assumed = 100 - rev.GetColo().GetVacancyPct()
 	}
-	return assumed * pv.cost / pv.revenue
+	return assumed * (pv.cost - pv.variable) / margin
 }
 
 // stabilizedNoi annualizes net operating income over the 12 months after the last phase energizes
 // (or the final 12 months of the hold if that is sooner).
-func stabilizedNoi(cf cashflow, phases []phase) float64 {
-	start := 0
-	for _, ph := range phases {
-		start = maxInt(start, ph.energize)
-	}
-	start = maxInt(0, minInt(start, cf.months-12))
-	end := minInt(start+12, cf.months)
+func stabilizedNoi(m *model) float64 {
+	start := maxInt(0, minInt(lastEnergize(m.phases), m.months-12))
+	end := minInt(start+12, m.months)
 	var noi float64
 	for t := start; t < end; t++ {
-		noi += cf.revenue[t] - cf.opex[t] - cf.power[t]
+		noi += m.cf.revenue[t] - m.cf.opex[t] - m.cf.power[t]
 	}
 	return noi * 12 / float64(end-start)
+}
+
+func lastEnergize(phases []phase) int {
+	last := 0
+	for _, ph := range phases {
+		last = maxInt(last, ph.energize)
+	}
+	return last
 }
 
 func riskComponents(m *model) []riskComponent {
@@ -179,14 +240,18 @@ func buildSummary(m *model, d *diags) {
 		UtilizationBreakevenPct:  utilizationBreakeven(m.plan, m.pv),
 		Extra: map[string]float64{
 			"racks": float64(m.site.racks), "gpus": m.site.gpus, "facility_mw": m.site.facilityMw,
-			"terminal_value": m.terminal, "pv_lifecycle_cost": m.pv.cost, "pv_gpu_hours": m.pv.gpuHours,
+			"terminal_value": m.exit.value, "exit_value_asset_basis": m.exit.assetBasis,
+			"pv_lifecycle_cost": m.pv.cost, "pv_gpu_hours": m.pv.gpuHours,
 			"opex_total": sum(m.cf.opex), "power_cost_total": sum(m.cf.power), "revenue_total": sum(m.cf.revenue),
 		},
+	}
+	if f.GetExitCapRate() > 0 {
+		s.Extra["exit_value_cap_rate"] = m.exit.capRateValue
 	}
 	for _, ph := range m.phases {
 		s.TimeToEnergizeMonths = minInt32(s.TimeToEnergizeMonths, int32(ph.energize))
 	}
-	noi := stabilizedNoi(m.cf, m.phases)
+	noi := stabilizedNoi(m)
 	s.YieldOnCostPct = noi / m.capex.total * 100
 	s.DevSpreadBps = (s.YieldOnCostPct - f.GetExitCapRate()*100) * 100
 	if irrPct, ok := irr(m.cf.net); ok {

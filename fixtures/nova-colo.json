@@ -84,7 +84,8 @@
       "maintenance_pct_of_capex": 1.64,
       "insurance_pct_of_capex": 0.082,
       "mgmt_fee_pct_of_egr": 3,
-      "property_tax_per_yr": 1100000
+      "property_tax_per_yr": 1100000,
+      "opex_growth_pct_yr": 2.5
     },
     "agility_premium_pct": 12
   },
