@@ -64,8 +64,9 @@ ramp 40 → 200 MW over months 6–42, 7-year hold. Internally consistent so the
   `gpu.depreciation_years` (uniform over 3–7 → rounded) and enables Monte Carlo (seed fixed, 1,000
   iterations) + sensitivity on the master levers; runs Analyze.
 - **Assert:** P10 < P50 < P90 for LCOC and NPV; histogram counts sum to iterations; re-running with the
-  same seed yields a byte-identical `MonteCarloResult`; tornado top-2 ⊂ {gpu_hour_price, utilization,
-  energization}; Monte Carlo bands render on the risk panel (screenshot).
+  same seed yields a byte-identical `MonteCarloResult`; the tornado is reported for two targets (LCOC
+  and NPV): on the NPV tornado `gpu_hour_price` and `utilization_pct` rank in the top 3 (on the LCOC
+  tornado price is flat, since LCOC is a cost); Monte Carlo bands render on the risk panel (screenshot).
 
 ### T5 — What-if on the linchpin (set_control, compare)
 - H: *"What if utilization is only 65%?"*
