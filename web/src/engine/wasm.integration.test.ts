@@ -8,10 +8,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { fromBinary, fromJsonString, toBinary } from "@bufbuild/protobuf";
+import { clone, create, fromBinary, fromJsonString, toBinary } from "@bufbuild/protobuf";
 import { beforeAll, describe, expect, test } from "vitest";
 
-import { ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingSchema, PowerSourceSchema, PowerType, ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createEngine, type WorkerLike } from "./client";
 import { serve, type EngineOps, type Reply, type Request } from "./protocol";
 
@@ -38,19 +38,42 @@ describe.skipIf(!built)("compiled engine.wasm", () => {
     plan = fromJsonString(SitePlanSchema, readFileSync(fixturePath, "utf8"));
   });
 
-  // Until WS2/WS4 land, the models are stubs: accept OK or a visible NOT_IMPLEMENTED diagnostic.
   const expectModelResult = (bytes: Uint8Array) => {
     const res = fromBinary(ResultSchema, bytes);
     const codes = res.diagnostics.map((d) => d.code);
-    expect(res.status === Status.OK || codes.includes("NOT_IMPLEMENTED")).toBe(true);
+    expect(res.status).toBe(Status.OK);
     expect(codes).not.toContain("MALFORMED_INPUT");
     expect(codes).not.toContain("INTERNAL_ERROR");
+    return res;
   };
 
-  test.each(["analyze", "optimize"] as const)("%s round-trips abilene-1 through serve", (op) => {
-    const reply = serve(ops, { id: 1, op, bytes: toBinary(SitePlanSchema, plan) });
+  test("analyze round-trips abilene-1 through serve", () => {
+    const reply = serve(ops, { id: 1, op: "analyze", bytes: toBinary(SitePlanSchema, plan) });
     if (!reply.ok) throw new Error(reply.error.message);
-    expectModelResult(reply.bytes);
+    expect(expectModelResult(reply.bytes).conservation?.allPassed).toBe(true);
+  });
+
+  test("optimize designs phases for an OPTIMIZE-mode plan through serve", () => {
+    // Grid-only supply cannot meet the shortfall cap (grid arrives at m30); add the T3 gas bridge.
+    const toOptimize = clone(SitePlanSchema, plan);
+    toOptimize.power?.sources.push(
+      create(PowerSourceSchema, { id: "gas", type: PowerType.BTM_GAS, capacityMw: 80, availableMonth: 12, costPerMwh: 85, capexPerKw: 1200, leadTimeMonths: 12 }),
+    );
+    toOptimize.phasing = create(PhasingSchema, {
+      mode: PhasingMode.OPTIMIZE,
+      policy: { maxPhases: 3, minPhaseMw: 25, maxPhaseMw: 100, minMonthsBetweenPhases: 6, maxShortfallMw: 20 },
+    });
+    const reply = serve(ops, { id: 2, op: "optimize", bytes: toBinary(SitePlanSchema, toOptimize) });
+    if (!reply.ok) throw new Error(reply.error.message);
+    const res = expectModelResult(reply.bytes);
+    expect(res.optimization?.bestPlan?.phasing?.mode).toBe(PhasingMode.EXPLICIT);
+    expect(res.optimization?.frontier.length).toBeGreaterThan(0);
+  });
+
+  test("optimize on a SINGLE_SHOT plan is rejected with USE_ANALYZE, not a crash", () => {
+    const res = fromBinary(ResultSchema, ops.optimize(toBinary(SitePlanSchema, plan)));
+    expect(res.status).toBe(Status.INVALID_INPUT);
+    expect(res.diagnostics.map((d) => d.code)).toEqual(["USE_ANALYZE"]);
   });
 
   test("corrupted bytes yield a MALFORMED_INPUT diagnostic, not a crash", () => {
