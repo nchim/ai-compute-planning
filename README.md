@@ -11,6 +11,7 @@ between all three is one protobuf: `SitePlan → Result`.
 | `engine/` | Go engine: `pb/` (generated), `core/` (pure model), `wasm/` (JS bridge) |
 | `web/` | Vite + React 18 + TypeScript SPA; `src/gen/` is generated |
 | `harness/` | Playwright remote-control harness + acceptance scripts |
+| `deploy/` | Cloud Run host: Go static server + Basic Auth + Anthropic relay, Dockerfile, runbook |
 | `fixtures/` | Shared protojson `SitePlan`s (`abilene-1.json` is the acceptance reference plan) |
 | `docs/`, `research/` | Design docs and the research corpus (start at `docs/README.md`) |
 
@@ -28,6 +29,22 @@ make gen     # regenerate engine/pb + web/src/gen after editing the proto; commi
 Generated code is committed so nothing beyond `buf` (with remote plugins) is needed to build.
 `wasm_exec.js` is copied from `$(go env GOROOT)/lib/wasm` by `make wasm`, not committed, so it
 always matches the Go toolchain that built the module.
+
+## Deploy
+The tester deployment is one Cloud Run service (`deploy/`): a Go server that hosts the built SPA behind
+a shared password and relays the Copilot's Anthropic calls with a server-held key. Full runbook, IAM
+and security notes: `deploy/cloudrun.md`.
+
+```sh
+# 1. once: the two secrets (and grant the Cloud Run service account roles/secretmanager.secretAccessor)
+printf '%s' 'sk-ant-...' | gcloud secrets create anthropic-api-key --data-file=- --project ai-compute-planner
+printf '%s' 'choose-a-password' | gcloud secrets create app-password --data-file=- --project ai-compute-planner
+# 2. every release: build on Cloud Build from source and roll out
+make deploy
+# 3. share the printed service URL with user `tester` and the password
+```
+
+`make serve` runs the same configuration locally (`ANTHROPIC_API_KEY` and `APP_PASSWORD` in the env).
 
 ## Fixtures
 `fixtures/abilene-1.json` is a protojson `SitePlan`. Conventions (JSON has no comments):

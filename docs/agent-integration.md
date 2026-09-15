@@ -10,12 +10,19 @@ Companion to `architecture.md` (command bus) and `ui-spec.md` (Copilot behaviors
   browser (WASM engine + command bus), so the loop lives in the SPA, not on a server.
 - **SDK:** `@anthropic-ai/sdk` in the browser, using the beta **tool runner**
   (`client.beta.messages.toolRunner` with `betaZodTool`) so we don't hand-write the loop.
-- **Inference transport (POC): BYO-key dev mode.** The developer pastes an Anthropic key (kept in
-  local/session storage, dev only); the SDK calls Anthropic directly with
-  `dangerouslyAllowBrowser: true` and the `anthropic-dangerous-direct-browser-access: true` header.
-  **⚠️ Never ship this.** Before any real deployment, insert a **thin serverless relay** that holds the
-  key server-side and forwards to Anthropic (set the SDK `baseURL` to the relay; drop the browser-access
-  flag). Tracked as a pre-deployment task — see `implementation-plan.md`.
+- **Inference transport** — selected at build time in `web/src/copilot/transport.ts`:
+  - **Relay mode (deployed default).** `VITE_COPILOT_RELAY=/api/anthropic` points the SDK's `baseURL`
+    at our own server (`deploy/server`, Go, on Cloud Run), which holds the Anthropic key, gates every
+    request behind the shared Basic Auth password, forwards only `POST /v1/messages` with an
+    allow-list of headers, streams SSE through, and enforces a per-UTC-day request cap (429 in the
+    Anthropic error envelope, so the SDK raises `RateLimitError` and the rail shows the reason). The
+    client passes a placeholder key (the SDK requires one; the relay overwrites it) and still sets
+    `dangerouslyAllowBrowser: true` — the SDK refuses to construct in a browser without it — but
+    removes the `anthropic-dangerous-direct-browser-access` header it would otherwise add, since there
+    is no key in the page to acknowledge. The key panel is replaced by "Relay mode — key held
+    server-side". Runbook: `deploy/cloudrun.md`.
+  - **BYO-key mode (dev default).** With `VITE_COPILOT_RELAY` unset the developer pastes a key (kept
+    in sessionStorage) and the browser calls Anthropic directly. **⚠️ Never deploy this build.**
 
 ## Capabilities (client-side tools, over the command bus)
 All tools dispatch through the command bus (so agent actions == human actions) and read/write the same
@@ -72,6 +79,7 @@ inference transport is configured (BYO-key in dev).
 ## Implementation map (WS8, `web/src/copilot/`)
 - `client.ts` — `createCopilot({store, engine, apiKey, model?, onUsage?})`: tool runner, streaming,
   cached system prompt + per-turn ViewContext, transcript persistence; `send` / `abort` / `subscribe`.
+- `transport.ts` — relay vs BYO-key selection (`VITE_COPILOT_RELAY`) and SDK client construction.
 - `tools.ts` — the seven tools; `analysis.ts` — waits for the store's re-analyze to settle;
   `context.ts` — the ViewContext block; `history.ts` — localStorage transcripts; `research.ts` —
   the build-time corpus bundle; `prompt.ts` — the PROMPT TEXT import.
@@ -85,7 +93,9 @@ inference transport is configured (BYO-key in dev).
   conservation) so the model self-corrects within one turn without an extra `run_analyze`.
 
 ## Deferred to pre-deployment
-- The thin serverless relay (key custody, per-user auth, rate limiting) replacing BYO-key mode.
+- ~~The thin serverless relay (key custody, rate limiting)~~ — done (`deploy/server`, relay mode
+  above). Still open: **per-user auth** (the relay uses one shared password) and a cap shared across
+  instances (the current one is per process; `--max-instances 1` keeps it meaningful).
 - **Conversation compaction / context management** for long sessions (beta compaction or context editing).
 - Optional per-turn model escalation (Sonnet 5 → Opus 5) for reasoning-heavy turns.
 - Move transcript persistence from localStorage to a durable/shared store if sessions need to sync.
