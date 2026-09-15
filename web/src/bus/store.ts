@@ -34,8 +34,9 @@ export interface Store {
 
 /**
  * Owns the state, the command log and the re-analyze cycle. Plan mutation → (debounced) analyze →
- * `resultReceived`. Each analyze call takes a request number; a reply is applied only if it is still
- * the latest, so out-of-order engine replies are dropped rather than overwriting a newer result.
+ * `resultReceived`. Each engine call takes a request number, minted when the mutation is scheduled;
+ * a reply is applied only if it is still the latest, so replies for a superseded plan (out of order,
+ * or landing while a newer mutation is still debounced) are dropped rather than shown.
  * Instances are created in `main.tsx` and passed by context — there is no module-level store.
  */
 export function createStore(options: StoreOptions): Store {
@@ -63,6 +64,7 @@ export function createStore(options: StoreOptions): Store {
   };
 
   const scheduleAnalyze = () => {
+    latestRequest++; // anything still in flight is for a superseded plan: drop its reply
     if (debounce !== null) clearTimeout(debounce);
     debounce = setTimeout(runAnalyze, debounceMs);
   };
@@ -82,12 +84,11 @@ export function createStore(options: StoreOptions): Store {
       return;
     }
     // Fire-and-forget: the guarded handler already reported any failure to the UI.
-    guarded(engine.analyze(plan)).catch(() => undefined);
+    guarded(latestRequest, engine.analyze(plan)).catch(() => undefined);
   };
 
-  /** Tracks an engine reply as in flight and applies it only while it is still the latest request. */
-  const guarded = (reply: Promise<Result>): Promise<Result> => {
-    const request = ++latestRequest;
+  /** Tracks an engine reply as in flight and applies it only while `request` is still the latest. */
+  const guarded = (request: number, reply: Promise<Result>): Promise<Result> => {
     inFlight++;
     return reply
       .then(
@@ -116,7 +117,7 @@ export function createStore(options: StoreOptions): Store {
     const candidate = clone(SitePlanSchema, state.plan);
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
-    return guarded(engine.optimize(candidate));
+    return guarded(++latestRequest, engine.optimize(candidate));
   };
 
   return {

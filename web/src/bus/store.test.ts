@@ -86,6 +86,26 @@ describe("store", () => {
     expect(store.getState().error).toBeNull();
   });
 
+  test("a reply for a plan superseded during the debounce window is dropped", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16);
+    expect(engine.calls).toHaveLength(1);
+
+    // The plan changes while the first analyze is in flight; its debounce has not fired yet.
+    store.dispatch({ type: "setField", path: "compute.pue", value: 1.3 });
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+    expect(store.getState().result).toBeNull();
+
+    vi.advanceTimersByTime(16);
+    expect(engine.calls).toHaveLength(2);
+    engine.calls[1]!.resolve(resultWithMw(2));
+    await flush();
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
+  });
+
   test("engine rejections become an error with kind + message", async () => {
     const engine = controllableEngine();
     const store = createStore({ engine });
