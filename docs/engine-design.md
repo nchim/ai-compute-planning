@@ -1,6 +1,6 @@
 # Engine Design — Go / WASM Analytical Core
 
-**Status:** v0.1 — 2026-09-15. Implements the `SitePlan → Result` contract in `docs/proto/engine.proto`.
+**Status:** v0.1 — 2026-09-15. Implements the `SitePlan → Result` contract in `proto/capplanner/v1/engine.proto`.
 Scope: single site, deterministic core + Monte Carlo + sensitivity + phasing-to-demand optimizer.
 
 ## Principles
@@ -18,7 +18,7 @@ Scope: single site, deterministic core + Monte Carlo + sensitivity + phasing-to-
 ## Package layout (idiomatic Go)
 ```
 engine/
-  proto/            // generated from docs/proto/engine.proto (buf)
+  proto/            // generated from proto/capplanner/v1/engine.proto (buf)
   core/             // pure analytical model
     validate.go     // input validation → ERROR diagnostics (fail fast, but collect all)
     sizing.go       // power/cooling/rack/space sizing

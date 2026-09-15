@@ -5,6 +5,9 @@ session run through the **remote-control harness** (Playwright + `window.__harne
 agent + WASM engine iteratively until behavior and output quality meet the expectations below. Run these
 once the basic engine is complete; treat failures as debugging targets for this session.
 
+> **Superseded as the top-level gate by `acceptance-session.md`** (one continuous session, T1–T7, which
+> embeds all three cases). These cases remain the unit-level assertions referenced from that script.
+
 Shared setup: single site (Abilene-1, ERCOT / W. Texas), mock but internally-consistent inputs.
 
 ---

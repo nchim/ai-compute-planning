@@ -1,26 +1,44 @@
 ---
 name: development
-description: Shared feature-development process for the AI-Lab Capacity Planner (Go/WASM engine, protobuf contract, SPA, remote-control harness). Invoke or read before doing ANY implementation work on this project — it defines the TDD + conservation + proto-contract discipline every worker follows. Also a LIVING doc: contribute improvements as you learn.
+description: Shared feature-development process for the AI-Lab Capacity Planner (Go/WASM engine, protobuf contract, SPA, remote-control harness). Read before doing ANY implementation work on this project — it defines the code-quality bar, the TDD + conservation + proto-contract discipline, and the worktree→PR workflow every worker follows. LIVING doc: append to the Playbook as you learn.
 ---
 
 # Development Skill — AI-Lab Capacity Planner
 
 Shared process for everyone building this project (orchestrator + subagent workers). Follow it for every
-feature. **This file is living: improve it as you learn (see "Improve this skill").**
+task. **This file is living: improve it as you learn (see "Improve this skill").**
 
 ## Read first (source of truth)
-- `docs/architecture.md` — components + the command-bus seam + remote-control harness.
-- `docs/proto/engine.proto` — THE contract (`SitePlan → Result`). Do not diverge from it.
-- `docs/engine-design.md` — engine internals, conservation checks, Monte Carlo, optimizer.
-- `docs/ui-spec.md` — UI behavior, command bus, Copilot, `window.__harness`.
-- `docs/implementation-plan.md` — workstreams, tasks, dependencies, your assignment.
-- `research/02-kpi-architecture.md` — the analytical/strategic spine (LCOC, the four dimensions,
-  shortage-vs-underutilization). `docs/product-brief.md` for product framing.
+- `docs/implementation-plan.md` — locked tech decisions, your workstream, dependencies.
+- `docs/acceptance-session.md` — the overall acceptance criterion; know which turns your work serves.
+- `proto/capplanner/v1/engine.proto` — THE contract (`SitePlan → Result`). Do not diverge from it.
+- `docs/architecture.md`, `docs/engine-design.md`, `docs/ui-spec.md`, `docs/agent-integration.md`,
+  `docs/agent-system-prompt.md` — component specs.
+- `research/02-kpi-architecture.md` — the analytical/strategic spine (LCOC, four dimensions,
+  shortage-vs-underutilization).
+
+## Code-quality bar (we are graded on this)
+1. **Concise and readable, written to be maintained and extended.** Small functions with one job,
+   names that say what they mean, no clever tricks, no dead code, no premature abstraction. A reader
+   should follow the pipeline top-down without a map. Comments explain *why*, not *what*.
+2. **Catch errors as early in the pipeline as possible.** Validate inputs at the boundary (proto
+   validation, tool-input schemas, harness arguments) and fail there with a precise message. Never let a
+   bad value travel into sizing/cashflow/rendering and surface as a NaN or a wrong chart.
+3. **Every error is handled and bubbles back to the caller — ultimately the agent.** In Go: return
+   wrapped errors (`fmt.Errorf("sizing: %w", err)`), never ignore a return value, never `panic` for
+   expected conditions; at the WASM boundary, recover and emit an `INTERNAL_ERROR` diagnostic. In TS:
+   no swallowed promises, no empty `catch`; tool failures become `tool_result` errors the model sees;
+   UI failures render a visible diagnostic. Engine model errors are **diagnostics in the Result**, not
+   Go errors.
+4. **No data races.** The engine has **no goroutines** (single-threaded pure function; WASM is
+   single-threaded anyway). Go tests run with `-race`. In the SPA, all mutable state lives behind the
+   command bus reducer; the engine runs in a Web Worker with request ids so out-of-order replies are
+   dropped, not applied. No module-level mutable singletons.
 
 ## Non-negotiable rules
-1. **The proto is the contract.** Never change `engine.proto` unilaterally. If a change is needed, STOP
-   and flag the orchestrator (SendMessage to `main`) — a proto change ripples to engine + UI + agent.
-   When approved, update the proto doc, regenerate, and note it in the plan.
+1. **The proto is the contract.** Never change `engine.proto` unilaterally. If you need a change, put
+   the proposed diff + rationale in your PR description and stop at that boundary; the orchestrator
+   decides. A proto change ripples to engine + UI + agent.
 2. **TDD.** Write failing tests first. Table-driven tests per module; golden fixtures in `testdata/`;
    conservation checks as property tests over randomized valid inputs.
 3. **Conservation is mandatory.** A feature is NOT done if any `ConservationCheck` fails on the golden
@@ -28,47 +46,54 @@ feature. **This file is living: improve it as you learn (see "Improve this skill
 4. **Determinism.** No wall-clock, no ambient RNG, no map-iteration-order dependence. All randomness is
    seeded from `run.monte_carlo.seed`. Same input+seed → byte-identical `Result`.
 5. **Purity.** The engine core has no I/O, no globals. `Analyze`/`Optimize` are pure functions of the
-   input proto. No panics cross the WASM boundary (recover → diagnostic).
+   input proto.
 6. **Verbose diagnostics.** Every error/warning carries `code`, `proto_path`, `expected`, `actual`,
-   `hint` so the agent can self-correct. Add a stable `code` for each new failure mode.
+   `hint` so the agent can self-correct. Add a stable `code` for each new failure mode and a test for it.
 7. **UI goes through the command bus.** No control (human, Copilot, or harness) bypasses it. The agent
    states no number that isn't from a `Result`.
-8. **Idiomatic Go.** `gofmt`, `go vet`, `staticcheck` clean. Small packages, wrapped errors, no premature
-   abstraction. Match the layout in `engine-design.md`.
+8. **Idiomatic Go / strict TS.** `gofmt`, `go vet`, `staticcheck` clean; `tsc --strict`, ESLint clean.
+   Match the layouts in `engine-design.md` and `implementation-plan.md`.
+9. **Stub honestly.** It is fine to stub low-level detail for the POC, but a stub must be visible: a
+   `// STUB:` comment, a diagnostic `INFO` where it affects results, and a line in your PR description.
+   Never hide a simplification inside a plausible-looking number.
 
-## Per-task workflow
-1. Read your task in `implementation-plan.md` + the relevant docs above.
+## Per-task workflow (worktree → PR)
+1. You are in your own git worktree on a fresh branch `ws<N>-<slug>` from `main`. Read your GitHub issue
+   (`gh issue view <N>`) and the docs above.
 2. Write the failing test(s) first.
-3. Implement the smallest change that passes; keep within your workstream's package boundaries.
-4. Run: `go test ./...`, `go vet ./...`, `staticcheck ./...`; for engine changes also run the
-   conservation + determinism tests.
-5. If you touched the contract or a shared interface: update the relevant doc in the same change.
-6. Self-review against the Definition of Done.
-7. Report back concisely: what changed, tests added, checks passing, and anything the orchestrator or
-   another workstream needs to know.
+3. Implement the smallest change that passes; stay inside your workstream's directories.
+4. Run the full check: `make check` (lint + tests, engine and web) — and `make wasm` if you touched the engine.
+5. If you touched a shared interface, update the relevant doc in the same PR.
+6. Commit in small, well-described commits. Push and open a PR: `gh pr create --fill --base main`, body
+   = what changed · tests added · checks passing · stubs · anything the orchestrator or another
+   workstream must know · `Closes #<issue>`. Append the attribution line the session provides.
+7. Report back to the orchestrator with the PR number and that same summary. Do not merge.
+8. If the orchestrator requests changes, push follow-up commits to the same branch and reply.
 
 ## Definition of Done
-- [ ] Tests written first and passing; coverage not reduced.
-- [ ] `gofmt`/`go vet`/`staticcheck` clean.
-- [ ] Conservation checks pass; determinism test passes (engine work).
-- [ ] New failure modes have coded, `proto_path`'d diagnostics.
-- [ ] Docs updated if any contract/interface changed.
-- [ ] No proto change without orchestrator sign-off.
-- [ ] Change is scoped to the assigned workstream; no drive-by edits elsewhere.
+- [ ] Tests written first and passing; `go test -race` clean; coverage not reduced.
+- [ ] `gofmt`/`go vet`/`staticcheck` (Go) and `tsc`/ESLint (TS) clean; `make check` green.
+- [ ] Conservation + determinism tests pass (engine work).
+- [ ] Every error path handled and surfaced (diagnostic, wrapped error, or tool_result error).
+- [ ] New failure modes have coded, `proto_path`'d diagnostics with tests.
+- [ ] Stubs are visible and listed in the PR.
+- [ ] Docs updated if any contract/interface changed; no proto change without orchestrator sign-off.
+- [ ] Scoped to the assigned workstream; no drive-by edits elsewhere. Playbook entry added if you learned something.
 
-## Commands (fill in as the toolchain lands)
-- Engine tests: `go test ./engine/...`
-- Lint: `go vet ./... && staticcheck ./...`
-- WASM build: `GOOS=js GOARCH=wasm go build -o web/engine.wasm ./engine/wasm`
-- Proto regen: `buf generate` (config in the engine workstream)
-- Harness/validation: (added by the harness workstream)
+## Commands (WS1 lands these; keep this list current)
+- Everything: `make check` · engine: `go test -race ./engine/...` · lint: `go vet ./... && staticcheck ./...`
+- Proto: `buf lint && buf generate` (from repo root; generated code is committed)
+- WASM: `make wasm` → `web/public/engine.wasm`
+- Web: `cd web && npm ci && npm run typecheck && npm test && npm run dev`
+- Harness: `cd harness && npm ci && npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
-bullet to the Playbook below.** Keep entries short and factual. Do not delete or rewrite others' entries;
-add yours. If you find a rule here is wrong or outdated, flag the orchestrator rather than silently
-changing a non-negotiable rule.
+bullet to the Playbook below.** Keep entries short and factual. Do not delete or rewrite others' entries.
+If a rule here is wrong or outdated, say so in your PR rather than silently changing a non-negotiable.
 
 ### Playbook (append-only, dated)
 - 2026-09-15 (orchestrator) — Initial skill. Proto contract + conservation-first + TDD are the backbone;
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
+- 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
+  bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.

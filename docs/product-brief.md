@@ -64,7 +64,7 @@ sizing, floor planning).
 
 ## Document map (source of truth for the build)
 - `docs/architecture.md` — components, command bus, harness, locked decisions.
-- `docs/proto/engine.proto` — the `SitePlan → Result` contract (the seam).
+- `proto/capplanner/v1/engine.proto` — the `SitePlan → Result` contract (the seam).
 - `docs/engine-design.md` — engine internals, conservation checks, Monte Carlo, optimizer, TDD.
 - `docs/ui-spec.md` — UI behavior + Site Feasibility view.
 - `docs/validation-cases.md` — 3 simulated sessions (acceptance criteria).
