@@ -150,3 +150,8 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   last bits between a Mac and CI. Never compare golden Results with `proto.Equal`; use
   `requireProtoClose` (engine/core/helpers_test.go — protoreflect walk, 1e-9 relative on floats, exact
   otherwise, reports the first differing field path). Same for any WS3/WS4 golden.
+- 2026-09-15 (WS7) — Component tests: put `// @vitest-environment jsdom` at the top of the test file
+  (the global env stays `node`); `@testing-library/react` + `jsdom` are dev deps. A label that wraps an
+  `Explainer` includes the tooltip text, so query controls with `getByRole(..., { name: /label/ })`
+  or `[data-path="..."]`, not `getByLabelText`. Fixture JSON imports with `?raw` work in both Vite and
+  Vitest, so one loader serves tests and the `/dev-site.html` dev route.

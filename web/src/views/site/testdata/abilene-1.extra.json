@@ -1,0 +1,91 @@
+{
+  "diagnostics": [
+    {
+      "severity": "INFO",
+      "code": "GOLDEN_FIXTURE",
+      "message": "UI golden = engine golden (engine/core/testdata/abilene-1.result.json) + the blocks in abilene-1.extra.json. The appended numbers are illustrative.",
+      "hint": "Rebuild with: jq -s '.[0] * .[1]' <engine golden> abilene-1.extra.json > abilene-1.result.json"
+    },
+    {
+      "severity": "WARNING",
+      "code": "DENSITY_NEAR_AIR_CEILING",
+      "message": "40 kW/rack is at the practical ceiling for air cooling; any density increase requires LIQUID_DTC.",
+      "protoPath": "compute.kw_per_rack",
+      "expected": "<= 40 for AIR",
+      "actual": "40",
+      "hint": "Set compute.cooling=LIQUID_DTC before raising density."
+    }
+  ],
+  "monteCarlo": {
+    "iterations": 1000,
+    "metrics": {
+      "lcoc_per_gpu_hour": {
+        "p10": 1.98, "p50": 2.19, "p90": 2.46, "mean": 2.21, "stddev": 0.18,
+        "histogram": [
+          { "low": 1.80, "high": 1.90, "count": 22 }, { "low": 1.90, "high": 2.00, "count": 68 },
+          { "low": 2.00, "high": 2.10, "count": 141 }, { "low": 2.10, "high": 2.20, "count": 219 },
+          { "low": 2.20, "high": 2.30, "count": 208 }, { "low": 2.30, "high": 2.40, "count": 152 },
+          { "low": 2.40, "high": 2.50, "count": 96 }, { "low": 2.50, "high": 2.60, "count": 55 },
+          { "low": 2.60, "high": 2.70, "count": 27 }, { "low": 2.70, "high": 2.80, "count": 12 }
+        ]
+      },
+      "npv": {
+        "p10": -420000000, "p50": 109000000, "p90": 690000000, "mean": 118000000, "stddev": 430000000,
+        "histogram": [
+          { "low": -900000000, "high": -650000000, "count": 31 }, { "low": -650000000, "high": -400000000, "count": 74 },
+          { "low": -400000000, "high": -150000000, "count": 138 }, { "low": -150000000, "high": 100000000, "count": 201 },
+          { "low": 100000000, "high": 350000000, "count": 223 }, { "low": 350000000, "high": 600000000, "count": 168 },
+          { "low": 600000000, "high": 850000000, "count": 98 }, { "low": 850000000, "high": 1100000000, "count": 44 },
+          { "low": 1100000000, "high": 1350000000, "count": 17 }, { "low": 1350000000, "high": 1600000000, "count": 6 }
+        ]
+      }
+    }
+  },
+  "sensitivity": {
+    "vars": [
+      { "inputPath": "revenue.compute.gpu_hour_price", "targetMetric": "npv", "lowOutput": -380000000, "highOutput": 598000000, "baseOutput": 109122648.8 },
+      { "inputPath": "revenue.compute.utilization_pct", "targetMetric": "lcoc_per_gpu_hour", "lowOutput": 2.52, "highOutput": 1.95, "baseOutput": 2.188 },
+      { "inputPath": "costs.gpu.depreciation_years", "targetMetric": "lcoc_per_gpu_hour", "lowOutput": 2.43, "highOutput": 2.04, "baseOutput": 2.188 },
+      { "inputPath": "power.interconnection.grid_energize_month", "targetMetric": "lcoc_per_gpu_hour", "lowOutput": 2.11, "highOutput": 2.29, "baseOutput": 2.188 },
+      { "inputPath": "compute.pue", "targetMetric": "lcoc_per_gpu_hour", "lowOutput": 2.14, "highOutput": 2.24, "baseOutput": 2.188 }
+    ]
+  },
+  "optimization": {
+    "bestPlan": {
+      "meta": { "planId": "abilene-1", "siteName": "Abilene-1", "scenarioName": "Phased, gas bridge", "schemaVersion": "v1" },
+      "phasing": {
+        "mode": "EXPLICIT",
+        "phases": [
+          { "id": "p1", "itLoadMw": 60, "startMonth": 6, "energizeMonth": 18, "powerSourceId": "gas", "cooling": "AIR", "footprintAcres": 36 },
+          { "id": "p2", "itLoadMw": 100, "startMonth": 18, "energizeMonth": 30, "powerSourceId": "grid", "cooling": "AIR", "footprintAcres": 60 },
+          { "id": "p3", "itLoadMw": 40, "startMonth": 24, "energizeMonth": 36, "powerSourceId": "grid", "cooling": "AIR", "footprintAcres": 24 }
+        ]
+      },
+      "power": {
+        "sources": [
+          { "id": "grid", "type": "GRID", "capacityMw": 220, "availableMonth": 30, "costPerMwh": 45, "capexPerKw": 400, "leadTimeMonths": 36 },
+          { "id": "gas", "type": "BTM_GAS", "capacityMw": 75, "availableMonth": 18, "costPerMwh": 72, "capexPerKw": 1100, "leadTimeMonths": 14 }
+        ],
+        "interconnection": { "queueStartMonth": 0, "gridEnergizeMonth": 30, "transformerLeadMonths": 36 }
+      }
+    },
+    "bestMetrics": {
+      "lcocPerGpuHour": 2.05, "totalCapex": 6900000000, "npv": 640000000, "timeToEnergizeMonths": 18,
+      "demandCapturePct": 91.4, "strandedCapacityMwMonths": 640, "shortfallMwMonths": 210
+    },
+    "frontier": [
+      { "decisionVarValues": { "phase_count": 1, "first_energize_month": 30, "gas_mw": 0 }, "metrics": { "lcocPerGpuHour": 2.19, "strandedCapacityMwMonths": 325, "shortfallMwMonths": 2285, "totalCapex": 6524000000 }, "feasible": false },
+      { "decisionVarValues": { "phase_count": 2, "first_energize_month": 30, "gas_mw": 0 }, "metrics": { "lcocPerGpuHour": 2.16, "strandedCapacityMwMonths": 2100, "totalCapex": 6600000000 }, "feasible": false },
+      { "decisionVarValues": { "phase_count": 2, "first_energize_month": 20, "gas_mw": 100 }, "metrics": { "lcocPerGpuHour": 2.12, "strandedCapacityMwMonths": 1200, "totalCapex": 7050000000 }, "feasible": true },
+      { "decisionVarValues": { "phase_count": 3, "first_energize_month": 18, "gas_mw": 60 }, "metrics": { "lcocPerGpuHour": 2.05, "strandedCapacityMwMonths": 640, "totalCapex": 6900000000 }, "feasible": true },
+      { "decisionVarValues": { "phase_count": 3, "first_energize_month": 16, "gas_mw": 80 }, "metrics": { "lcocPerGpuHour": 2.09, "strandedCapacityMwMonths": 520, "totalCapex": 7100000000 }, "feasible": true },
+      { "decisionVarValues": { "phase_count": 4, "first_energize_month": 14, "gas_mw": 100 }, "metrics": { "lcocPerGpuHour": 2.17, "strandedCapacityMwMonths": 410, "totalCapex": 7400000000 }, "feasible": true },
+      { "decisionVarValues": { "phase_count": 4, "first_energize_month": 12, "gas_mw": 140 }, "metrics": { "lcocPerGpuHour": 2.26, "strandedCapacityMwMonths": 380, "totalCapex": 8300000000 }, "feasible": false },
+      { "decisionVarValues": { "phase_count": 3, "first_energize_month": 24, "gas_mw": 40 }, "metrics": { "lcocPerGpuHour": 2.08, "strandedCapacityMwMonths": 980, "totalCapex": 6800000000 }, "feasible": true },
+      { "decisionVarValues": { "phase_count": 5, "first_energize_month": 12, "gas_mw": 120 }, "metrics": { "lcocPerGpuHour": 2.23, "strandedCapacityMwMonths": 300, "totalCapex": 8150000000 }, "feasible": false }
+    ],
+    "decisionVarValues": { "phase_count": 3, "first_energize_month": 18, "gas_mw": 60 },
+    "evaluations": 214,
+    "converged": true
+  }
+}
