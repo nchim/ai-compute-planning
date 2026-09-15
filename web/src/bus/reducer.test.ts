@@ -245,7 +245,7 @@ describe("selection, results, errors", () => {
   });
 
   test("resultReceived stores the result and clears any error", () => {
-    const errored = reduce(loaded(), { type: "errorRaised", error: { kind: "internal", message: "boom" } });
+    const errored = reduce(loaded(), { type: "errorRaised", error: { kind: "worker", message: "boom" } });
     expect(errored.error?.message).toBe("boom");
     const result = fakeResult(loadAbilene());
     const s = reduce(errored, { type: "resultReceived", result });

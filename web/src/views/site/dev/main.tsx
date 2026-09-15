@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { StoreProvider, createStore } from "../../../bus";
-import type { Engine } from "../../../engine/types";
+import type { Engine } from "../../../engine/client";
 import { SiteFeasibilityView } from "../SiteFeasibilityView";
 import { loadGoldenPlan, loadGoldenResult } from "../testdata";
 

@@ -4,7 +4,9 @@
   --shortfall: #b45353; --stranded: #7a8fa3;
   --p0: #5f8a84; --p1: #8a7f5f; --p2: #6b7a8f; --p3: #9c6b6b; --p4: #7d6b9c;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; color: var(--text);
-  background: #f6f6f7; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  background: #f6f6f7; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
+  /* Sits beside the WS6 canvas inside .bodyrow (flex row) as its own scrollable column. */
+  flex: 1.6; min-width: 0; overflow: auto; }
 .site-view * { box-sizing: border-box; }
 .canvas-hd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .h-title { font-size: 18px; font-weight: 600; color: var(--ink); }

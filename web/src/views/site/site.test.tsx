@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, test } from "vitest";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
-import type { Engine } from "../../engine/types";
+import type { Engine } from "../../engine/client";
 import type { Result } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
