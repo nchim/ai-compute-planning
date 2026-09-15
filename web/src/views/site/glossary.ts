@@ -63,10 +63,10 @@ export const glossary: Record<string, GlossaryEntry> = {
   "optimization.decision_vars": { concept: "Plan paths the optimizer may vary.", formula: "min ≤ value ≤ max, in steps", benchmark: "phase count/size/timing + power source", source: kpi },
 
   // --- regions / overlays ---
-  "region.context_map": { concept: "The site in geographic context.", formula: "overlays: power · water · latency", benchmark: "—", source: siting },
-  "overlay.power": { concept: "Grid / BTM / PPA availability and distance.", formula: "sources by available_month", benchmark: "BTM gas 18–30 mo", source: power },
-  "overlay.water": { concept: "Water stress index 0..1 (cooling constraint).", formula: "site.water_stress_index", benchmark: "> 0.6 favors dry / liquid cooling", source: siting },
-  "overlay.latency": { concept: "Demand class the location can serve.", formula: "site.latency_tier", benchmark: "training is latency-tolerant", source: siting },
+  "region.context_map": { concept: "The site on a real basemap (Esri Gray Canvas, OpenStreetMap-derived) with a scale bar; zoom and pan to judge distance.", formula: "overlays: power · water · latency, drawn at true km scale", benchmark: "—", source: siting },
+  "overlay.power": { concept: "One marker per power source with a dashed tie to the site. The plan has no source coordinates, so placement is illustrative (not surveyed): BTM assets next to the parcel, a grid tie ~25 km, a PPA further out.", formula: "sources by type · available_month", benchmark: "BTM gas 18–30 mo", source: power },
+  "overlay.water": { concept: "Water stress index 0..1 (cooling constraint) as a tint over the ~60 km region the site draws on; darker = more stressed.", formula: "fill opacity = 0.1 + 0.5 × site.water_stress_index", benchmark: "> 0.6 favors dry / liquid cooling", source: siting },
+  "overlay.latency": { concept: "How far the site can serve each demand class, as rings at real distances. Assumes ~1 ms RTT per 100 km of fibre with a 1.5× route factor.", formula: "metro ≲ 2 ms → ≈80 km · regional ≲ 10 ms → ≈400 km · training (≳ 30 ms, tolerant) → ≈1,500 km", benchmark: "training is latency-tolerant", source: siting },
   "region.site_schematic": { concept: "Parametric parcel model; scrub time to see phases land.", formula: "Result.schematic blocks by energize_month", benchmark: "footprint < 60% keeps expansion optionality", source: siting },
   "region.phasing": { concept: "The first-class lever: stage capacity against the demand ramp.", formula: "shortfall vs stranded areas", benchmark: "track demand within 20 MW", source: kpi },
   "region.critical_path": { concept: "Revenue starts at energization; the longest chain sets the date.", formula: "max(interconnection, transformers, construction)", benchmark: "transformers 128–160 wk", source: power },

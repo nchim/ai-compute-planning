@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { fromJsonString } from "@bufbuild/protobuf";
-import { afterEach, describe, expect, test } from "vitest";
 import { useEffect } from "react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
 import { CopilotHandleProvider, useRegisterCopilotSend } from "../../copilot/handle";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
@@ -18,6 +19,10 @@ import { SiteFeasibilityView } from "./SiteFeasibilityView";
 import { SiteSchematic } from "./SiteSchematic";
 import { loadGoldenPlan, loadGoldenResult } from "./testdata";
 import novaResultJson from "../../../../engine/core/testdata/nova-colo.result.json?raw";
+
+// jsdom cannot lay out a Leaflet map; the fake records layers instead (see ContextMap.test.tsx).
+vi.mock("leaflet", async () => (await import("./testdata/fakeLeaflet")).fakeLeafletModule);
+vi.mock("leaflet/dist/leaflet.css", () => ({}));
 
 interface Harness {
   readonly store: Store;
@@ -76,12 +81,13 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("Schematic not computed yet")).toBeTruthy();
   });
 
-  test("context map draws the site and toggles overlays", () => {
+  test("context map mounts the Leaflet provider and toggles overlays with their legend", () => {
     const { container } = mount(harness(), <ContextMap />);
-    expect(container.querySelector(".ov-power")).not.toBeNull();
-    expect(container.querySelector(".ov-water")).toBeNull();
+    expect(container.querySelector(".leaflet-map")).not.toBeNull();
+    expect(screen.getByText(/Overlay: power · provider: leaflet/)).toBeTruthy();
+    expect(screen.queryByText(/water stress/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /water/ }));
-    expect(container.querySelector(".ov-water")).not.toBeNull();
+    expect(screen.getByText(/Overlay: power · water/)).toBeTruthy();
     expect(screen.getByText(/water stress 0.60/)).toBeTruthy();
   });
 

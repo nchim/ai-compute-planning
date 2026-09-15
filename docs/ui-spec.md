@@ -42,9 +42,29 @@ Header: site name, market · target MW · scenario, "vs. baseline: <label>" when
 score (`OK` / `OK with warnings` / `invalid input` / `infeasible` · conservation green/FAILED), and the
 four dimension chips. Regions, each a `Region` tagged by dimension (Space/Time/Capital/Risk):
 
-1. **Context map (Space)** — the site rendered by a `MapProvider` with toggleable **power / water /
-   latency** overlays (segmented control with explainers). The POC provider is schematic
-   (`schematicMapProvider`); a real tile provider plugs into the same seam later.
+1. **Context map (Space)** — a real basemap: `leafletMapProvider` (`LeafletMap.tsx`) renders
+   **Esri World Light Gray Canvas** raster tiles (`World_Dark_Gray_Base` under
+   `prefers-color-scheme: dark`; no API key; max zoom 16; "Tiles © Esri — Esri, HERE, Garmin,
+   © OpenStreetMap contributors" attribution) under Leaflet with zoom/pan, an
+   `L.control.scale()` bar and the site as a marker whose popup shows site name, market · ISO and
+   lat/lng; clicking it dispatches `select` with path `site`. The toggleable **power / water /
+   latency** overlays (segmented control with explainers) are drawn in real geography:
+   - *latency* — nested rings at true kilometre radii for every tier the site can serve
+     (metro ≈ 80 km, regional ≈ 400 km, training-remote ≈ 1,500 km; assumes ~1 ms RTT per 100 km
+     of fibre with a 1.5× route factor — see `glossary.ts` `overlay.latency`); the view fits the
+     outer ring.
+   - *water* — a translucent tint over the ~60 km region, opacity scaled by `water_stress_index`,
+     with a legend chip.
+   - *power* — one marker per `power.sources[]` plus a dashed tie to the site. The plan carries no
+     source coordinates, so placement is a documented schematic offset (`geo.ts`
+     `powerSourcePlacement`: bearings NE/SE/SW/NW, distance by type) and every label reads
+     "location illustrative"; the legend says "not surveyed".
+   Tiles are fetched cross-origin by the browser; on a Leaflet `tileerror` the region shows a one-line
+   notice and keeps the vector overlays on a blank map. (CARTO Positron was the intended style, but
+   since 2025 every keyless CARTO tile carries an "API KEY REQUIRED" watermark — no localhost or
+   non-commercial exemption — so the Positron-like Esri canvas is used instead; swapping is one URL.) `schematicMapProvider` (tile-free SVG) stays
+   behind the same `MapProvider` seam for injection. Tests mock the `leaflet` module
+   (`testdata/fakeLeaflet.ts`) because jsdom cannot lay a map out.
 2. **Site schematic · phase reveal (Space + Time)** — parcel + blocks from `Result.schematic` (data
    halls, substation, cooling yard, gas pad, expansion pads), `footprint_used_pct`, and a **time
    scrubber** (`input[type=range]`, "time scrubber (month)") that writes `selection.month` so blocks
