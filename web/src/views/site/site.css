@@ -196,3 +196,5 @@
 .site-view fieldset.phase legend { display: flex; align-items: center; gap: 6px; }
 .site-view fieldset.phase legend .x { border: none; background: none; cursor: pointer; color: #71717a; font-size: 13px; line-height: 1; padding: 0 2px; }
 .site-view fieldset.phase legend .x:hover { color: #9c3b3b; }
+
+.site-view .field input[type="checkbox"] { width: auto; justify-self: start; margin: 0; }

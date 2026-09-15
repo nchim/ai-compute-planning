@@ -119,7 +119,7 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
       description:
         "Delete one element of a repeated SitePlan field (e.g. path phasing.phases, index 1 deletes the second phase; " +
         "also power.sources, demand.points, risk.distributions, optimization.constraints), then re-analyze.",
-      inputSchema: z.object({ path: z.string().min(1).describe("The repeated field, without [i]"), index: z.number().int().describe("0-based position") }),
+      inputSchema: z.object({ path: z.string().min(1).describe("The repeated field, without [i]"), index: z.number().describe("0-based integer position") }), // plain number: zod .int() adds bounds the API rejects; removeAt validates
       strict: true,
       run: async ({ path, index }) => {
         removeAt(planOrThrow(store), path, index); // validate at the boundary
