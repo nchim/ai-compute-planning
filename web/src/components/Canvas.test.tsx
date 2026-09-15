@@ -89,6 +89,24 @@ describe("baseline toolbar", () => {
     expect(container.querySelector(".engine-progress")).toBeNull();
   });
 
+  test("the canvas shows only the latest proposal's headline, never the patch", () => {
+    const store = mount();
+    act(() => store.dispatch({ type: "loadPlan", plan: fromJsonString(SitePlanSchema, fixtureJson("abilene-1")) }));
+    act(() => {
+      store.proposeChange("first idea", [{ path: "compute.pue", value: 1.3 }]);
+      store.proposeChange("Switch to 3-phase build", [{ path: "phasing.mode", value: "EXPLICIT" }, { path: "phasing.phases[0].id", value: "p1" }]);
+    });
+    const panel = document.querySelector("[data-panel='proposal']") as HTMLElement;
+    expect(panel.querySelectorAll("[data-proposal-id]")).toHaveLength(1);
+    expect(panel.textContent).toContain("Switch to 3-phase build");
+    expect(panel.textContent).toContain("2 changes");
+    expect(panel.textContent).not.toContain("first idea");
+    expect(panel.textContent).not.toContain("phasing.mode");
+    expect(panel.textContent).toContain("1 earlier in the Copilot thread");
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(panel.textContent).toContain("Accepted");
+  });
+
   test("a rejected toggle surfaces in the error banner", () => {
     const store = mount();
     act(() => store.dispatch({ type: "toggleCompare" }));

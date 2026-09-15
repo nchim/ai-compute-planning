@@ -28,6 +28,8 @@ const engineName = import.meta.env.VITE_ENGINE === "wasm" ? "wasm" : "fake";
 export function Canvas() {
   const { state, store } = useStore();
   const ctx = viewContext(state);
+  // The canvas shows only the newest proposal's headline; the full history and patches live in the rail.
+  const latestProposal = state.proposals[state.proposals.length - 1];
 
   const loadFixture = (name: string) => {
     try {
@@ -76,14 +78,13 @@ export function Canvas() {
         </div>
       )}
 
-      {state.proposals.length > 0 && (
-        <section className="panel">
+      {latestProposal !== undefined && (
+        <section className="panel" data-panel="proposal">
           <div className="panel-hd">
-            <span className="t">Proposed changes</span>
+            <span className="t">Proposed change</span>
+            {state.proposals.length > 1 && <span className="dim">{state.proposals.length - 1} earlier in the Copilot thread</span>}
           </div>
-          {state.proposals.map((p) => (
-            <ProposalCard key={p.id} proposal={p} store={store} />
-          ))}
+          <ProposalCard proposal={latestProposal} store={store} />
         </section>
       )}
 
@@ -186,20 +187,21 @@ function Diagnostics(props: { diagnostics: readonly Diagnostic[] }) {
 
 function ProposalCard(props: { proposal: Proposal; store: Store }) {
   const { proposal: p, store } = props;
+  const changes = p.patch.length;
   return (
-    <div className="proposal">
-      <b>{p.summary}</b> · {p.patch.map((op) => `${op.path} = ${String(op.value)}`).join(", ")}
+    <div className="proposal" data-proposal-id={p.id} data-status={p.status}>
+      <b>{p.summary}</b> <span className="dim">{changes} change{changes === 1 ? "" : "s"}</span>
       {p.status === "pending" ? (
         <div className="acts">
           <button className="btn primary" onClick={() => store.dispatch({ type: "acceptProposal", id: p.id })}>
             Accept
           </button>
           <button className="btn" onClick={() => store.dispatch({ type: "rejectProposal", id: p.id })}>
-            Reject
+            Undo
           </button>
         </div>
       ) : (
-        <div className="status">{p.status}</div>
+        <div className="status">{p.status === "accepted" ? "Accepted" : "Undone"}</div>
       )}
     </div>
   );
