@@ -12,7 +12,8 @@ GCP_PROJECT ?= ai-compute-planner
 GCP_REGION  ?= us-central1
 SERVICE     ?= capplanner
 
-.PHONY: deps gen lint test check wasm web harness acceptance serve deploy
+.PHONY: deps gen lint test check wasm web harness acceptance serve deploy sessions
+HOURS ?= 4
 
 ## deps: install JS dependencies (run once, and after lockfile changes)
 deps:
@@ -66,3 +67,7 @@ deploy:
 	gcloud run deploy $(SERVICE) --source . --region $(GCP_REGION) --project $(GCP_PROJECT) \
 		--allow-unauthenticated --min-instances 0 --max-instances 1 \
 		--set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest,APP_PASSWORD=app-password:latest
+
+## sessions: print shared tester sessions from the last HOURS (default 4) as transcripts (see deploy/cloudrun.md)
+sessions:
+	python3 deploy/sessions.py --hours $(HOURS) --project $(GCP_PROJECT) --service $(SERVICE)

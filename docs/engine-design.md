@@ -30,7 +30,7 @@ engine/
     demand.go       // DemandAt: linear interpolation of the demand ramp (exported for the optimizer)
     capex.go / opex.go / revenue.go / cashflow.go / metrics.go
     schematic.go    // block layout for Result.schematic
-    conserve.go     // the thirteen conservation checks
+    conserve.go     // the fourteen conservation checks
     render.go       // Tables, Charts assembly
     analyze.go      // orchestrates the pipeline
     diag.go         // diagnostic codes + helpers
@@ -87,6 +87,7 @@ Each returns a `ConservationCheck{name, passed, residual, tolerance}`; residual 
 | `capital_phases_sum` | Σ(phase capex) = total_capex |
 | `capital_uses_eq_sources` | equity = total uses (100% equity STUB) |
 | `land_footprint_le_parcel` | Σ(block acres) ≤ `site.land_acres` |
+| `blocks_within_parcel` | every non-setback schematic block lies inside the parcel rectangle (residual = overflow acres) |
 | `whitespace_le_gross` | white space ≤ gross buildable |
 | `power_load_eq_racks` | it_load = racks × kw_per_rack / 1000 |
 | `facility_power_pue` | facility_power = it_load × pue |
@@ -105,7 +106,7 @@ Stable strings; the agent and the harness match on them.
 
 | Package | Codes |
 |---|---|
-| `core` | `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_POWER_SOURCE`, `DENSITY_EXCEEDS_COOLING`, `FLOOR_LOAD_INSUFFICIENT`, `PHASE_BEFORE_POWER`, `POWER_UNDERSUPPLY`, `SOURCE_OVERLOADED`, `FOOTPRINT_OVER_PARCEL`, `USE_OPTIMIZE`, `PHASES_NE_TARGET`, `ENERGIZE_AFTER_HOLD`, `IRR_UNDEFINED` (INFO), `STORAGE_NOT_FIRM` (INFO), `CONSERVATION_FAILED` |
+| `core` | `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_POWER_SOURCE`, `DENSITY_EXCEEDS_COOLING`, `FLOOR_LOAD_INSUFFICIENT`, `PHASE_BEFORE_POWER`, `POWER_UNDERSUPPLY`, `SOURCE_OVERLOADED`, `FOOTPRINT_OVER_PARCEL`, `USE_OPTIMIZE`, `PHASES_NE_TARGET`, `ENERGIZE_AFTER_HOLD`, `IRR_UNDEFINED` (INFO), `STORAGE_NOT_FIRM` (INFO), `CONSERVATION_FAILED`, `SCHEMATIC_OVERFLOW` (WARNING: the blocks do not fit the usable rectangle even wrapped into rows; they are clamped to the parcel) |
 | `risk` | `UNKNOWN_INPUT_PATH`, `OUT_OF_RANGE`, `MC_INVALID_DRAWS`, `MC_NO_DISTRIBUTIONS`, `SENSITIVITY_INVALID_DRAW` |
 | `optimize` | `USE_ANALYZE`, `MISSING_REQUIRED`, `OUT_OF_RANGE`, `UNKNOWN_METRIC`, `NO_FEASIBLE_CANDIDATE`, `OBJECTIVE_DEFAULTED` (INFO), `DECISION_VARS_IGNORED` (INFO, STUB), `PHASE_COUNT_SKIPPED`, `SEARCH_TRUNCATED` |
 | `bridge` | `MALFORMED_INPUT`, `UNKNOWN_OP`, `INTERNAL_ERROR` |
@@ -175,7 +176,7 @@ by |high − low|. The UI renders both tornados; T4 asserts price and utilizatio
 - Storage (BESS) is not firm supply (`STORAGE_NOT_FIRM` INFO).
 - PPAs count at nameplate.
 - Land at cost at exit; terminal value is asset-based (#30: `exit_cap_rate` only feeds dev spread).
-- Schematic is a single-row block layout, not a site plan.
+- Schematic is a row-wrapped block layout inside the usable rectangle (2:1 blocks, narrowed to 1:1 when a row is crowded), not a site plan.
 - Energy billed at nameplate facility load, not utilization (#28); colo escalation compounds from t0
   and opex never grows (#29). The fidelity PR for #28–#30 is in flight.
 

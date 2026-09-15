@@ -1,5 +1,5 @@
 import { useStore } from "../../bus";
-import { Status } from "../../gen/capplanner/v1/engine_pb";
+import { Severity, Status } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
 import { OptimizationPanel } from "./OptimizationPanel";
@@ -23,8 +23,10 @@ const inlinePaths = /^(revenue\.compute\.|power\.interconnection\.grid_energize_
 
 export function SiteFeasibilityView() {
   const { state } = useStore();
-  const { plan, result, error, baseline, compare } = state;
-  const topDiagnostics = (result?.diagnostics ?? []).filter((d) => !inlinePaths.test(d.protoPath));
+  const { plan, result, baseline, compare } = state;
+  // Errors always surface here (a path with no control on this canvas would otherwise be invisible);
+  // warnings/infos on controlled paths render inline next to their control.
+  const topDiagnostics = (result?.diagnostics ?? []).filter((d) => d.severity === Severity.ERROR || !inlinePaths.test(d.protoPath));
   const conservation = result?.conservation;
 
   return (
@@ -55,11 +57,6 @@ export function SiteFeasibilityView() {
         </span>
       </header>
 
-      {error !== null && (
-        <p className="app-error" role="alert">
-          {error.kind}: {error.message}
-        </p>
-      )}
       {plan === null && <NotComputed what="Plan" />}
       {topDiagnostics.length > 0 && (
         <ul className="diags top">

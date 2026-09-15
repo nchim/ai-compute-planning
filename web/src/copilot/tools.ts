@@ -4,7 +4,7 @@ import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
 import { toJson } from "@bufbuild/protobuf";
 import { z } from "zod";
 
-import { applyPatch, defaultBaselineLabel, type PatchOp, type Store } from "../bus";
+import { applyPatch, defaultBaselineLabel, removeAt, type PatchOp, type Store } from "../bus";
 import type { Engine } from "../engine";
 import {
   DiagnosticSchema,
@@ -115,6 +115,20 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
       },
     }),
     define(deps, {
+      name: "remove_list_item",
+      description:
+        "Delete one element of a repeated SitePlan field (e.g. path phasing.phases, index 1 deletes the second phase; " +
+        "also power.sources, demand.points, risk.distributions, optimization.constraints), then re-analyze.",
+      inputSchema: z.object({ path: z.string().min(1).describe("The repeated field, without [i]"), index: z.number().describe("0-based integer position") }), // plain number: zod .int() adds bounds the API rejects; removeAt validates
+      strict: true,
+      run: async ({ path, index }) => {
+        removeAt(planOrThrow(store), path, index); // validate at the boundary
+        store.dispatch({ type: "removeAt", path, index });
+        rejectIfRefused(store);
+        return { removed: `${path}[${index}]`, analysis: analysisJson(await tracker.settle()) };
+      },
+    }),
+    define(deps, {
       name: "run_analyze",
       description: "Run Analyze on the current plan and return Result.summary, diagnostics and conservation.",
       inputSchema: z.object({}),
@@ -129,10 +143,10 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
         "a constraint or decision var set on an earlier call stays in the plan unless you overwrite that index.",
       inputSchema: optimizeInput,
       run: async (input) => {
-        const patch = optimizePatch(input);
-        if (patch.length > 0) mutate(store, patch, { type: "applyPatch", patch });
-        await tracker.settle();
-        return optimizationJson(await store.optimize());
+        // Objective/constraints/policy go on the optimizer's candidate only: a refused or infeasible run
+        // must leave the live plan (and the screen) exactly as it was. Apply the winner via propose_change.
+        planOrThrow(store);
+        return optimizationJson(await store.optimize(optimizePatch(input)));
       },
     }),
     define(deps, {
@@ -280,12 +294,34 @@ function optimizePatch(input: OptimizeInput): PatchOp[] {
 
 export function analysisJson(result: Result): Record<string, unknown> {
   const failed = result.conservation?.checks.filter((c) => !c.passed).map((c) => c.name) ?? [];
-  return {
+  const out: Record<string, unknown> = {
     status: Status[result.status],
     summary: result.summary === undefined ? null : toJson(SummaryMetricsSchema, result.summary, PROTOJSON),
     diagnostics: result.diagnostics.map((d) => toJson(DiagnosticSchema, d, PROTOJSON)),
     conservation: { all_passed: result.conservation?.allPassed ?? null, failed_checks: failed },
   };
+  // Risk outputs ride along when the engine produced them, so the model never has to guess at them.
+  const mc = result.monteCarlo;
+  if (mc !== undefined && Object.keys(mc.metrics).length > 0) {
+    out["monte_carlo"] = {
+      iterations: mc.iterations,
+      metrics: Object.fromEntries(
+        Object.entries(mc.metrics).map(([k, d]) => [k, { p10: d.p10, p50: d.p50, p90: d.p90, mean: d.mean, stddev: d.stddev }]),
+      ),
+    };
+  }
+  const vars = result.sensitivity?.vars ?? [];
+  if (vars.length > 0) {
+    out["sensitivity"] = vars.map((v) => ({
+      input_path: v.inputPath,
+      target_metric: v.targetMetric,
+      low: v.lowOutput,
+      base: v.baseOutput,
+      high: v.highOutput,
+      swing: Math.abs(v.highOutput - v.lowOutput),
+    }));
+  }
+  return out;
 }
 
 function optimizationJson(result: Result): Record<string, unknown> {

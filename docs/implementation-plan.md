@@ -91,7 +91,7 @@ Vite scaffold; `fixtures/abilene-1.json` with Go and TS round-trip tests.
 ### WS2 — Engine core  *(#2 → PR #16)*
 `engine/core`: validate → sizing → schedule → capex → opex → revenue → cashflow → metrics → layout →
 conserve → render, per `engine-design.md`; every diagnostic code the acceptance session names; the
-thirteen conservation checks; `Result` rendered (tables, charts, schematic) from the model.
+fourteen conservation checks; `Result` rendered (tables, charts, schematic) from the model.
 **Done:** `abilene-1` analyzes `OK` with conservation green; golden `testdata/abilene-1.result.json`
 compared with tolerance; diagnostic tests per code; determinism test; `Analyze` ≈ 130 µs native.
 

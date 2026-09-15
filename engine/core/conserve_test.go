@@ -8,7 +8,7 @@ import (
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
 
-// TestConservationProperty: every randomized VALID plan must pass all 13 checks. The seed is fixed so
+// TestConservationProperty: every randomized VALID plan must pass all 14 checks. The seed is fixed so
 // a failure is reproducible; the failing plan's parameters are printed.
 func TestConservationProperty(t *testing.T) {
 	rng := rand.New(rand.NewSource(20260915))
@@ -18,8 +18,8 @@ func TestConservationProperty(t *testing.T) {
 		if res.GetStatus() == pb.Status_INVALID_INPUT {
 			t.Fatalf("iteration %d: generator produced an invalid plan: %v", i, diagCodes(res))
 		}
-		if n := len(res.GetConservation().GetChecks()); n != 13 {
-			t.Fatalf("iteration %d: %d checks, want 13", i, n)
+		if n := len(res.GetConservation().GetChecks()); n != 14 {
+			t.Fatalf("iteration %d: %d checks, want 14", i, n)
 		}
 		if !res.GetConservation().GetAllPassed() {
 			t.Fatalf("iteration %d: conservation failed: %s\nplan: %v", i, failedChecks(res.GetConservation()), p)

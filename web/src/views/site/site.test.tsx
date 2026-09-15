@@ -1,19 +1,30 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, test } from "vitest";
+import { create, fromJsonString } from "@bufbuild/protobuf";
+import { useEffect } from "react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import { CopilotHandleProvider, useRegisterCopilotSend } from "../../copilot/handle";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
-import { PhasingMode, type Result } from "../../gen/capplanner/v1/engine_pb";
+import { CellSchema, PhasingMode, ResultSchema, type Result } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
+import { layoutMarkers } from "./charts/Gantt";
+import { columnLabel, formatCell } from "./resultAccess";
 import { OptimizationPanel, patchFromBestPlan } from "./OptimizationPanel";
-import { PhasingLever } from "./PhasingLever";
+import { PhasingLever, newPhasePatch } from "./PhasingLever";
 import { ProForma } from "./ProForma";
 import { Risk } from "./Risk";
 import { SiteFeasibilityView } from "./SiteFeasibilityView";
 import { SiteSchematic } from "./SiteSchematic";
 import { loadGoldenPlan, loadGoldenResult } from "./testdata";
+import novaResultJson from "../../../../engine/core/testdata/nova-colo.result.json?raw";
+
+// jsdom cannot lay out a Leaflet map; the fake records layers instead (see ContextMap.test.tsx).
+vi.mock("leaflet", async () => (await import("./testdata/fakeLeaflet")).fakeLeafletModule);
+vi.mock("leaflet/dist/leaflet.css", () => ({}));
 
 interface Harness {
   readonly store: Store;
@@ -72,18 +83,18 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("Schematic not computed yet")).toBeTruthy();
   });
 
-  test("context map draws the site and toggles overlays", () => {
+  test("context map mounts the Leaflet provider with every overlay on and a legend, no toggles", () => {
     const { container } = mount(harness(), <ContextMap />);
-    expect(container.querySelector(".ov-power")).not.toBeNull();
-    expect(container.querySelector(".ov-water")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /water/ }));
-    expect(container.querySelector(".ov-water")).not.toBeNull();
-    expect(screen.getByText(/water stress 0.60/)).toBeTruthy();
+    expect(container.querySelector(".leaflet-map")).not.toBeNull();
+    expect(screen.queryByRole("group", { name: /overlays/ })).toBeNull();
+    expect(screen.getByText(/stress index 0.60/)).toBeTruthy();
+    expect(screen.getByText(/serves training/)).toBeTruthy();
+    expect(screen.getByText(/placement illustrative/)).toBeTruthy();
   });
 
   test("schematic renders all blocks at the final month with the footprint badge and phase legend", () => {
     const { container } = mount(harness(), <SiteSchematic />);
-    expect(container.querySelectorAll("[data-block]")).toHaveLength(8);
+    expect(container.querySelectorAll("[data-block]")).toHaveLength(9);
     expect(screen.getByText(/footprint \d+% used/)).toBeTruthy();
     expect(container.querySelectorAll(".legend li")).toHaveLength(1);
   });
@@ -95,12 +106,117 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("82.1%")).toBeTruthy();
   });
 
+  test("phasing: OPTIMIZE is not a selectable mode, and a blank state explains the two ways to get phases", () => {
+    const h = harness(null);
+    const { container } = mount(h, <PhasingLever />);
+    const options = Array.from(container.querySelectorAll("select option")).map((o) => o.getAttribute("value"));
+    expect(options).toContain("EXPLICIT");
+    expect(options).not.toContain("OPTIMIZE");
+    const blank = container.querySelector("[data-blank='phasing']");
+    expect(blank).not.toBeNull();
+    fireEvent.click(within(blank as HTMLElement).getByRole("button", { name: /optimize phasing/i }));
+    expect(h.optimizeCalls).toHaveLength(1);
+  });
+
+  test("phasing shows a running panel and disables the trigger while the optimizer is in flight", () => {
+    const h = harness();
+    const { container } = mount(h, <PhasingLever />);
+    fireEvent.click(screen.getByRole("button", { name: /optimize phasing/i }));
+    expect(h.store.getState().engine.optimizing).toBe(true);
+    expect(container.querySelector("[data-running='optimize']")).not.toBeNull();
+    expect((screen.getByRole("button", { name: /optimizing/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector(".shade.shortfall")).toBeNull(); // the chart yields to the running panel
+  });
+
+  test("hovering a schematic block shows its card; Explain hands the selection to the Copilot", () => {
+    const h = harness();
+    const sent: string[] = [];
+    function Registrar() {
+      const register = useRegisterCopilotSend();
+      useEffect(() => register(async (t) => void sent.push(t)), [register]);
+      return null;
+    }
+    const { container } = render(
+      <StoreProvider store={h.store}>
+        <CopilotHandleProvider>
+          <Registrar />
+          <SiteSchematic />
+        </CopilotHandleProvider>
+      </StoreProvider>,
+    );
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+    const hall = container.querySelector("[data-block^='hall']") as SVGGElement;
+    fireEvent.mouseEnter(hall);
+    const card = container.querySelector("[data-block-card]") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toMatch(/data hall/);
+    expect(card.textContent).toMatch(/energizes/);
+    expect(card.textContent).toMatch(/acres/);
+    fireEvent.mouseLeave(hall);
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+
+    fireEvent.click(hall); // pin
+    fireEvent.click(within(container.querySelector("[data-block-card]") as HTMLElement).getByRole("button", { name: /explain/i }));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(/Explain the ".*" block on the site schematic/);
+  });
+
+  test("gantt markers never overlap: same month merges into one label, near months stack on two lines", () => {
+    const x = (m: number) => 150 + m * 10;
+    const same = layoutMarkers([{ month: 30, cls: "grid", text: "grid m30 · Q3-28" }, { month: 30, cls: "energize", text: "energize m30 · Q3-28" }], x, 700);
+    expect(same).toHaveLength(1);
+    expect(same[0]!.text).toBe("grid · energize m30 · Q3-28");
+    expect(same[0]!.cls).toBe("grid energize");
+    const near = layoutMarkers([{ month: 30, cls: "grid", text: "grid m30" }, { month: 33, cls: "energize", text: "energize m33" }], x, 700);
+    expect(near.map((m) => m.line)).toEqual([0, 1]);
+    const far = layoutMarkers([{ month: 12, cls: "energize", text: "energize m12" }, { month: 30, cls: "grid", text: "grid m30" }], x, 700);
+    expect(far.map((m) => m.line)).toEqual([0, 0]);
+    expect(layoutMarkers([{ month: 54, cls: "grid", text: "grid m54" }], x, 700)[0]!.anchorEnd).toBe(true);
+  });
+
+  test("engine table cells format by column unit and headers are humanized", () => {
+    const fmt = { money: (n: number) => `$${n}`, pct: (n: number) => `${n.toFixed(1)}%`, num: (n: number) => String(n) };
+    const n = (v: number) => create(CellSchema, { v: { case: "n", value: v } });
+    expect(formatCell("share_pct", n(9.196811771919068), fmt)).toBe("9.2%");
+    expect(formatCell("amount_usd", n(600e6), fmt)).toBe("$600000000");
+    expect(formatCell("it_mw", n(200), fmt)).toBe("200 MW");
+    expect(formatCell("energize_month", n(30), fmt)).toBe("m30");
+    expect(formatCell("component", create(CellSchema, { v: { case: "s", value: "shell" } }), fmt)).toBe("shell");
+    expect(["component", "amount_usd", "per_mw_usd", "share_pct"].map(columnLabel)).toEqual(["component", "amount", "per MW", "share"]);
+  });
+
+  test("each phase has a delete control that removes exactly that phase through the bus", () => {
+    const h = harness();
+    h.store.dispatch({ type: "applyPatch", patch: newPhasePatch(0, 0) });
+    h.store.dispatch({ type: "applyPatch", patch: newPhasePatch(1, 12) });
+    h.dispatched.length = 0;
+    mount(h, <PhasingLever />);
+    fireEvent.click(screen.getByRole("button", { name: /delete phase p1/ }));
+    expect(h.dispatched).toEqual([{ type: "removeAt", path: "phasing.phases", index: 0 }]);
+    expect(h.store.getState().plan?.phasing?.phases.map((p) => p.id)).toEqual(["p2"]);
+  });
+
+  test("schematic header states the parcel size in acres", () => {
+    mount(harness(), <SiteSchematic />);
+    expect(screen.getByText(/400 acres · 300 usable/)).toBeTruthy();
+  });
+
+  test("pro forma draws the annual net cashflow line from the cashflow chart", () => {
+    const { container } = mount(harness(), <ProForma />);
+    const net = container.querySelector(".line-chart path.line.net");
+    expect(net).not.toBeNull();
+    expect(net!.getAttribute("d")).toMatch(/^M[\d.]+,[\d.]+( L[\d.]+,[\d.]+)+$/);
+  });
+
   test("critical path renders each task and the energize + grid markers", () => {
     const { container } = mount(harness(), <CriticalPath />);
     expect(container.querySelectorAll(".task")).toHaveLength(4);
     expect(container.querySelectorAll('.task[data-kind="grid"]')).toHaveLength(2);
-    expect(screen.getByText("energize Q3-28")).toBeTruthy();
-    expect(screen.getByText("grid Q3-28")).toBeTruthy();
+    // Energize and grid coincide at m30 on the golden plan: one merged marker, never two overlapping labels.
+    const markers = container.querySelectorAll(".marker");
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.classList.contains("grid") && markers[0]!.classList.contains("energize")).toBe(true);
+    expect(screen.getByText("grid · energize m30 · Q3-28")).toBeTruthy();
   });
 
   test("pro forma renders the KPI tiles, the capex stack and the table", () => {
@@ -163,7 +279,7 @@ describe("controls dispatch through the bus", () => {
     fireEvent.change(screen.getByLabelText("time scrubber (month)"), { target: { value: "20" } });
     expect(h.dispatched[0]).toMatchObject({ type: "select", selection: { month: 20 } });
     const visible = [...container.querySelectorAll("[data-block]")].map((el) => el.getAttribute("data-block"));
-    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion"]);
+    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion", "expansion_e"]);
     expect(h.store.getState().selection.month).toBe(20);
   });
 
@@ -211,7 +327,7 @@ describe("controls dispatch through the bus", () => {
     expect(h.dispatched).toHaveLength(1);
     expect(h.dispatched[0]).toMatchObject({ type: "applyPatch" });
     const policy = h.store.getState().plan?.phasing?.policy;
-    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 20]);
+    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 200]); // shortfall cap defaults to the target MW (uncapped)
     fireEvent.change(container.querySelector('[data-path="phasing.policy.max_shortfall_mw"] input')!, { target: { value: "15" } });
     expect(h.dispatched[1]).toEqual({ type: "setField", path: "phasing.policy.max_shortfall_mw", value: 15 });
   });
@@ -295,5 +411,78 @@ describe("compare mode", () => {
     h.store.dispatch({ type: "toggleCompare" });
     const { container } = mount(h, <SiteFeasibilityView />);
     expect(container.querySelectorAll(".delta, .baseline, [data-baseline]")).toHaveLength(0);
+  });
+});
+
+describe("schematic renders in screen pixels regardless of parcel size (#39)", () => {
+  /** The golden with its schematic swapped for the nova-colo one (5 acres, 142 m; the golden is 400 acres, 1272 m). */
+  function withNovaSchematic(): Result {
+    const result = loadGoldenResult();
+    result.schematic = fromJsonString(ResultSchema, novaResultJson).schematic;
+    return result;
+  }
+
+  function labelScales(container: HTMLElement): { id: string; scale: number }[] {
+    return [...container.querySelectorAll(".block .label")].map((g) => {
+      const m = /scale\(([\d.e+-]+)\)/.exec(g.getAttribute("transform") ?? "");
+      expect(m, `label transform ${g.getAttribute("transform")}`).not.toBeNull();
+      return { id: g.closest("[data-block]")!.getAttribute("data-block")!, scale: Number(m![1]) };
+    });
+  }
+
+  test("label font size on screen is the same on a 5-acre and a 400-acre parcel", () => {
+    const sizes = new Set<string>();
+    for (const result of [loadGoldenResult(), withNovaSchematic()]) {
+      const { container } = mount(harness(result), <SiteSchematic />);
+      const svg = container.querySelector("svg.schematic")!;
+      const [, , w] = svg.getAttribute("viewBox")!.split(" ").map(Number);
+      const pxPerM = Number(svg.getAttribute("data-px-per-m"));
+      expect(pxPerM * w!, "rendered width in px").toBeGreaterThan(100);
+      const labels = labelScales(container);
+      expect(labels.length).toBeGreaterThan(3);
+      for (const { id, scale } of labels) {
+        const text = container.querySelector(`[data-block="${id}"] text`)!;
+        const px = Number(text.getAttribute("font-size")) * scale * pxPerM; // screen px = font × label scale × px/m
+        sizes.add(px.toFixed(3));
+      }
+      cleanup();
+    }
+    expect([...sizes]).toHaveLength(1);
+  });
+
+  test("a block narrower or shorter than its label gets no label", () => {
+    const result = withNovaSchematic();
+    const blocks = result.schematic!.blocks;
+    blocks.find((b) => b.id === "hall_p1")!.wM = 3; // 3 m: a few px wide on any screen
+    blocks.find((b) => b.id === "hall_p2")!.hM = 0.5;
+    const { container } = mount(harness(result), <SiteSchematic />);
+    expect(container.querySelector('[data-block="hall_p1"] text')).toBeNull();
+    expect(container.querySelector('[data-block="hall_p2"] text')).toBeNull();
+    expect(container.querySelector('[data-block="substation"] text')?.textContent).toBe("substation");
+  });
+
+  test("every rect and label lies inside the viewBox, and strokes do not scale with the parcel", () => {
+    for (const result of [loadGoldenResult(), withNovaSchematic()]) {
+      const { container } = mount(harness(result), <SiteSchematic />);
+      const svg = container.querySelector("svg.schematic")!;
+      const [, , w, h] = svg.getAttribute("viewBox")!.split(" ").map(Number);
+      for (const rect of svg.querySelectorAll("rect")) {
+        const [x, y, rw, rh] = ["x", "y", "width", "height"].map((a) => Number(rect.getAttribute(a)));
+        expect(x, rect.outerHTML).toBeGreaterThanOrEqual(0);
+        expect(y, rect.outerHTML).toBeGreaterThanOrEqual(0);
+        expect(x! + rw!, rect.outerHTML).toBeLessThanOrEqual(w! + 1e-6);
+        expect(y! + rh!, rect.outerHTML).toBeLessThanOrEqual(h! + 1e-6);
+        expect(rect.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+      }
+      for (const g of svg.querySelectorAll(".label")) {
+        const [tx, ty] = /translate\(([\d.e+-]+) ([\d.e+-]+)\)/.exec(g.getAttribute("transform")!)!.slice(1).map(Number);
+        expect(tx).toBeGreaterThanOrEqual(0);
+        expect(ty).toBeGreaterThanOrEqual(0);
+        expect(tx).toBeLessThanOrEqual(w!);
+        expect(ty).toBeLessThanOrEqual(h!);
+      }
+      expect(svg.querySelectorAll(".setback rect[fill^='url(#']").length).toBe(4);
+      cleanup();
+    }
   });
 });

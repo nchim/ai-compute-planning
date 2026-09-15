@@ -1,8 +1,8 @@
 import { clone } from "@bufbuild/protobuf";
 
 import { ResultSchema, SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
-import { PathError, applyPatch } from "./paths";
-import type { AppError, Command, PatchOp, Proposal, State } from "./types";
+import { PathError, applyPatch, removeAt } from "./paths";
+import { initialState, type AppError, type Command, type PatchOp, type Proposal, type State } from "./types";
 
 /**
  * Pure reducer: `(state, command) → state`. No clock, no ids, no I/O — the store supplies those.
@@ -17,12 +17,16 @@ export function reduce(state: State, cmd: Command): State {
       return patchPlan(state, [{ path: cmd.path, value: cmd.value }]);
     case "applyPatch":
       return patchPlan(state, cmd.patch);
+    case "removeAt":
+      return removeFromPlan(state, cmd.path, cmd.index);
     case "proposeChange":
       return propose(state, { id: cmd.id, summary: cmd.summary, patch: cmd.patch, status: "pending" });
     case "acceptProposal":
       return settleProposal(state, cmd.id, "accepted");
     case "rejectProposal":
       return settleProposal(state, cmd.id, "rejected");
+    case "reset":
+      return { ...initialState, engine: state.engine }; // engine activity is derived; everything else starts over
     case "undo":
       return shiftHistory(state, "past", "future");
     case "redo":
@@ -63,6 +67,16 @@ function patchPlan(state: State, patch: readonly PatchOp[]): State {
   if (state.plan === null) return reject(state, "no plan loaded");
   try {
     return commitPlan(state, applyPatch(state.plan, patch));
+  } catch (err) {
+    if (err instanceof PathError) return reject(state, err.message);
+    throw err;
+  }
+}
+
+function removeFromPlan(state: State, path: string, index: number): State {
+  if (state.plan === null) return reject(state, "no plan loaded");
+  try {
+    return commitPlan(state, removeAt(state.plan, path, index));
   } catch (err) {
     if (err instanceof PathError) return reject(state, err.message);
     throw err;

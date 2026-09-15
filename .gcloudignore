@@ -6,8 +6,8 @@
 .gcloudignore
 .github
 .claude
-design
-harness
+/design
+/harness
 research/sources
 node_modules
 **/node_modules

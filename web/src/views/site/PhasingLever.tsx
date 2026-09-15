@@ -1,7 +1,7 @@
 import { useStore, type PatchOp } from "../../bus";
-import { PhasingModeSchema } from "../../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingModeSchema } from "../../gen/capplanner/v1/engine_pb";
 import { StepChart } from "./charts/StepChart";
-import { MetricTile, NotComputed, Region, useCompareBaseline } from "./chrome";
+import { MetricTile, Region, useCompareBaseline } from "./chrome";
 import { NumberField, SelectField, TextField } from "./controls";
 import { Explainer } from "./Explainer";
 import { num, pct } from "./fmt";
@@ -29,6 +29,11 @@ export function PhasingLever() {
   const baseline = baselineChart === undefined ? undefined : { demand: series("demand", baselineChart), capacity: series("capacity", baselineChart) };
   const summary = state.result?.summary;
   const lastEnergize = Math.max(0, ...phases.map((p) => p.energizeMonth));
+  const optimizing = state.engine.optimizing;
+  // OPTIMIZE is an action, not a plan state: the button runs the optimizer on a clone. A plan that
+  // still carries mode=OPTIMIZE (older fixtures, an agent edit) cannot be analyzed, so offer the way out.
+  const modeIsOptimize = state.plan?.phasing?.mode === PhasingMode.OPTIMIZE;
+  const runOptimize = () => void store.optimize().catch(() => undefined); // failures surface via state.error
 
   return (
     <Region
@@ -36,24 +41,44 @@ export function PhasingLever() {
       title="Phasing — demand ramp vs. staged capacity"
       dimensions={["time"]}
       actions={
-        <button type="button" className="btnp" onClick={() => void store.optimize().catch(() => undefined) /* surfaced via state.error */}>
-          Optimize phasing
+        <button type="button" className="btnp" disabled={optimizing || state.plan === null} onClick={runOptimize} aria-busy={optimizing}>
+          {optimizing ? "Optimizing…" : "Optimize phasing"}
         </button>
       }
     >
       <div className="two-col">
         <div>
-          <SelectField path="phasing.mode" label="Mode" enum={PhasingModeSchema} />
+          <SelectField path="phasing.mode" label="Mode" enum={PhasingModeSchema} exclude={["OPTIMIZE"]} />
+          {modeIsOptimize && (
+            <p className="notice" data-notice="mode-optimize">
+              This plan is set to OPTIMIZE, which the analyzer cannot run. Choose a mode above or{" "}
+              <button type="button" className="mini" onClick={runOptimize} disabled={optimizing}>
+                run the optimizer
+              </button>
+              .
+            </p>
+          )}
           <div className="phase-list">
             <Explainer term="phasing.phases">Phases</Explainer>
             {phases.map((p, i) => (
               <fieldset key={i} className="phase" data-phase={p.id}>
-                <legend>{p.id || `phase ${i + 1}`}</legend>
-                <TextField path={`phasing.phases[${i}].id`} label="id" />
-                <NumberField path={`phasing.phases[${i}].it_load_mw`} label="IT MW" />
-                <NumberField path={`phasing.phases[${i}].start_month`} label="start m" integer />
-                <NumberField path={`phasing.phases[${i}].energize_month`} label="energize m" integer />
-                <TextField path={`phasing.phases[${i}].power_source_id`} label="power source" />
+                <legend>
+                  {p.id || `phase ${i + 1}`}
+                  <button
+                    type="button"
+                    className="x"
+                    aria-label={`delete phase ${p.id || i + 1}`}
+                    title="Delete this phase"
+                    onClick={() => store.dispatch({ type: "removeAt", path: "phasing.phases", index: i })}
+                  >
+                    ×
+                  </button>
+                </legend>
+                <TextField path={`phasing.phases[${i}].id`} label="Phase id" />
+                <NumberField path={`phasing.phases[${i}].it_load_mw`} label="IT load (MW)" />
+                <NumberField path={`phasing.phases[${i}].start_month`} label="Construction start (month)" integer />
+                <NumberField path={`phasing.phases[${i}].energize_month`} label="Energize (month)" integer />
+                <TextField path={`phasing.phases[${i}].power_source_id`} label="Power source id" />
               </fieldset>
             ))}
             <button
@@ -67,8 +92,25 @@ export function PhasingLever() {
           </div>
         </div>
         <div>
-          {chart === undefined ? (
-            <NotComputed what="Demand vs capacity chart" />
+          {optimizing ? (
+            <div className="running" role="status" aria-live="polite" data-running="optimize">
+              <span className="spinner" aria-hidden="true" />
+              <div>
+                <b>Optimizing phasing…</b>
+                <div className="running-sub">Enumerating phase counts and power sources, then refining sizes and timing against the demand ramp.</div>
+              </div>
+            </div>
+          ) : chart === undefined ? (
+            <div className="empty blank" data-blank="phasing">
+              <b>No phasing plan yet.</b>
+              <div>
+                Add phases by hand (mode EXPLICIT), or let the optimizer stage capacity against the demand ramp
+                {state.plan?.phasing?.policy === undefined ? " using a default policy" : " using the policy in the optimization panel"}.
+              </div>
+              <button type="button" className="mini" onClick={runOptimize} disabled={state.plan === null}>
+                Optimize phasing
+              </button>
+            </div>
           ) : (
             <StepChart demand={series("demand")} capacity={series("capacity")} shortfall={series("shortfall")} stranded={series("stranded")} xLabel={chart.meta["x"] ?? "month"} yLabel={chart.meta["y"] ?? "MW"} {...(baseline === undefined ? {} : { baseline })} />
           )}

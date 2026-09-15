@@ -12,7 +12,8 @@ human or the Copilot exercises.
 | Acceptance session, scripted (the CI gate) | `make acceptance` (= `cd harness && npm run acceptance`) |
 | Acceptance session, live Copilot (manual; needs a key, records a video) | `cd harness && npm run acceptance:live` |
 | Smoke only | `cd harness && npm run smoke` |
-| All specs (smoke + scripted acceptance) | `cd harness && npm test` |
+| Schematic screenshots (every fixture, scrubbed to the last month → `<runDir>/schematic-<fixture>.png`) | `cd harness && npx playwright test tests/schematic.spec.ts` |
+| All specs (smoke, schematic, scripted acceptance) | `cd harness && npm test` |
 | Watch the browser | `cd harness && npx playwright test --headed` (or `HEADED=1` for a `Session` launched from your own script) |
 | One spec, verbose | `cd harness && npx playwright test tests/smoke.spec.ts --reporter=list` |
 | Typecheck | `cd harness && npm run typecheck` |

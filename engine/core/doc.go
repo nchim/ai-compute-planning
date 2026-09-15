@@ -103,6 +103,6 @@
 //   - ConstructionLeadMonths = 18 for every build; power-source capex attributed to the first phase
 //     that can use it; capex paid as lumps (no S-curve); 100% equity (capital_uses_eq_sources);
 //     storage (BESS) is not firm supply (STORAGE_NOT_FIRM INFO); PPAs count at nameplate;
-//     land at cost at exit; no selling costs; no idle energy draw; schematic is a single-row block
-//     layout, not a site plan.
+//     land at cost at exit; no selling costs; no idle energy draw; schematic is a row-wrapped block
+//     layout inside the usable rectangle, not a site plan.
 package core

@@ -52,7 +52,7 @@ export interface HarnessApi {
   /** Opens an accept/undo card (the Copilot's `propose_change`); returns the proposal id. */
   proposeChange(summary: string, patch: readonly PatchEntry[]): Promise<string>;
   /** Resolves when the Copilot turn ends; rejects until a Copilot is registered via `setCopilot`. */
-  sendCopilot(text: string): Promise<void>;
+  sendCopilot(text: string, options?: SendOptions): Promise<void>;
   setCopilot(copilot: CopilotHandle | null): Promise<void>;
   /** The registered Copilot's transcript, tool events and last usage; rejects until one is registered. */
   getCopilotSnapshot(): Promise<Json>;
@@ -75,7 +75,13 @@ export interface HarnessApi {
   getConsoleErrors(): Promise<string[]>;
 }
 
-export type CopilotFn = (text: string) => Promise<void>;
+/** Per-turn request options a caller may pass through to the Copilot. */
+export interface SendOptions {
+  /** `output_config.effort` for this turn; omitted = the API default. */
+  readonly effort?: "low" | "medium" | "high";
+}
+
+export type CopilotFn = (text: string, options?: SendOptions) => Promise<void>;
 
 /** What the Copilot registers: a way to send a turn and a JSON view of its state for assertions. */
 export interface CopilotHandle {

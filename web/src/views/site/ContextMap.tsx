@@ -1,21 +1,14 @@
-import { useState } from "react";
-
 import { useStore } from "../../bus";
 import { LatencyClass, type Site } from "../../gen/capplanner/v1/engine_pb";
-import { Explainer } from "./Explainer";
+import { leafletMapProvider } from "./LeafletMap";
 import { NotComputed, Region } from "./chrome";
-import type { MapProvider, Overlay } from "./mapProvider";
+import { latencyLabel, type MapProvider, type Overlay } from "./mapProvider";
+
+export { leafletMapProvider };
 
 const overlays: readonly Overlay[] = ["power", "water", "latency"];
 
-const latencyLabel: Record<LatencyClass, string> = {
-  [LatencyClass.LATENCY_UNSPECIFIED]: "latency tier unset",
-  [LatencyClass.TRAINING_REMOTE]: "training (remote)",
-  [LatencyClass.INFERENCE_REGIONAL]: "inference (regional)",
-  [LatencyClass.INFERENCE_METRO]: "inference (metro)",
-};
-
-// STUB: schematic map — no real tiles in the POC. A tile-based MapProvider drops in here.
+/** Tile-free fallback: the same overlays as a schematic, for environments with no basemap access. */
 export const schematicMapProvider: MapProvider = {
   name: "schematic",
   render(site, active) {
@@ -55,34 +48,16 @@ export const schematicMapProvider: MapProvider = {
   },
 };
 
+/** Every overlay is always on: the map is a picture of the site's context, not a layer editor. */
+const allOverlays: ReadonlySet<Overlay> = new Set<Overlay>(overlays);
+
 export function ContextMap(props: { provider?: MapProvider }) {
   const { state } = useStore();
-  const provider = props.provider ?? schematicMapProvider;
-  const [active, setActive] = useState<ReadonlySet<Overlay>>(() => new Set<Overlay>(["power"]));
-  const toggle = (o: Overlay) =>
-    setActive((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(o)) next.add(o);
-      return next;
-    });
+  const provider = props.provider ?? leafletMapProvider;
   const site: Site | undefined = state.plan?.site;
   return (
-    <Region
-      id="context_map"
-      title="Context map"
-      dimensions={["space"]}
-      actions={
-        <span className="seg" role="group" aria-label="overlays">
-          {overlays.map((o) => (
-            <button key={o} type="button" className={active.has(o) ? "on" : ""} aria-pressed={active.has(o)} onClick={() => toggle(o)}>
-              <Explainer term={`overlay.${o}`}>{o}</Explainer>
-            </button>
-          ))}
-        </span>
-      }
-    >
-      {site === undefined ? <NotComputed what="Site" /> : provider.render(site, active)}
-      <p className="kpi-s">Overlay: {[...active].join(" · ") || "none"} · provider: {provider.name}</p>
+    <Region id="context_map" title="Context map" dimensions={["space"]}>
+      {site === undefined ? <NotComputed what="Site" /> : provider.render(site, allOverlays)}
     </Region>
   );
 }

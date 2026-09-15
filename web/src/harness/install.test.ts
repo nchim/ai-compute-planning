@@ -98,7 +98,10 @@ describe("harness api", () => {
     const send = vi.fn(async () => undefined);
     await api.setCopilot({ send, snapshot: () => ({ messages: 2 }) });
     await api.sendCopilot("hi");
-    expect(send).toHaveBeenCalledWith("hi");
+    expect(send).toHaveBeenCalledWith("hi", undefined);
+    await api.sendCopilot("careful", { effort: "low" });
+    expect(send).toHaveBeenLastCalledWith("careful", { effort: "low" });
+    await expect(api.sendCopilot("x", { effort: "max" } as never)).rejects.toThrow("effort must be low, medium or high");
     expect(await api.getCopilotSnapshot()).toEqual({ messages: 2 });
     await api.setCopilot({
       send: async () => {

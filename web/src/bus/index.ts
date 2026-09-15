@@ -1,8 +1,8 @@
 export { StoreProvider, useStore } from "./hook";
 export { logToJson, commandToJson } from "./log";
-export { PathError, applyPatch } from "./paths";
+export { PathError, applyPatch, removeAt } from "./paths";
 export { planChanged, reduce } from "./reducer";
-export { createStore, type Store, type StoreOptions } from "./store";
+export { createStore, defaultPhasingPolicy, defaultPolicyFor, type Store, type StoreOptions } from "./store";
 export { defaultBaselineLabel } from "./baseline";
 export type {
   AppError,

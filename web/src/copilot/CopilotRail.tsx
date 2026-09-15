@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type FormEvent, type KeyboardEvent } from "react";
 
 import { useStore, viewContext, type Proposal } from "../bus";
-import { createCopilot, emptySnapshot, type Copilot, type CopilotSnapshot } from "./client";
+import { saveSharePreference, useSessionShare } from "../telemetry";
+import { createCopilot, emptySnapshot, type Activity, type Copilot, type CopilotSnapshot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
+import { useRegisterCopilotSend } from "./handle";
+import { resetSession } from "../session/reset";
 import type { CopilotHandle, Json } from "../harness/api";
 import { safeStorage, type Message } from "./history";
-import { renderMarkdownLite } from "./markdownLite";
+import { Markdown } from "./Markdown";
 import type { ToolEvent } from "./tools";
 import { RELAY_PLACEHOLDER_KEY, transport } from "./transport";
 import "./CopilotRail.css";
@@ -32,15 +35,28 @@ export function CopilotRail() {
     () => (apiKey === "" ? null : createCopilot({ store, engine, apiKey })),
     [store, engine, apiKey],
   );
+  const registerSend = useRegisterCopilotSend();
+  const share = useSessionShare();
   useEffect(() => {
-    const register = (handle: CopilotHandle | null) =>
+    const register = (handle: CopilotHandle | null) => {
+      registerSend(handle === null ? null : (text) => handle.send(text)); // in-app readers ("Explain" links)
       window.__harness?.setCopilot(handle).catch((err: unknown) => console.error("harness.setCopilot failed", err));
-    register(copilot === null ? null : { send: copilot.send, snapshot: () => snapshotJson(copilot.getSnapshot()) });
+    };
+    register(copilot === null ? null : { send: (text, options) => copilot.send(text, options), snapshot: () => snapshotJson(copilot.getSnapshot()) });
+    const detachShare = copilot === null ? null : share?.attachCopilot(copilot); // session sharing sees each turn
     return () => {
+      detachShare?.();
       register(null);
       copilot?.dispose();
     };
-  }, [copilot]);
+  }, [copilot, registerSend, share]);
+
+  const [sharing, setSharing] = useState(() => share?.isEnabled() ?? false);
+  const updateSharing = (on: boolean) => {
+    share?.setEnabled(on);
+    saveSharePreference(safeStorage("local"), on);
+    setSharing(on);
+  };
 
   const snapshot = useSyncExternalStore(copilot?.subscribe ?? noSubscribe, copilot?.getSnapshot ?? emptyGetter);
 
@@ -59,11 +75,19 @@ export function CopilotRail() {
     // The rejection is already shown in the snapshot's error banner; here it only needs observing.
     copilot.send(text).catch(() => undefined);
   };
+  // Enter sends; Shift+Enter inserts a newline (the textarea grows to fit).
+  const onComposerKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  };
 
   return (
     <aside className="rail" aria-label="Copilot">
       <div className="rail-hd">
         Copilot
+        {share !== null && sharing && <span className="share-dot" role="img" aria-label="Sharing this session with the developer" />}
         {import.meta.env.DEV && snapshot.lastUsage !== null && (
           <span className="copilot-usage" title="Last turn's token usage (dev only)">
             cache read {snapshot.lastUsage.cache_read_input_tokens ?? 0} · in {snapshot.lastUsage.input_tokens} · out{" "}
@@ -74,7 +98,24 @@ export function CopilotRail() {
           viewing: {tabLabels[ctx.activeTab]}
           {ctx.selectedSiteId === null ? "" : ` · ${ctx.selectedSiteId}`}
         </span>
+        {state.plan !== null && (
+          <button
+            type="button"
+            className="btn mini-btn"
+            data-action="reset-session"
+            disabled={snapshot.running}
+            title="Start over on this fixture: forgets the conversation and every edit, result, proposal and baseline"
+            onClick={() => {
+              if (window.confirm("Reset this session? The conversation, all plan edits, results, proposals and the baseline are discarded and the fixture reloads fresh.")) {
+                resetSession(store, copilot);
+              }
+            }}
+          >
+            Reset
+          </button>
+        )}
       </div>
+      {share !== null && <ShareToggle on={sharing} onChange={updateSharing} />}
       {RELAY_MODE ? (
         <div className="copilot-key">
           <div className="copilot-notice">Relay mode — key held server-side.</div>
@@ -101,7 +142,8 @@ export function CopilotRail() {
         {snapshot.transcript.messages.map((m, i) => (
           <MessageView key={i} message={m} toolEvents={snapshot.toolEvents} />
         ))}
-        {snapshot.streamingText !== "" && <div className="msg bot">{renderMarkdownLite(snapshot.streamingText)}</div>}
+        {/* Proposals sit with the conversation: settled ones as one compact line, pending ones as cards
+            that need a decision — both before whatever the Copilot is doing now. */}
         {state.proposals.map((p) => (
           <ProposalCard
             key={p.id}
@@ -110,6 +152,8 @@ export function CopilotRail() {
             onUndo={() => store.dispatch({ type: "rejectProposal", id: p.id })}
           />
         ))}
+        {snapshot.streamingText !== "" && <div className="msg bot"><Markdown text={snapshot.streamingText} /></div>}
+        {snapshot.running && snapshot.activity.kind !== "writing" && <ActivityIndicator activity={snapshot.activity} />}
       </div>
       {copilot === null ? (
         <div className="copilot-disabled">Paste an API key above to enable the Copilot.</div>
@@ -117,11 +161,12 @@ export function CopilotRail() {
         <div className="copilot-disabled">Load a plan to start a conversation.</div>
       ) : (
         <form className="composer" onSubmit={submit}>
-          <input
+          <GrowingTextarea
             aria-label="Message Copilot"
-            placeholder="Bridge with gas so we energize by Q3-27…"
+            placeholder="Ask or instruct… (Shift+Enter for a new line)"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onComposerKey}
             disabled={snapshot.running}
           />
           {snapshot.running ? (
@@ -141,7 +186,67 @@ export function CopilotRail() {
 
 /** The harness's view of the Copilot: transcript, tool events and usage (all plain JSON already). */
 function snapshotJson(s: CopilotSnapshot): Json {
-  return JSON.parse(JSON.stringify({ messages: s.transcript.messages, toolEvents: s.toolEvents, lastUsage: s.lastUsage, running: s.running, error: s.error })) as Json;
+  return JSON.parse(
+    JSON.stringify({ messages: s.transcript.messages, droppedTurns: s.transcript.droppedTurns, toolEvents: s.toolEvents, lastUsage: s.lastUsage, running: s.running, error: s.error }),
+  ) as Json;
+}
+
+/** A single-line textarea that grows with its content up to `maxRows`, then scrolls. */
+function GrowingTextarea(props: ComponentProps<"textarea"> & { maxRows?: number }) {
+  const { maxRows = 8, ...rest } = props;
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 18;
+    el.style.height = "auto"; // shrink first so deleting lines also shrinks the box
+    el.style.height = `${Math.min(el.scrollHeight, lineHeight * maxRows + 16)}px`;
+  }, [props.value, maxRows]);
+  return <textarea ref={ref} rows={1} {...rest} />;
+}
+
+/** Progress feedback for the wait before any text streams: thinking, or a named tool running. */
+function ActivityIndicator(props: { activity: Activity }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [props.activity]);
+  const label =
+    props.activity.kind === "tool" ? `Running ${props.activity.name}` : props.activity.kind === "thinking" ? "Thinking" : "Working";
+  return (
+    <div className="msg bot copilot-activity" role="status" aria-live="polite" data-activity={props.activity.kind}>
+      <span className="copilot-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      {label}
+      {seconds >= 3 && <span className="copilot-elapsed"> · {seconds}s</span>}
+    </div>
+  );
+}
+
+/** Opt-in session sharing (see telemetry/share.ts); the explainer says exactly what leaves the browser. */
+function ShareToggle(props: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="copilot-share">
+      <label>
+        <input type="checkbox" checked={props.on} onChange={(e) => props.onChange(e.target.checked)} />
+        Share session with developer
+      </label>
+      <span className="explainer copilot-share-why" tabIndex={0}>
+        <span className="q" aria-hidden="true">
+          ?
+        </span>
+        <span role="tooltip" className="pop">
+          Sends what you do here — plan edits, Copilot questions and answers, result summaries and any errors — to this
+          deployment's server log so the developer can see what worked and what broke. Never your API key.
+        </span>
+      </span>
+    </div>
+  );
 }
 
 function KeyPanel(props: { apiKey: string; onChange: (key: string) => void }) {
@@ -202,7 +307,7 @@ function MessageView(props: { message: Message; toolEvents: readonly ToolEvent[]
   return (
     <div className="msg bot">
       {blocks.map((b, i) => {
-        if (b.type === "text") return <div key={i}>{renderMarkdownLite(b.text)}</div>;
+        if (b.type === "text") return <div key={i}><Markdown text={b.text} /></div>;
         if (b.type !== "tool_use") return null;
         const ev = props.toolEvents.find((e) => e.id === b.id);
         const status = ev?.status ?? "done";
@@ -218,25 +323,36 @@ function MessageView(props: { message: Message; toolEvents: readonly ToolEvent[]
 
 function ProposalCard(props: { proposal: Proposal; onAccept: () => void; onUndo: () => void }) {
   const { proposal } = props;
+  const changes = proposal.patch.length;
   const preview = proposal.patch.map((op) => `${op.path} = ${JSON.stringify(op.value)}`).join("\n");
+  if (proposal.status !== "pending") {
+    return (
+      <div className={`proposal settled ${proposal.status}`} data-proposal-id={proposal.id} data-status={proposal.status}>
+        <span className="status">{proposal.status === "accepted" ? "Accepted" : "Undone"}</span> {proposal.summary}
+        <details>
+          <summary>{changes} change{changes === 1 ? "" : "s"}</summary>
+          <pre>{preview}</pre>
+        </details>
+      </div>
+    );
+  }
   return (
-    <div className="proposal" data-proposal-id={proposal.id}>
+    <div className="proposal pending" data-proposal-id={proposal.id} data-status="pending">
       <div>
         <strong>Proposed:</strong> {proposal.summary}
       </div>
-      <pre>{preview}</pre>
-      {proposal.status === "pending" ? (
-        <div className="acts">
-          <button className="btn primary" type="button" onClick={props.onAccept}>
-            Accept
-          </button>
-          <button className="btn" type="button" onClick={props.onUndo}>
-            Undo
-          </button>
-        </div>
-      ) : (
-        <span className="status">{proposal.status}</span>
-      )}
+      <details>
+        <summary>{changes} change{changes === 1 ? "" : "s"}</summary>
+        <pre>{preview}</pre>
+      </details>
+      <div className="acts">
+        <button className="btn primary" type="button" onClick={props.onAccept}>
+          Accept
+        </button>
+        <button className="btn" type="button" onClick={props.onUndo}>
+          Undo
+        </button>
+      </div>
     </div>
   );
 }

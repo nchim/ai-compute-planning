@@ -23,6 +23,7 @@
 .site-view .panel-hd .t { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .site-view .panel-hd .actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 .site-view .two-col { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 14px; }
+.site-view .two-col > div { min-width: 0; }
 .site-view .empty { color: #a1a1aa; font-style: italic; border: 1px dashed #e4e4e7; border-radius: 4px; padding: 10px; }
 .site-view .app-error { color: #fff; background: #9c6b6b; border-radius: 4px; padding: 6px 10px; }
 
@@ -56,10 +57,11 @@
 .site-view .phase-list { margin-top: 8px; }
 .site-view fieldset.phase, .site-view fieldset.row3 { border: 1px solid #ececee; border-radius: 5px; padding: 4px 8px; margin: 6px 0; }
 .site-view fieldset.phase legend { font-size: 11px; color: var(--muted); }
-.site-view fieldset .field { grid-template-columns: 90px 1fr; margin: 2px 0; }
+.site-view fieldset .field { grid-template-columns: 150px 1fr; margin: 2px 0; }
+.site-view .capex-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .site-view .diags { list-style: none; margin: 4px 0; padding: 0; font-size: 11.5px; }
-.site-view .diag { border-left: 3px solid var(--muted); padding: 3px 8px; margin: 3px 0; background: var(--soft); border-radius: 0 4px 4px 0; }
+.site-view .diag { display: block; border-left: 3px solid var(--muted); padding: 3px 8px; margin: 3px 0; background: var(--soft); border-radius: 0 4px 4px 0; overflow-wrap: anywhere; }
 .site-view .diag-warning { border-color: #b8860b; } .diag-error { border-color: #9c3b3b; } .diag-info { border-color: var(--space); }
 .site-view .diag .hint { color: var(--muted); }
 
@@ -115,6 +117,30 @@
 .site-view .map .ov-water circle { fill: #4f83a8; } .map .ov-water text { fill: #4f83a8; }
 .site-view .map .ov-latency circle { fill: none; stroke: var(--time); stroke-dasharray: 5 4; stroke-width: 1.5; } .map .ov-latency text { fill: var(--time); }
 
+/* The schematic's user unit is the metre; every stroke is non-scaling, so widths and dashes here are screen px. */
+.site-view .schematic { width: 100%; height: auto; display: block; }
+.site-view .schematic .parcel { fill: #f3f4f1; stroke: var(--line); stroke-dasharray: 6 4; stroke-width: 1; }
+.site-view .schematic .hatch { stroke: #c4c4c8; stroke-width: 1; }
+.site-view .schematic .block rect { stroke: #fff; stroke-width: 1.5; }
+.site-view .schematic .block text { fill: #fff; font-weight: 600; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.site-view .schematic .setback rect { stroke: #d4d4d8; stroke-width: 1; } .site-view .schematic .setback text { fill: var(--muted); }
+.site-view .schematic .expansion-pad rect { fill: none; stroke: var(--line); stroke-dasharray: 5 4; } .site-view .schematic .expansion-pad text { fill: var(--muted); }
+/* Leaflet basemap: the container needs a fixed height for tiles to lay out. */
+.site-view .leaflet-map { width: 100%; height: 300px; border-radius: 4px; border: 1px solid #ececee; background: #eef0ec; }
+.site-view .leaflet-container { font: inherit; font-size: 11px; }
+.site-view .leaflet-control-attribution { font-size: 9px; }
+.site-view .map-label { font-size: 10.5px; font-weight: 600; color: var(--ink); background: rgba(255,255,255,.9); border: none; box-shadow: 0 1px 3px rgba(0,0,0,.15); padding: 1px 5px; }
+.site-view .map-label::before { display: none; }
+.site-view .map-notice { margin: 6px 0 0; font-size: 11px; color: #9c3b3b; }
+.site-view .map-legend { margin: 6px 0 2px; }
+.site-view .swatch.latency { background: transparent; border: 1.5px solid var(--time); border-radius: 50%; }
+.site-view .swatch.water { background: #4f83a8; }
+.site-view .swatch.power { background: var(--space); }
+@media (prefers-color-scheme: dark) {
+  .site-view .leaflet-map { background: #26262b; border-color: #3f3f46; }
+  .site-view .map-label { background: rgba(31,31,35,.9); color: #f4f4f5; }
+}
+
 .site-view .schematic { width: 100%; height: auto; font-size: 26px; }
 .site-view .schematic .parcel { fill: #f3f4f1; stroke: var(--line); stroke-dasharray: 8 6; stroke-width: 3; }
 .site-view .schematic .block rect { stroke: #fff; stroke-width: 3; }
@@ -135,9 +161,40 @@
 .site-view .h-sub[data-baseline] { font-weight: 600; color: var(--ink); }
 .site-view .chart .line.baseline { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .5; }
 .site-view .chart .line.zero { stroke: var(--line); stroke-width: 1; }
+.site-view .chart .line.net { stroke: var(--capital, #8a7f5f); }
 .site-view .swatch.baseline { background: transparent; border: 1px dashed var(--ink); opacity: .6; }
 .site-view .swatch.net { background: var(--capital); }
 .site-view .stackbar.with-baseline svg { height: 48px; }
 .site-view .stackbar .baseline rect { opacity: .45; }
 .site-view .bands .baseline { opacity: .5; } .site-view .bands .baseline line { stroke: var(--ink); stroke-dasharray: 3 2; }
+.site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .5; }
 .site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 8; opacity: .5; }
+
+/* Blank and running states for regions that need an action before they have data. */
+.site-view .blank { display: grid; gap: 6px; justify-items: start; font-style: normal; color: #52525b; }
+.site-view .blank b { color: var(--ink); }
+.site-view .notice { font-size: 11.5px; color: #52525b; background: var(--soft); border-radius: 4px; padding: 6px 8px; margin: 4px 0; }
+.site-view .running { display: flex; gap: 10px; align-items: center; border: 1px dashed var(--line); border-radius: 4px; padding: 14px; color: var(--ink); font-size: 12px; min-height: 90px; }
+.site-view .running-sub { color: #52525b; font-size: 11.5px; margin-top: 2px; }
+.site-view .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: site-spin 0.9s linear infinite; flex: none; }
+@keyframes site-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .site-view .spinner { animation: none; } }
+
+/* Schematic block card (hover preview / click to pin) with the Explain link to the Copilot. */
+.site-view .schematic .block { cursor: pointer; outline: none; }
+.site-view .schematic .block.focused rect { stroke: var(--ink); stroke-width: 2px; }
+.site-view .block-hint { font-size: 11px; color: #a1a1aa; margin: 6px 0 0; }
+.site-view .block-card { margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11.5px; background: #fff; }
+.site-view .block-card.pinned { border-color: var(--accent); }
+.site-view .block-card-hd { display: flex; align-items: center; gap: 8px; }
+.site-view .block-card-hd .x { margin-left: auto; border: none; background: none; cursor: pointer; color: #71717a; font-size: 14px; line-height: 1; }
+.site-view .block-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0; }
+.site-view .block-card dt { color: #71717a; }
+.site-view .block-card dd { margin: 0; color: var(--ink); }
+.site-view .block-card .explain { margin-top: 2px; }
+
+.site-view fieldset.phase legend { display: flex; align-items: center; gap: 6px; }
+.site-view fieldset.phase legend .x { border: none; background: none; cursor: pointer; color: #71717a; font-size: 13px; line-height: 1; padding: 0 2px; }
+.site-view fieldset.phase legend .x:hover { color: #9c3b3b; }
+
+.site-view .field input[type="checkbox"] { width: auto; justify-self: start; margin: 0; }

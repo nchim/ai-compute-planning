@@ -52,6 +52,17 @@ const mutationPaths = (store: Store) =>
     return [];
   });
 
+describe("per-turn effort", () => {
+  test("send(text, { effort }) sets output_config.effort on that turn's requests only", async () => {
+    const api = scriptedApi([{ content: [{ type: "text", text: "ok" }] }, { content: [{ type: "text", text: "ok" }] }]);
+    const copilot = createCopilot({ store: loadedStore(t2Engine()), engine: t2Engine(), apiKey: "sk-test", client: api.client, storage: null });
+    await copilot.send("cheap question", { effort: "low" });
+    await copilot.send("default question");
+    expect(api.requests[0]?.["output_config"]).toEqual({ effort: "low" });
+    expect(api.requests[1]?.["output_config"]).toBeUndefined();
+  });
+});
+
 describe("copilot tool loop (scripted API, real SDK)", () => {
   test("T2: diagnostic → edit on the named proto_path → re-run OK; only those paths are mutated", async () => {
     const turns: ScriptedTurn[] = [
@@ -91,9 +102,9 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(setControl["eager_input_streaming"]).toBeUndefined();
     // Only the plan-writing tools are strict: every strict schema joins one compiled grammar with a
     // size cap, and nine strict tools (run_optimize's nested schema included) tripped it live (WS10).
-    expect(tools.filter((t) => t["strict"] === true).map((t) => t["name"])).toEqual(["edit_site_plan", "set_control", "propose_change"]);
+    expect(tools.filter((t) => t["strict"] === true).map((t) => t["name"])).toEqual(["edit_site_plan", "set_control", "remove_list_item", "propose_change"]);
     expect(tools.map((t) => t["name"])).toEqual([
-      "edit_site_plan", "set_control", "run_analyze", "run_optimize", "propose_change", "set_baseline", "toggle_compare", "explain", "query_research",
+      "edit_site_plan", "set_control", "remove_list_item", "run_analyze", "run_optimize", "propose_change", "set_baseline", "toggle_compare", "explain", "query_research",
     ]);
 
     // ViewContext is the first block of the user message, after the system prompt — never inside it.
@@ -125,6 +136,47 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(snap.toolEvents.map((e) => e.status)).toEqual(["done", "done", "done"]);
     expect(snap.running).toBe(false);
     expect(snap.error).toBeNull();
+  });
+
+  test("activity reports thinking → tool → writing → idle so the UI can show progress before text arrives", async () => {
+    const turns: ScriptedTurn[] = [
+      { content: [{ type: "tool_use", id: "toolu_1", name: "run_analyze", input: {} }] },
+      { content: [{ type: "text", text: "Done." }] },
+    ];
+    const api = scriptedApi(turns);
+    const copilot = createCopilot({ store: loadedStore(t2Engine()), engine: t2Engine(), apiKey: "sk-test", client: api.client, storage: null });
+    const seen: string[] = [];
+    copilot.subscribe((_event, snap) => {
+      const kind = snap.activity.kind === "tool" ? `tool:${snap.activity.name}` : snap.activity.kind;
+      if (seen[seen.length - 1] !== kind) seen.push(kind);
+    });
+
+    expect(copilot.getSnapshot().activity.kind).toBe("idle");
+    await copilot.send("Analyze this.");
+
+    expect(seen[0]).toBe("thinking");
+    expect(seen).toContain("tool:run_analyze");
+    expect(seen.indexOf("tool:run_analyze")).toBeLessThan(seen.indexOf("writing"));
+    expect(seen[seen.length - 1]).toBe("idle");
+    expect(copilot.getSnapshot().running).toBe(false);
+  });
+
+  test("clear() forgets the conversation in memory and in storage, and refuses while a turn is running", async () => {
+    window.localStorage.clear();
+    const storage = window.localStorage;
+    const api = scriptedApi([{ content: [{ type: "text", text: "Hello." }] }]);
+    const store = loadedStore(t2Engine());
+    const copilot = createCopilot({ store, engine: t2Engine(), apiKey: "sk-test", client: api.client, storage });
+    await copilot.send("Hi");
+    expect(copilot.getSnapshot().transcript.messages).toHaveLength(2);
+    expect(storage.length).toBeGreaterThan(0);
+
+    copilot.clear();
+    expect(copilot.getSnapshot().transcript.messages).toHaveLength(0);
+    expect(copilot.getSnapshot().notice).toBe("Conversation cleared.");
+    expect(storage.length).toBe(0);
+    // A fresh Copilot on the same storage sees nothing.
+    expect(createCopilot({ store, engine: t2Engine(), apiKey: "sk-test", client: api.client, storage }).getSnapshot().transcript.messages).toHaveLength(0);
   });
 
   test("an unknown path is refused before dispatch and returned as an is_error tool_result", async () => {

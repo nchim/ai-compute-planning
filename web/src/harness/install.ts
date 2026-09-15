@@ -117,9 +117,15 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
       return id;
     },
 
-    async sendCopilot(text) {
+    async sendCopilot(text, options) {
       expectString("text", text);
-      await requireCopilot().send(text);
+      if (options !== undefined) {
+        const effort = (options as { effort?: unknown }).effort;
+        if (effort !== undefined && !["low", "medium", "high"].includes(effort as string)) {
+          throw new Error(`sendCopilot: effort must be low, medium or high, got ${String(effort)}`);
+        }
+      }
+      await requireCopilot().send(text, options);
     },
 
     async setCopilot(handle) {

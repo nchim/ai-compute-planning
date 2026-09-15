@@ -106,10 +106,11 @@ export interface EnumLike {
 }
 
 /** Enum select; writes the enum *name* (the bus accepts names) and hides the `_UNSPECIFIED` zero value. */
-export function SelectField(props: { path: string; label: string; enum: EnumLike }) {
+export function SelectField(props: { path: string; label: string; enum: EnumLike; exclude?: readonly string[] }) {
   const id = useId();
   const f = useField(props.path);
-  const options = props.enum.values.filter((v) => v.number !== 0);
+  const excluded = new Set(props.exclude ?? []);
+  const options = props.enum.values.filter((v) => v.number !== 0 && !excluded.has(v.name));
   const current = options.find((v) => v.number === f.value || v.name === f.value)?.name ?? "";
   return (
     <Field path={props.path} label={props.label} id={id}>

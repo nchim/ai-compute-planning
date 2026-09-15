@@ -4,8 +4,8 @@ import { LineChart } from "./charts/LineChart";
 import { StackBar, type Segment } from "./charts/StackBar";
 import { MetricTile, NotComputed, Region, useCompareBaseline } from "./chrome";
 import { SelectField, SliderField } from "./controls";
-import { money, pct, quarterLabel } from "./fmt";
-import { cellText, chartById, tableById } from "./resultAccess";
+import { money, num, pct, quarterLabel } from "./fmt";
+import { chartById, columnLabel, formatCell, tableById } from "./resultAccess";
 
 // Engine encoding: one series per capex component, one point per phase → sum the phases per component.
 const capexSegments = (chart: Chart | undefined): Segment[] => (chart?.series ?? []).map((s) => ({ name: s.name, value: s.points.reduce((sum, p) => sum + p.y, 0) }));
@@ -52,13 +52,13 @@ export function ProForma() {
       {table !== undefined && (
         <table className="capex-table">
           <thead>
-            <tr>{table.columns.map((c) => <th key={c}>{c}</th>)}</tr>
+            <tr>{table.columns.map((c) => <th key={c}>{columnLabel(c)}</th>)}</tr>
           </thead>
           <tbody>
             {table.rows.map((r, i) => (
               <tr key={i}>
                 {r.cells.map((c, j) => (
-                  <td key={j}>{c.v.case === "n" && c.v.value >= 1e5 ? money(c.v.value) : cellText(c)}</td>
+                  <td key={j} className={c.v.case === "n" ? "num" : ""}>{formatCell(table.columns[j] ?? "", c, { money, pct, num })}</td>
                 ))}
               </tr>
             ))}

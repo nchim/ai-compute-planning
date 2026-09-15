@@ -1,10 +1,12 @@
 import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
 import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
+import { create, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
 
 import { createStore } from "../bus";
 import { loadAbilene } from "../bus/testPlan";
 import { createFakeEngine } from "../engine";
+import { ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createAnalysisTracker } from "./analysis";
 import { researchPaths } from "./research";
 import { createTools, type ToolEvent } from "./tools";
@@ -25,7 +27,7 @@ function harness() {
     const toolUse = { type: "tool_use" as const, id: `id-${name}`, name, input };
     return t.run(t.parse(input), { toolUse, toolUseBlock: toolUse });
   };
-  return { store, events, run, tools };
+  return { store, engine, events, run, tools };
 }
 
 describe("edit_site_plan under a slow engine", () => {
@@ -113,6 +115,18 @@ describe("explain", () => {
 });
 
 describe("propose_change and run_optimize", () => {
+  test("remove_list_item deletes one element of a repeated field and rejects bad paths or indexes", async () => {
+    const h = harness();
+    h.store.dispatch({ type: "applyPatch", patch: [{ path: "power.sources[1].id", value: "gas" }, { path: "power.sources[1].type", value: "BTM_GAS" }, { path: "power.sources[1].capacity_mw", value: 80 }] });
+    expect(h.store.getState().plan?.power?.sources.map((s) => s.id)).toEqual(["grid", "gas"]);
+    const out = JSON.parse(String(await h.run("remove_list_item", { path: "power.sources", index: 1 }))) as { removed: string };
+    expect(out.removed).toBe("power.sources[1]");
+    expect(h.store.getState().plan?.power?.sources.map((s) => s.id)).toEqual(["grid"]);
+    expect(await failure(h.run("remove_list_item", { path: "power.sources", index: 5 }))).toContain("out of range");
+    expect(await failure(h.run("remove_list_item", { path: "compute.pue", index: 0 }))).toContain("not a repeated field");
+    expect(h.store.getState().plan?.power?.sources).toHaveLength(1);
+  });
+
   test("propose_change validates the patch and returns a pending proposal id", async () => {
     const h = harness();
     const out = JSON.parse(String(await h.run("propose_change", { summary: "go liquid", patch: [{ path: "compute.cooling", value: "LIQUID_DTC" }] }))) as { proposal_id: string };
@@ -121,24 +135,46 @@ describe("propose_change and run_optimize", () => {
     expect(h.store.getState().proposals).toHaveLength(1);
   });
 
-  test("run_optimize writes objective/constraints/policy (not phasing.mode) and optimizes via the store", async () => {
+  test("run_optimize applies objective/constraints/policy to the candidate only; the live plan and screen are untouched", async () => {
     const h = harness();
+    const sent: SitePlan[] = [];
+    const engineOptimize = h.engine.optimize.bind(h.engine);
+    h.engine.optimize = (plan: SitePlan) => {
+      sent.push(plan);
+      return engineOptimize(plan);
+    };
+    const before = toBinary(SitePlanSchema, h.store.getState().plan!);
     await failure(h.run("run_optimize", {
       objective: "MIN_STRANDED_PLUS_LCOC",
       constraints: [{ metric: "total_capex", op: "LE", value: 8e9 }],
       decision_vars: null,
       policy: { max_phases: 4, min_phase_mw: null, max_phase_mw: null, min_months_between_phases: null, max_shortfall_mw: 20 },
     }));
-    const plan = h.store.getState().plan!;
-    expect(plan.phasing?.mode).toBe(1); // SINGLE_SHOT: the live plan never flips to OPTIMIZE
-    expect(plan.optimization?.objective?.type).toBe(1);
-    expect(plan.optimization?.constraints[0]).toMatchObject({ metric: "total_capex", op: 1, value: 8e9 });
-    expect(plan.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
-    const log = h.store.getLog().map((e) => e.command.type);
-    // The load's debounced analyze is superseded by the patch's; then store.optimize stores its reply.
-    expect(log).toEqual(["loadPlan", "applyPatch", "resultReceived", "resultReceived"]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.phasing?.mode).toBe(3); // OPTIMIZE on the candidate
+    expect(sent[0]!.optimization?.constraints[0]).toMatchObject({ metric: "total_capex", op: 1, value: 8e9 });
+    expect(sent[0]!.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
+    expect(toBinary(SitePlanSchema, h.store.getState().plan!)).toEqual(before); // nothing written to the live plan
+    expect(h.store.getLog().map((e) => e.command.type)).not.toContain("applyPatch");
     // The fake engine returns no OptimizationResult, which is reported — not hidden.
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });
+  });
+});
+
+describe("run_analyze output", () => {
+  test("includes Monte Carlo percentiles and the sensitivity tornado when the engine produced them", async () => {
+    const h = harness();
+    const rich = create(ResultSchema, {
+      status: Status.OK,
+      summary: { lcocPerGpuHour: 2.1 },
+      monteCarlo: { iterations: 1000, metrics: { lcoc_per_gpu_hour: { p10: 1.9, p50: 2.1, p90: 2.4, mean: 2.12, stddev: 0.2 } } },
+      sensitivity: { vars: [{ inputPath: "revenue.compute.utilization_pct", targetMetric: "npv", lowOutput: -1e8, highOutput: 3e8, baseOutput: 1e8 }] },
+    });
+    h.engine.analyze = () => Promise.resolve(rich);
+    h.store.dispatch({ type: "setField", path: "run.monte_carlo.enabled", value: true });
+    const out = JSON.parse(String(await h.run("run_analyze", {}))) as Record<string, unknown>;
+    expect(out["monte_carlo"]).toEqual({ iterations: 1000, metrics: { lcoc_per_gpu_hour: { p10: 1.9, p50: 2.1, p90: 2.4, mean: 2.12, stddev: 0.2 } } });
+    expect(out["sensitivity"]).toEqual([{ input_path: "revenue.compute.utilization_pct", target_metric: "npv", low: -1e8, base: 1e8, high: 3e8, swing: 4e8 }]);
   });
 });
 

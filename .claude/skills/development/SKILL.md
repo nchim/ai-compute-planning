@@ -110,8 +110,8 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev` (`VITE_ENGINE=wasm` after `make wasm`, else the fake engine; `VITE_HARNESS=1` installs `window.__harness`).
 - Harness: `make harness` (typecheck + smoke; `make wasm` first for the real engine; see `harness/README.md`) · every spec: `cd harness && npm test`.
-- Acceptance: `make acceptance` (scripted, the CI gate) · `cd harness && npm run acceptance:live` (real Copilot, key from `ANTHROPIC_API_KEY` or `~/.config/capplanner/anthropic_key`, records a video).
-- Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`).
+- Acceptance: `make acceptance` (scripted, the CI gate) · `cd harness && npm run acceptance:live` (real Copilot, key from `ANTHROPIC_API_KEY` or `~/.config/capplanner/anthropic_key`, records a video) · `npm run acceptance:live:iterate` + `ACCEPTANCE_RESUME_FROM=<turn>` to re-verify from a failed turn.
+- Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`) · `make sessions` (`HOURS=24`) prints shared tester sessions from Cloud Logging as transcripts.
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -219,6 +219,31 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   energization (not t0) is what reconciles; its sale value is forward-12 NOI ÷ cap (`K207`). When the
   cost side moves with utilization, keep the breakeven exact by discounting the variable lines
   separately (`opexSeries.variable`, `exit.variable`) rather than assuming cost is fixed.
+- 2026-09-15 (#39) — SVGs whose user unit is a physical one (the schematic's metres) must not put
+  font-size/stroke-width in user units: they scale inversely with the parcel. Measure the rendered
+  width (ResizeObserver, a fallback under jsdom), use `vector-effect="non-scaling-stroke"` on every
+  rect and put each label in a `<g transform="translate(x y) scale(mPerPx)">` so text is in px; hide a
+  label when the block is narrower than `chars × 0.62 em`. Engine side, a first-fit row wrap of 2:1
+  blocks wastes half of every row on a small square parcel — let a crowded row narrow its blocks
+  together (down to 1:1) and keep a phase's hall + yard as one group. `harness/tests/schematic.spec.ts`
+  screenshots the region per fixture; look at the PNGs (Read tool) — a passing geometry assertion
+  did not catch white-on-hatch labels, a CSS specificity slip (`.schematic .x text` loses to
+  `.site-view .schematic .block text`).
+- 2026-09-15 (ux-map) — **CARTO basemaps are no longer key-free:** every keyless
+  `basemaps.cartocdn.com` tile is rendered with an "API KEY REQUIRED" watermark regardless of
+  Referer (localhost included); fetch one tile with curl and *look at it* before trusting a "no key"
+  claim. Esri's `Canvas/World_{Light,Dark}_Gray_{Base,Reference}` services are a key-free
+  Positron-like substitute (labels live in the separate `Reference` layer; max zoom 16). Leaflet
+  under jsdom has no layout, so component tests `vi.mock("leaflet")` with the recording fake in
+  `web/src/views/site/testdata/fakeLeaflet.ts` and assert on layers/controls/events, and a
+  `tileerror` fired from the fake must be wrapped in `act()` because it sets React state.
+- 2026-09-15 (ux-share) — Cloud Logging parses a stdout line into `jsonPayload` only when the *whole*
+  line is JSON, so a structured event sink needs its own `log.New(os.Stdout, "", 0)` — the request
+  logger's timestamp prefix would turn it into `textPayload`. Client side, drain the command log at
+  flush time (not per store notification) or a burst of edits becomes one event per dispatch; `toJson`
+  with default options gives `planId` (lowerCamel) while `useProtoFieldName` gives `plan_id` — a reader
+  that mixes the two (bus log vs. Result summary) must know which it is looking at. `findLast` is
+  ES2023 and the web tsconfig lib is ES2022.
 - 2026-09-15 (WS10) — Acceptance gotchas: `fixtures/abilene-1.json` must not carry `costs.gpu.residual_curve`
   or `depreciation_years` (a master lever) has no effect. Sensitivity on `compute.pue` ±10% trips
   `POWER_UNDERSUPPLY` on the fixture (240 MW facility vs 260 MW grid) → `OK_WITH_WARNINGS`; pick levers

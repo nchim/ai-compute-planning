@@ -41,12 +41,23 @@ export interface Baseline {
   readonly result: Result;
 }
 
+export interface EngineActivity {
+  /** A (debounced or in-flight) analyze is pending. */
+  readonly analyzing: boolean;
+  /** An optimizer run is in flight. */
+  readonly optimizing: boolean;
+}
+
+export const idleEngine: EngineActivity = { analyzing: false, optimizing: false };
+
 export interface State {
   readonly plan: SitePlan | null;
   readonly result: Result | null;
   readonly baseline: Baseline | null;
   /** Compare mode: the site view juxtaposes the current Result against `baseline`. */
   readonly compare: boolean;
+  /** What the engine is doing right now; updated by the store outside the command log. */
+  readonly engine: EngineActivity;
   readonly proposals: readonly Proposal[];
   readonly selection: Selection;
   readonly error: AppError | null;
@@ -58,6 +69,7 @@ export type Command =
   | { readonly type: "loadPlan"; readonly plan: SitePlan }
   | { readonly type: "setField"; readonly path: string; readonly value: FieldValue }
   | { readonly type: "applyPatch"; readonly patch: readonly PatchOp[] }
+  | { readonly type: "removeAt"; readonly path: string; readonly index: number }
   | {
       readonly type: "proposeChange";
       readonly id: string;
@@ -66,6 +78,7 @@ export type Command =
     }
   | { readonly type: "acceptProposal"; readonly id: string }
   | { readonly type: "rejectProposal"; readonly id: string }
+  | { readonly type: "reset" }
   | { readonly type: "undo" }
   | { readonly type: "redo" }
   | { readonly type: "setBaseline"; readonly label: string }
@@ -94,6 +107,7 @@ export const initialState: State = {
   result: null,
   baseline: null,
   compare: false,
+  engine: idleEngine,
   proposals: [],
   selection: initialSelection,
   error: null,
