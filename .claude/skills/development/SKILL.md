@@ -98,6 +98,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
+- 2026-09-15 (WS3) — Risk composes over the core without hooks: `risk.SetNumeric` writes dotted
+  `input_path`s via protoreflect (`Mutable` creates unset parents; int fields are rounded). Draw from
+  `(0,1)` open (`uniform01`) so `math.Erfinv` never returns ±Inf. 1k Monte Carlo iterations cost ~125 ms
+  native and are dominated by `core.Analyze` rendering tables/charts every draw — a render-free core
+  entry point would roughly halve it if WASM needs the headroom. LCOC is a *cost* metric: a tornado on
+  `gpu_hour_price` is ~flat (only the EGR-linked mgmt fee moves), which is why the tornado is reported
+  for both LCOC and NPV (one `SensitivityVar` per path × target, LCOC block first).
 - 2026-09-15 (WS1) — Proto enum values share the *package* scope: two enums in one file cannot both
   define `OPTIMIZE`. `RunMode` values are therefore `RUN_ANALYZE`/`RUN_OPTIMIZE`. `buf lint` passes
   with `ENUM_VALUE_PREFIX`/`ENUM_ZERO_VALUE_SUFFIX` excepted; do not rename enum values to "fix" lint.
@@ -117,6 +124,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
   `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
   `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
+- 2026-09-15 (WS4) — `core.Analyze` costs ~130 µs on the fixture, so the optimizer's 400-evaluation
+  budget is ~50 ms worst case; a full T3 Optimize converges in ~40 evaluations (~8 ms). Core rejects
+  `run.mode=RUN_OPTIMIZE`, so every cloned candidate must set `RUN_ANALYZE`. Core checks *pooled* firm
+  supply and a phase's source readiness only — it does not cap load per source, and energy is dispatched
+  cheapest-first regardless of `power_source_id`; anything that must respect per-source capacity has to
+  enforce it itself. `phasing.policy.max_shortfall_mw` is applied to the hold-average shortfall
+  (instantaneous is unsatisfiable whenever demand starts before any source is ready).
 - 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
 - 2026-09-15 (WS8) — Copilot/SDK gotchas: `betaZodTool` already installs a zod `parse` the tool runner
   calls inside its try/catch, so a schema failure or a thrown `Error`/`ToolError` becomes an `is_error`
@@ -128,6 +142,14 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   jsdom environment `import.meta.url` is `http:`, so fs-based fixture loaders (`loadAbilene`) fail —
   import the fixture with `?raw` there. Files outside `web/` (docs, research) import fine at build time
   but need `server.fs.allow` for the dev server.
+- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
+  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
+  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
+  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
+- 2026-09-15 (WS2) — **FMA gotcha:** Go fuses `a*b+c` on arm64 but not amd64, so doubles differ in the
+  last bits between a Mac and CI. Never compare golden Results with `proto.Equal`; use
+  `requireProtoClose` (engine/core/helpers_test.go — protoreflect walk, 1e-9 relative on floats, exact
+  otherwise, reports the first differing field path). Same for any WS3/WS4 golden.
 - 2026-09-15 (WS7) — Component tests: put `// @vitest-environment jsdom` at the top of the test file
   (the global env stays `node`); `@testing-library/react` + `jsdom` are dev deps. A label that wraps an
   `Explainer` includes the tooltip text, so query controls with `getByRole(..., { name: /label/ })`
