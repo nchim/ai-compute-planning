@@ -118,6 +118,16 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
   `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
 - 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
+- 2026-09-15 (WS8) — Copilot/SDK gotchas: `betaZodTool` already installs a zod `parse` the tool runner
+  calls inside its try/catch, so a schema failure or a thrown `Error`/`ToolError` becomes an `is_error`
+  tool_result for free — throw `ToolError(message)` to control the exact content. `strict`/
+  `eager_input_streaming` are not `betaZodTool` options: spread them onto the returned tool. The most
+  faithful API mock is the real `Anthropic` client with an injected `fetch` that answers scripted SSE
+  (`web/src/copilot/testApi.ts`) — it exercises the SDK's stream parser, runner and validation and lets
+  tests assert on the actual request bodies (cache_control, tool schemas, message order). Under the
+  jsdom environment `import.meta.url` is `http:`, so fs-based fixture loaders (`loadAbilene`) fail —
+  import the fixture with `?raw` there. Files outside `web/` (docs, research) import fine at build time
+  but need `server.fs.allow` for the dev server.
 - 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
   `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
   Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.

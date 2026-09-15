@@ -58,14 +58,25 @@ ramp 40 → 200 MW over months 6–42, 7-year hold. Internally consistent so the
   vs. T2; first phase uses a BTM gas source with `energize_month` < grid month; schematic blocks have
   strictly increasing `energize_month` per phase; the timeline scrubber reveals them (screenshot).
 
+### T3b — Pin and compare (baseline + comparison mode)
+- Before accepting the optimized plan in T3, the harness (as the human) clicks **"Set as baseline"** on
+  the single-shot plan; after the optimized plan is applied it toggles **Compare**.
+- H: *"How much better is this than the baseline?"* → C reads the baseline summary from ViewContext
+  and cites the deltas (demand capture, stranded MW-months, time to energize, LCOC, capex).
+- **Assert:** `baseline` is set with the pre-optimization plan + Result; in compare mode every metric
+  tile shows a Δ vs. baseline and the demand-vs-capacity chart carries a ghosted baseline series
+  (screenshot); undo/redo never changes the baseline; C's deltas match `current − baseline` from the
+  two Results (live).
+
 ### T4 — How robust is it? (Monte Carlo + sensitivity)
 - H: *"How robust is our LCOC, and where's the downside?"*
 - C adds distributions on `gpu_hour_price` (triangular), `utilization_pct` (normal),
   `gpu.depreciation_years` (uniform over 3–7 → rounded) and enables Monte Carlo (seed fixed, 1,000
   iterations) + sensitivity on the master levers; runs Analyze.
 - **Assert:** P10 < P50 < P90 for LCOC and NPV; histogram counts sum to iterations; re-running with the
-  same seed yields a byte-identical `MonteCarloResult`; tornado top-2 ⊂ {gpu_hour_price, utilization,
-  energization}; Monte Carlo bands render on the risk panel (screenshot).
+  same seed yields a byte-identical `MonteCarloResult`; the tornado is reported for two targets (LCOC
+  and NPV): on the NPV tornado `gpu_hour_price` and `utilization_pct` rank in the top 3 (on the LCOC
+  tornado price is flat, since LCOC is a cost); Monte Carlo bands render on the risk panel (screenshot).
 
 ### T5 — What-if on the linchpin (set_control, compare)
 - H: *"What if utilization is only 65%?"*
