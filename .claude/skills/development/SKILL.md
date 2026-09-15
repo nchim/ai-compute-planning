@@ -155,3 +155,9 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `Explainer` includes the tooltip text, so query controls with `getByRole(..., { name: /label/ })`
   or `[data-path="..."]`, not `getByLabelText`. Fixture JSON imports with `?raw` work in both Vite and
   Vitest, so one loader serves tests and the `/dev-site.html` dev route.
+- 2026-09-15 (WS11) — A fresh worktree has no `node_modules`: run `make deps` before `vitest`, or Vite
+  fails resolving `@vitejs/plugin-react` from a stray parent. Component tests that dispatch straight to
+  the store (not via a click) must wrap the dispatch in `act()`; an app error renders two `role="alert"`
+  nodes (Canvas banner + site view), so query with `getAllByRole`. `client.test.ts` pins the full Copilot
+  tool-name list — extend it when adding a tool. Cross-Result overlays: keep one `useCompareBaseline()`
+  hook (null when compare is off) so every chart's baseline prop is simply omitted, never branched on.

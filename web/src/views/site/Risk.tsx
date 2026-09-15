@@ -2,7 +2,7 @@ import { useStore } from "../../bus";
 import { Bands } from "./charts/Bands";
 import { Radar } from "./charts/Radar";
 import { Tornado } from "./charts/Tornado";
-import { MetricTile, NotComputed, Region } from "./chrome";
+import { MetricTile, NotComputed, Region, useCompareBaseline } from "./chrome";
 import { Toggle } from "./controls";
 import { Explainer } from "./Explainer";
 import { money, num } from "./fmt";
@@ -18,9 +18,11 @@ export function Risk() {
   const radar = chartById(state.result, "risk_radar");
   const axes = (radar?.series[0]?.points ?? []).map((p) => ({ label: p.label, value: p.y }));
   const mc = state.result?.monteCarlo;
+  const baselineMc = useCompareBaseline()?.result.monteCarlo;
   const bands = bandMetrics.flatMap((m) => {
     const dist = mc?.metrics[m.key];
-    return dist === undefined ? [] : [{ ...m, dist }];
+    const baseline = baselineMc?.metrics[m.key];
+    return dist === undefined ? [] : [{ ...m, dist, ...(baseline === undefined ? {} : { baseline }) }];
   });
   const swings = (state.result?.sensitivity?.vars ?? []).map((v) => ({
     label: v.inputPath,
@@ -39,8 +41,8 @@ export function Risk() {
           {radar === undefined ? <NotComputed what="Risk radar" /> : <Radar axes={axes} />}
           {summary !== undefined && (
             <div className="tiles">
-              <MetricTile metricKey="composite_risk_score" label="composite risk" value={`${num(summary.compositeRiskScore)} /100`} />
-              <MetricTile metricKey="utilization_breakeven_pct" label="utilization breakeven" value={`${num(summary.utilizationBreakevenPct)}%`} />
+              <MetricTile metricKey="composite_risk_score" label="composite risk" value={`${num(summary.compositeRiskScore)} /100`} format={num} />
+              <MetricTile metricKey="utilization_breakeven_pct" label="utilization breakeven" value={`${num(summary.utilizationBreakevenPct)}%`} format={(n) => `${num(n)}%`} />
             </div>
           )}
         </div>
@@ -52,8 +54,9 @@ export function Risk() {
             <>
               <p className="kpi-s">{mc?.iterations ?? 0} iterations</p>
               {bands.map((b) => (
-                <Bands key={b.key} label={b.label} dist={b.dist} format={b.format} />
+                <Bands key={b.key} label={b.label} dist={b.dist} format={b.format} {...(b.baseline === undefined ? {} : { baseline: b.baseline })} />
               ))}
+              {baselineMc !== undefined && <p className="kpi-s"><span className="swatch baseline" /> dashed = baseline P10/P50/P90</p>}
             </>
           )}
         </div>

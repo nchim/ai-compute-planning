@@ -130,3 +130,38 @@ describe("harness api", () => {
     expect(JSON.parse(JSON.stringify(ctx))).toEqual(ctx);
   });
 });
+
+describe("baseline", () => {
+  test("setBaseline → getBaseline → toggleCompare; undo leaves the baseline; clear resets compare", async () => {
+    const { api, store } = await loaded();
+    await expect(api.toggleCompare()).rejects.toThrow("no baseline");
+    await expect(api.setBaseline(7 as unknown as string)).rejects.toThrow("label must be a string");
+
+    await api.setBaseline();
+    const pinned = await api.getBaseline();
+    expect(pinned?.label).toBe("Grid-only single shot");
+    expect((pinned?.summary as { lcoc_per_gpu_hour?: number }).lcoc_per_gpu_hour).toBeGreaterThan(0);
+
+    await api.setControl("costs.gpu.depreciation_years", 4);
+    await api.waitIdle();
+    await api.toggleCompare();
+    const ctx = (await api.getViewContext()) as { compare: boolean; baselineLabel: string; baselineSummary: unknown };
+    expect(ctx.compare).toBe(true);
+    expect(ctx.baselineLabel).toBe("Grid-only single shot");
+    expect(ctx.baselineSummary).toEqual(pinned?.summary);
+
+    await api.undo();
+    expect(await api.getBaseline()).toEqual(pinned);
+    expect(store.getState().compare).toBe(true);
+
+    await api.clearBaseline();
+    expect(await api.getBaseline()).toBeNull();
+    expect(store.getState().compare).toBe(false);
+    await expect(api.clearBaseline()).rejects.toThrow("clearBaseline: no baseline");
+  });
+
+  test("setBaseline rejects before any Result exists", async () => {
+    const { api } = harness();
+    await expect(api.setBaseline("x")).rejects.toThrow("setBaseline: no result");
+  });
+});

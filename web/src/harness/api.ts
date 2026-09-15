@@ -27,6 +27,12 @@ export interface CommandLogEntry {
   readonly rejected: { readonly kind: string; readonly message: string } | null;
 }
 
+/** The pinned baseline as the harness sees it: its label and its Result.summary as protojson. */
+export interface BaselineSnapshot {
+  readonly label: string;
+  readonly summary: Json;
+}
+
 export interface HarnessApi {
   loadPlan(protojson: string): Promise<void>;
   getPlan(): Promise<string>;
@@ -41,6 +47,12 @@ export interface HarnessApi {
   rejectCard(id?: string): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
+  /** Pins the current plan + Result as the baseline; label defaults to the scenario name. Rejects without a Result. */
+  setBaseline(label?: string): Promise<void>;
+  clearBaseline(): Promise<void>;
+  /** Rejects until a baseline is pinned. */
+  toggleCompare(): Promise<void>;
+  getBaseline(): Promise<BaselineSnapshot | null>;
   getViewContext(): Promise<Json>;
   getCommandLog(): Promise<CommandLogEntry[]>;
   /** Resolves when no analyze is debounced or in flight; rejects on an engine error or timeout. */

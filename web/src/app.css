@@ -110,7 +110,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   border-radius: 20px; padding: 3px 8px; background: var(--surface);
 }
 .dot { width: 9px; height: 9px; border-radius: 50%; }
-.toolbar { display: flex; gap: 8px; align-items: center; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toolbar .btn:disabled { opacity: .5; }
+.toolbar .btn.toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.toolbar .baseline-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; border: 1px dashed var(--border); border-radius: 6px; padding: 4px 8px; }
+.toolbar .baseline-chip .x { border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 14px; line-height: 1; padding: 0 2px; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 13px; }
 .panel-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .panel-hd .t { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }

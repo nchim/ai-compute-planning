@@ -1,6 +1,6 @@
 import { clone } from "@bufbuild/protobuf";
 
-import { SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { ResultSchema, SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { PathError, applyPatch } from "./paths";
 import type { AppError, Command, PatchOp, Proposal, State } from "./types";
 
@@ -27,6 +27,12 @@ export function reduce(state: State, cmd: Command): State {
       return shiftHistory(state, "past", "future");
     case "redo":
       return shiftHistory(state, "future", "past");
+    case "setBaseline":
+      return setBaseline(state, cmd.label);
+    case "clearBaseline":
+      return state.baseline === null ? reject(state, "no baseline is set") : { ...state, baseline: null, compare: false };
+    case "toggleCompare":
+      return state.baseline === null ? reject(state, "no baseline is set: pin one before comparing") : { ...state, compare: !state.compare };
     case "select":
       return { ...state, selection: cmd.selection };
     case "resultReceived":
@@ -88,6 +94,14 @@ function settleProposal(state: State, id: string, status: "accepted" | "rejected
     ...next,
     proposals: next.proposals.map((p) => (p.id === id ? { ...p, status } : p)),
   };
+}
+
+/** Pins the current plan + Result as clones so later edits (and undo/redo, which touch only `plan`) never reach them. */
+function setBaseline(state: State, label: string): State {
+  if (state.plan === null || state.result === null) return reject(state, "no result to pin as baseline yet");
+  if (label.trim() === "") return reject(state, "baseline label must not be empty");
+  const baseline = { label, plan: clone(SitePlanSchema, state.plan), result: clone(ResultSchema, state.result) };
+  return { ...state, baseline };
 }
 
 function shiftHistory(state: State, from: "past" | "future", to: "past" | "future"): State {

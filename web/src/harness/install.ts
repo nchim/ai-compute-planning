@@ -1,6 +1,6 @@
 import { ScalarType, create, fromJsonString, toJson, toJsonString, type DescEnum, type DescField, type DescMessage } from "@bufbuild/protobuf";
 
-import { logToJson, viewContext, type Command, type Proposal, type Store } from "../bus";
+import { defaultBaselineLabel, logToJson, viewContext, type Command, type Proposal, type Store } from "../bus";
 import {
   DiagnosticSchema,
   ResultSchema,
@@ -9,7 +9,7 @@ import {
 } from "../gen/capplanner/v1/engine_pb";
 import type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi } from "./api";
 
-export type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi, Json } from "./api";
+export type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi, Json } from "./api";
 
 /** Proto field names (snake_case) so plan JSON lines up with bus paths and diagnostics' proto_path. */
 const jsonOptions = { useProtoFieldName: true } as const;
@@ -120,6 +120,26 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
       run({ type: "redo" });
     },
 
+    async setBaseline(label) {
+      if (label !== undefined) expectString("label", label);
+      run({ type: "setBaseline", label: label ?? defaultBaselineLabel(store.getState(), store.getLog()) });
+    },
+
+    async clearBaseline() {
+      run({ type: "clearBaseline" });
+    },
+
+    async toggleCompare() {
+      run({ type: "toggleCompare" });
+    },
+
+    async getBaseline() {
+      const baseline = store.getState().baseline;
+      if (baseline === null) return null;
+      const summary = baseline.result.summary;
+      return { label: baseline.label, summary: summary === undefined ? null : toJson(SummaryMetricsSchema, summary, jsonOptions) };
+    },
+
     async getViewContext() {
       const ctx = viewContext(store.getState());
       return {
@@ -127,6 +147,7 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
         selection: { ...ctx.selection },
         plan: ctx.plan === null ? null : toJson(SitePlanSchema, ctx.plan, jsonOptions),
         resultSummary: ctx.resultSummary === null ? null : toJson(SummaryMetricsSchema, ctx.resultSummary, jsonOptions),
+        baselineSummary: ctx.baselineSummary === null ? null : toJson(SummaryMetricsSchema, ctx.baselineSummary, jsonOptions),
         diagnostics: ctx.diagnostics.map((d) => toJson(DiagnosticSchema, d, jsonOptions)),
       };
     },

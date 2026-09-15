@@ -34,9 +34,19 @@ export interface AppError {
   readonly message: string;
 }
 
+/** A pinned scenario: independent clones of the plan and the Result it produced. */
+export interface Baseline {
+  readonly label: string;
+  readonly plan: SitePlan;
+  readonly result: Result;
+}
+
 export interface State {
   readonly plan: SitePlan | null;
   readonly result: Result | null;
+  readonly baseline: Baseline | null;
+  /** Compare mode: the site view juxtaposes the current Result against `baseline`. */
+  readonly compare: boolean;
   readonly proposals: readonly Proposal[];
   readonly selection: Selection;
   readonly error: AppError | null;
@@ -58,6 +68,9 @@ export type Command =
   | { readonly type: "rejectProposal"; readonly id: string }
   | { readonly type: "undo" }
   | { readonly type: "redo" }
+  | { readonly type: "setBaseline"; readonly label: string }
+  | { readonly type: "clearBaseline" }
+  | { readonly type: "toggleCompare" }
   | { readonly type: "select"; readonly selection: Selection }
   | { readonly type: "resultReceived"; readonly result: Result }
   | { readonly type: "errorRaised"; readonly error: AppError }
@@ -79,6 +92,8 @@ export const initialSelection: Selection = { tab: "site", path: null, phaseId: n
 export const initialState: State = {
   plan: null,
   result: null,
+  baseline: null,
+  compare: false,
   proposals: [],
   selection: initialSelection,
   error: null,

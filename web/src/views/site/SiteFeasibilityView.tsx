@@ -23,7 +23,7 @@ const inlinePaths = /^(revenue\.compute\.|power\.interconnection\.grid_energize_
 
 export function SiteFeasibilityView() {
   const { state } = useStore();
-  const { plan, result, error } = state;
+  const { plan, result, error, baseline, compare } = state;
   const topDiagnostics = (result?.diagnostics ?? []).filter((d) => !inlinePaths.test(d.protoPath));
   const conservation = result?.conservation;
 
@@ -34,6 +34,11 @@ export function SiteFeasibilityView() {
         {plan !== null && (
           <span className="h-sub">
             {plan.site?.market} · {plan.compute?.targetItLoadMw ?? 0} MW · {plan.meta?.scenarioName}
+          </span>
+        )}
+        {compare && baseline !== null && (
+          <span className="h-sub" data-baseline={baseline.label}>
+            vs. baseline: {baseline.label}
           </span>
         )}
         {result !== null && (

@@ -37,6 +37,9 @@ export function viewContextBlock(state: State): string {
     resultSummary: ctx.resultSummary === null ? null : toJson(SummaryMetricsSchema, ctx.resultSummary, PROTOJSON),
     diagnostics: ctx.diagnostics.map((d) => toJson(DiagnosticSchema, d, PROTOJSON)),
     conservation: { all_passed: state.result?.conservation?.allPassed ?? null },
+    baselineLabel: ctx.baselineLabel,
+    baselineSummary: ctx.baselineSummary === null ? null : toJson(SummaryMetricsSchema, ctx.baselineSummary, PROTOJSON),
+    compare: ctx.compare,
     pendingProposals: state.proposals.filter((p) => p.status === "pending").map((p) => p.id),
   };
   return `<view_context>\n${JSON.stringify(body)}\n</view_context>`;

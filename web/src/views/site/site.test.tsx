@@ -235,3 +235,65 @@ describe("controls dispatch through the bus", () => {
     expect(patchFromBestPlan(loadGoldenResult().optimization!.bestPlan!)).toHaveLength(1 + 3 * 7 + 2 * 7);
   });
 });
+
+describe("compare mode", () => {
+  /** Golden pinned as baseline, then a moved Result (LCOC/NPV worse, capture better) with compare on. */
+  function compared(): Harness {
+    const h = harness();
+    h.store.dispatch({ type: "setBaseline", label: "golden" });
+    const moved = loadGoldenResult();
+    moved.summary!.lcocPerGpuHour *= 1.1;
+    moved.summary!.npv *= 0.9;
+    moved.summary!.demandCapturePct += 5;
+    for (const p of moved.charts.find((c) => c.id === "demand_vs_capacity")!.series.find((s) => s.name === "capacity")!.points) p.y *= 0.8;
+    h.store.dispatch({ type: "resultReceived", result: moved });
+    h.store.dispatch({ type: "toggleCompare" });
+    return h;
+  }
+
+  test("tiles show signed, coloured deltas per the glossary's betterWhen", () => {
+    const { container } = mount(compared(), <ProForma />);
+    const lcoc = container.querySelector('[data-metric="lcoc_per_gpu_hour"] .delta') as HTMLElement;
+    expect(lcoc.className).toBe("delta worse");
+    expect(lcoc.textContent).toBe("+$0.22 (+10.0%) vs. baseline");
+    const npv = container.querySelector('[data-metric="npv"] .delta') as HTMLElement;
+    expect(npv.className).toBe("delta worse");
+    expect(npv.textContent?.startsWith("-$")).toBe(true);
+    expect(npv.textContent).toContain("(-10.0%)");
+    expect((container.querySelector('[data-metric="time_to_energize_months"] .delta') as HTMLElement).className).toBe("delta same");
+  });
+
+  test("phasing shows a better-coloured capture delta and the ghosted baseline series", () => {
+    const { container } = mount(compared(), <PhasingLever />);
+    const capture = container.querySelector('[data-metric="demand_capture_pct"] .delta') as HTMLElement;
+    expect(capture.className).toBe("delta better");
+    expect(capture.textContent?.startsWith("+5.0%")).toBe(true);
+    expect(container.querySelectorAll(".step-chart .line.baseline")).toHaveLength(2);
+    expect(container.querySelectorAll(".step-chart .line.capacity")).toHaveLength(1);
+    expect(screen.getByText("baseline")).toBeTruthy();
+  });
+
+  test("capex stack, cashflow, Monte Carlo bands and the schematic carry the baseline overlay", () => {
+    const h = compared();
+    const pro = mount(h, <ProForma />);
+    expect(pro.container.querySelectorAll(".stackbar .baseline rect")).toHaveLength(7);
+    expect(pro.container.querySelectorAll(".line-chart .line.baseline")).toHaveLength(1);
+    cleanup();
+    const risk = mount(h, <Risk />);
+    expect(risk.container.querySelectorAll(".bands .baseline")).toHaveLength(2);
+    cleanup();
+    const schematic = mount(h, <SiteSchematic />);
+    const blocks = h.store.getState().baseline!.result.schematic!.blocks.length;
+    expect(schematic.container.querySelectorAll(".schematic .baseline rect")).toHaveLength(blocks);
+    cleanup();
+    mount(h, <SiteFeasibilityView />);
+    expect(screen.getByText("vs. baseline: golden")).toBeTruthy();
+  });
+
+  test("with compare off (or no baseline) nothing baseline-related renders", () => {
+    const h = compared();
+    h.store.dispatch({ type: "toggleCompare" });
+    const { container } = mount(h, <SiteFeasibilityView />);
+    expect(container.querySelectorAll(".delta, .baseline, [data-baseline]")).toHaveLength(0);
+  });
+});

@@ -4,7 +4,7 @@ import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
 import { toJson } from "@bufbuild/protobuf";
 import { z } from "zod";
 
-import { applyPatch, type PatchOp, type Store } from "../bus";
+import { applyPatch, defaultBaselineLabel, type PatchOp, type Store } from "../bus";
 import type { Engine } from "../engine";
 import {
   DiagnosticSchema,
@@ -141,6 +141,32 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
         const id = store.proposeChange(summary, patch);
         rejectIfRefused(store);
         return { proposal_id: id, status: "pending" };
+      },
+    }),
+    define(deps, {
+      name: "set_baseline",
+      description:
+        "Pin the current plan and its Result as the baseline scenario (label defaults to the scenario name). " +
+        "Fails until a Result exists. Later Results are compared against it when compare mode is on.",
+      inputSchema: z.object({ label: z.string().nullable().describe("Baseline label, or null for the default") }),
+      run: async ({ label }) => {
+        const state = store.getState();
+        const chosen = label ?? defaultBaselineLabel(state, store.getLog());
+        store.dispatch({ type: "setBaseline", label: chosen });
+        rejectIfRefused(store);
+        const summary = store.getState().baseline?.result.summary;
+        return { label: chosen, baseline_summary: summary === undefined ? null : toJson(SummaryMetricsSchema, summary, PROTOJSON) };
+      },
+    }),
+    define(deps, {
+      name: "toggle_compare",
+      description: "Toggle compare mode (current Result vs. the pinned baseline on every tile and chart). Fails without a baseline.",
+      inputSchema: z.object({}),
+      run: async () => {
+        store.dispatch({ type: "toggleCompare" });
+        rejectIfRefused(store);
+        const { compare, baseline } = store.getState();
+        return { compare, baseline_label: baseline?.label ?? null };
       },
     }),
     define(deps, {
