@@ -141,8 +141,8 @@ export function CopilotRail() {
         {snapshot.transcript.messages.map((m, i) => (
           <MessageView key={i} message={m} toolEvents={snapshot.toolEvents} />
         ))}
-        {snapshot.streamingText !== "" && <div className="msg bot"><Markdown text={snapshot.streamingText} /></div>}
-        {snapshot.running && snapshot.activity.kind !== "writing" && <ActivityIndicator activity={snapshot.activity} />}
+        {/* Proposals sit with the conversation: settled ones as one compact line, pending ones as cards
+            that need a decision — both before whatever the Copilot is doing now. */}
         {state.proposals.map((p) => (
           <ProposalCard
             key={p.id}
@@ -151,6 +151,8 @@ export function CopilotRail() {
             onUndo={() => store.dispatch({ type: "rejectProposal", id: p.id })}
           />
         ))}
+        {snapshot.streamingText !== "" && <div className="msg bot"><Markdown text={snapshot.streamingText} /></div>}
+        {snapshot.running && snapshot.activity.kind !== "writing" && <ActivityIndicator activity={snapshot.activity} />}
       </div>
       {copilot === null ? (
         <div className="copilot-disabled">Paste an API key above to enable the Copilot.</div>
@@ -313,25 +315,36 @@ function MessageView(props: { message: Message; toolEvents: readonly ToolEvent[]
 
 function ProposalCard(props: { proposal: Proposal; onAccept: () => void; onUndo: () => void }) {
   const { proposal } = props;
+  const changes = proposal.patch.length;
   const preview = proposal.patch.map((op) => `${op.path} = ${JSON.stringify(op.value)}`).join("\n");
+  if (proposal.status !== "pending") {
+    return (
+      <div className={`proposal settled ${proposal.status}`} data-proposal-id={proposal.id} data-status={proposal.status}>
+        <span className="status">{proposal.status === "accepted" ? "Accepted" : "Undone"}</span> {proposal.summary}
+        <details>
+          <summary>{changes} change{changes === 1 ? "" : "s"}</summary>
+          <pre>{preview}</pre>
+        </details>
+      </div>
+    );
+  }
   return (
-    <div className="proposal" data-proposal-id={proposal.id}>
+    <div className="proposal pending" data-proposal-id={proposal.id} data-status="pending">
       <div>
         <strong>Proposed:</strong> {proposal.summary}
       </div>
-      <pre>{preview}</pre>
-      {proposal.status === "pending" ? (
-        <div className="acts">
-          <button className="btn primary" type="button" onClick={props.onAccept}>
-            Accept
-          </button>
-          <button className="btn" type="button" onClick={props.onUndo}>
-            Undo
-          </button>
-        </div>
-      ) : (
-        <span className="status">{proposal.status}</span>
-      )}
+      <details>
+        <summary>{changes} change{changes === 1 ? "" : "s"}</summary>
+        <pre>{preview}</pre>
+      </details>
+      <div className="acts">
+        <button className="btn primary" type="button" onClick={props.onAccept}>
+          Accept
+        </button>
+        <button className="btn" type="button" onClick={props.onUndo}>
+          Undo
+        </button>
+      </div>
     </div>
   );
 }
