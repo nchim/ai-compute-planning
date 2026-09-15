@@ -76,7 +76,7 @@
   "revenue": {
     "mode": "COMPUTE_SALES",
     "compute": {
-      "gpu_hour_price": 2.25,
+      "gpu_hour_price": 3.25,
       "utilization_pct": 80,
       "price_decay_pct_yr": 8
     }

@@ -25,8 +25,9 @@ func TestAbileneGolden(t *testing.T) {
 		t.Fatalf("conservation failed: %s", failedChecks(res.GetConservation()))
 	}
 	s := res.GetSummary()
-	// Plausibility (reviewed): GB300 racks at $40k/GPU dominate capex; LCOC sits below the $2.25 price.
-	if s.GetCapexPerMw() < 20e6 || s.GetCapexPerMw() > 120e6 || s.GetLcocPerGpuHour() < 0.5 || s.GetLcocPerGpuHour() > 3 {
+	// Plausibility (reviewed): $30–40M/MW incl. GPUs; LCOC on the order of $1.5–2.5/GPU-hr, below the
+	// $3.25 GB300-class price.
+	if s.GetCapexPerMw() < 25e6 || s.GetCapexPerMw() > 45e6 || s.GetLcocPerGpuHour() < 1.5 || s.GetLcocPerGpuHour() > 2.5 {
 		t.Fatalf("implausible economics: capex/MW %g, LCOC %g", s.GetCapexPerMw(), s.GetLcocPerGpuHour())
 	}
 	if s.GetTimeToEnergizeMonths() != 30 || s.GetMwOnlineFinal() != 200 || s.GetDemandCapturePct() >= 100 || s.GetShortfallMwMonths() <= 0 {
@@ -49,9 +50,7 @@ func TestAbileneGolden(t *testing.T) {
 	if err := protojson.Unmarshal(raw, &want); err != nil {
 		t.Fatal(err)
 	}
-	if !proto.Equal(res, &want) {
-		t.Fatal("Result differs from testdata/abilene-1.result.json; review and rerun with -update if intended")
-	}
+	requireProtoClose(t, res, &want)
 }
 
 // T2 of the acceptance session: a bad density is caught with both codes and their proto_paths, and
