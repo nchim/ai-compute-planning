@@ -38,3 +38,34 @@ jobs:
 
       - name: Generated code is up to date
         run: make gen && git diff --exit-code -- engine/pb web/src/gen
+
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            harness/package-lock.json
+
+      - run: make deps
+      - run: make wasm   # the smoke drives the real engine when it is built
+      - run: cd harness && npx playwright install --with-deps chromium
+      - run: make harness
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-runs
+          path: harness/runs/
+          if-no-files-found: ignore

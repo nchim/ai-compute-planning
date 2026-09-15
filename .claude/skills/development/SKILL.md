@@ -86,7 +86,7 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
-- Harness: `cd harness && npm test` (placeholder until WS9; then `npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`)
+- Harness: `make harness` (or `cd harness && npm run smoke`; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `npm run acceptance -- --copilot=scripted` (WS10)
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -128,3 +128,4 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   cheapest-first regardless of `power_source_id`; anything that must respect per-source capacity has to
   enforce it itself. `phasing.policy.max_shortfall_mw` is applied to the hold-average shortfall
   (instantaneous is unsatisfiable whenever demand starts before any source is ready).
+- 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
