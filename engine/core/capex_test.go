@@ -15,7 +15,7 @@ func TestCapexFixtureComponents(t *testing.T) {
 	_, by := b.byComponent()
 	want := map[string]float64{
 		compShell: 600e6, compElec: 800e6, compCooling: 400e6, compNetwork: 200e6,
-		compPower: 400 * 260 * 1000, compLand: 400 * 50000, compGpu: 360000 * 40000,
+		compPower: 400 * 260 * 1000, compLand: 400 * 50000, compGpu: 5000 * 22 * 40000,
 	}
 	for k, v := range want {
 		if !approxEq(by[k], v, 1e-9) {
@@ -25,8 +25,8 @@ func TestCapexFixtureComponents(t *testing.T) {
 	if _, ok := by[compAgility]; ok {
 		t.Error("air-cooled 250 psf design must not carry an agility premium")
 	}
-	if !approxEq(b.total, 16.524e9, 1e-9) {
-		t.Errorf("total = %g, want 16.524e9", b.total)
+	if !approxEq(b.total, 6.524e9, 1e-9) {
+		t.Errorf("total = %g, want 6.524e9", b.total)
 	}
 	if got := b.monthly(84, gpuLine); got[30] != want[compGpu] {
 		t.Errorf("GPUs must be bought at energize (m30), got %v", got[30])

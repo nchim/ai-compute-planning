@@ -72,8 +72,11 @@ func TestT2DensityScenario(t *testing.T) {
 		requireComplete(t, d)
 	}
 
+	// The agent's correction: an NVL72 rack (130 kW, 72 GPUs) on liquid cooling with a liquid-rated
+	// slab. GPU count stays ≈ constant, so capex/MW rises only through the agility premium.
 	fixed := clonePlan(bad)
 	fixed.Compute.Cooling = pb.CoolingMode_LIQUID_DTC
+	fixed.Compute.GpusPerRack = 72
 	fixed.Site.FloorLoadPsf = 300
 	res = Analyze(fixed)
 	if res.GetStatus() != pb.Status_OK || !res.GetConservation().GetAllPassed() {
@@ -82,14 +85,12 @@ func TestT2DensityScenario(t *testing.T) {
 	if res.GetSchematic().GetFootprintUsedPct() >= baseline.GetSchematic().GetFootprintUsedPct() {
 		t.Error("denser racks must shrink the footprint")
 	}
-	// Total capex/MW falls (fewer racks × fixed gpus_per_rack = fewer GPUs), so the premium must be
-	// visible on the facility side: its own line, and a higher facility capex per MW.
+	if res.GetSummary().GetCapexPerMw() <= baseline.GetSummary().GetCapexPerMw() {
+		t.Errorf("agility premium must raise capex per MW: %g vs baseline %g", res.GetSummary().GetCapexPerMw(), baseline.GetSummary().GetCapexPerMw())
+	}
 	premium := capexPerMw(res, compAgility)
 	if premium <= 0 || !approxEq(premium, 0.12*(capexPerMw(res, compShell)+capexPerMw(res, compElec)+capexPerMw(res, compCooling)), 1e-9) {
 		t.Errorf("agility premium line = %g/MW, want 12%% of shell+electrical+cooling", premium)
-	}
-	if facilityCapexPerMw(res) <= facilityCapexPerMw(baseline) {
-		t.Error("agility premium must raise facility capex per MW")
 	}
 }
 
@@ -101,10 +102,6 @@ func capexPerMw(res *pb.Result, component string) float64 {
 		}
 	}
 	return 0
-}
-
-func facilityCapexPerMw(res *pb.Result) float64 {
-	return capexPerMw(res, "total") - capexPerMw(res, compGpu) - capexPerMw(res, compLand)
 }
 
 func TestExplicitPhasesAnalyzeOK(t *testing.T) {

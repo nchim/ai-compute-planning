@@ -18,7 +18,7 @@ func validate(plan *pb.SitePlan) diags {
 	if d.hasErrors() {
 		return d
 	}
-	validateDensity(plan.GetCompute().GetKwPerRack(), plan.GetCompute().GetCooling(), plan.GetSite().GetFloorLoadPsf(), "compute", &d)
+	validateDensity(plan.GetCompute().GetKwPerRack(), plan.GetCompute().GetCooling(), plan.GetSite().GetFloorLoadPsf(), "compute.kw_per_rack", &d)
 	validatePhasing(plan, &d)
 	return d
 }
@@ -207,12 +207,13 @@ func validatePhasingStructure(p *pb.Phasing, d *diags) {
 
 // validateDensity checks that the cooling mode carries the rack density and the slab carries the
 // cooling mode the density *requires* (not merely the declared one), so an air-cooled 130 kW/rack
-// plan surfaces both problems at once. pathPrefix is "compute" or "phasing.phases[i]".
-func validateDensity(kwPerRack float64, cooling pb.CoolingMode, floorPsf float64, pathPrefix string, d *diags) {
+// plan surfaces both problems at once. densityPath is the field to fix: the site density
+// ("compute.kw_per_rack") or a phase's cooling override ("phasing.phases[i].cooling").
+func validateDensity(kwPerRack float64, cooling pb.CoolingMode, floorPsf float64, densityPath string, d *diags) {
 	if ceiling := coolingCeilingKw(cooling); kwPerRack > ceiling {
-		d.errorf(codeDensityExceedsCooling, "compute.kw_per_rack",
+		d.errorf(codeDensityExceedsCooling, densityPath,
 			fmt.Sprintf("≤ %g kW/rack for %s", ceiling, cooling.String()), num(kwPerRack)+" kW/rack",
-			fmt.Sprintf("set %s.cooling=%s (ceiling %g kW/rack) or lower kw_per_rack to ≤ %g", pathPrefix, requiredCooling(kwPerRack).String(), coolingCeilingKw(requiredCooling(kwPerRack)), ceiling),
+			fmt.Sprintf("set cooling=%s (ceiling %g kW/rack) or lower compute.kw_per_rack to ≤ %g", requiredCooling(kwPerRack).String(), coolingCeilingKw(requiredCooling(kwPerRack)), ceiling),
 			"rack density %g kW exceeds the %g kW/rack ceiling of %s cooling", kwPerRack, ceiling, cooling.String())
 	}
 	need := requiredFloorLoadPsf(cooling)
@@ -248,7 +249,7 @@ func validatePhasing(plan *pb.SitePlan, d *diags) {
 	for i, ph := range plan.GetPhasing().GetPhases() {
 		path := fmt.Sprintf("phasing.phases[%d]", i)
 		if ph.GetCooling() != pb.CoolingMode_COOLING_UNSPECIFIED && ph.GetCooling() != c.GetCooling() {
-			validateDensity(c.GetKwPerRack(), ph.GetCooling(), plan.GetSite().GetFloorLoadPsf(), path, d)
+			validateDensity(c.GetKwPerRack(), ph.GetCooling(), plan.GetSite().GetFloorLoadPsf(), path+".cooling", d)
 		}
 		if ph.GetEnergizeMonth() < prevEnergize {
 			d.errorf(codeOutOfRange, path+".energize_month", fmt.Sprintf("≥ %d (previous phase)", prevEnergize), num(float64(ph.GetEnergizeMonth())),

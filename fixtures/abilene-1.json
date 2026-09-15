@@ -18,7 +18,7 @@
   },
   "compute": {
     "accelerator": "GB300",
-    "gpus_per_rack": 72,
+    "gpus_per_rack": 22,
     "kw_per_rack": 40,
     "target_it_load_mw": 200,
     "pue": 1.2,
