@@ -11,7 +11,7 @@ import { expect, test, type TestInfo } from "@playwright/test";
 
 import { Session, type Json, type PatchEntry } from "../src/session";
 import { KEY_PANEL_SELECTOR, copilotSnapshot, copilotTurn, keyInitScript, loadApiKey, turnMarkdown, type Turn } from "./lib/copilot";
-import { lastOptimization, lastSeq, mutationsSince } from "./lib/log";
+import { appliedOptimization, lastSeq, mutationsSince } from "./lib/log";
 import { deltaFacts, missingDimensions, numbersIn, traceable, untraceable } from "./lib/narration";
 import { conservationGreen, findDiagnostic, metric, numbersOf, parsePlan, parseResult, type Result } from "./lib/result";
 
@@ -31,6 +31,7 @@ const H = {
   t5: "What if utilization is only 65%?",
   t6: "What just changed?",
   t7: "Summarize the recommendation for the steering committee across space, time, capital and risk, and remind me why a gas bridge is worth the premium.",
+  t8: "Different idea: a colo operator has offered us 100 MW in Phoenix from Q1-2027 at a fixed $/kW-month for five years. Should we take that instead of building Abilene-1? What would you need to know to be sure?",
 } as const;
 
 /**
@@ -163,7 +164,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       if (live) {
         const turn = await grounding.turn(s, "T3", H.t3);
         expect(turn.toolCalls.some((c) => c.name === "run_optimize" && !c.isError), "the Copilot ran the optimizer").toBe(true);
-        optimization = lastOptimization(await s.getCommandLog(), t2.seq);
+        optimization = appliedOptimization(await s.getCommandLog(), t2.seq, parsePlan(await s.getPlan()));
       } else {
         await s.acceptCard(await s.proposeChange("Add a BTM gas bridge and the optimizer policy", [...gasSource, ...optimizerSetup]));
         await s.waitIdle();
@@ -332,6 +333,22 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       }
       expect(await s.getConsoleErrors(), "no page errors during the session").toEqual([]);
     });
+
+    // ---- T8 — Open-ended advice (live only: no deterministic tool path to script) -------------
+    if (live) {
+      await session.step("T8 build vs buy", async (s) => {
+        const turn = await grounding.turn(s, "T8", H.t8);
+        expect(turn.toolCalls.map((c) => c.name), "pulled the build-vs-buy framing from the corpus").toContain("query_research");
+        expect(turn.text, "an explicit recommendation").toMatch(/\brecommend/i);
+        expect(turn.text, "an explicit list of unknowns").toMatch(/need to know|unknown|would need|open question|to be sure/i);
+        expect(turn.text, "the timing / optionality argument").toMatch(/option(al)?(ity)?|buys? (us )?time|time to market|speed/i);
+        // No fabricated colo economics: the human gave no $/kW figure, so none may appear as a fact.
+        for (const m of turn.text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)\s*(?:\/|per)\s*kW/gi)) {
+          const context = turn.text.slice(Math.max(0, (m.index ?? 0) - 160), (m.index ?? 0) + 40);
+          expect(/assum|placeholder|illustrat|hypothet|if |say |e\.g\.|example|for instance|would need/i.test(context), `unsourced colo rate "${m[0]}" (context: …${context.trim()}…)`).toBe(true);
+        }
+      });
+    }
     await session.screenshot("final");
   } finally {
     await session.writeArtifact("timings.json", JSON.stringify(timings, null, 2));

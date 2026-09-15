@@ -172,7 +172,9 @@ func (s *search) score(c candidate, res *pb.Result) *evaluated {
 	ev := &evaluated{cand: c, res: res, entry: &pb.Candidate{DecisionVarValues: s.values(c)}}
 	s.frontier = append(s.frontier, ev.entry)
 	vals := ev.entry.DecisionVarValues
-	if res.GetStatus() == pb.Status_INVALID_INPUT {
+	// A candidate the core rejects, or whose ledger fails a conservation check (its numbers are not to
+	// be trusted, per the check's own hint), can never be the winner.
+	if res.GetStatus() == pb.Status_INVALID_INPUT || !res.GetConservation().GetAllPassed() {
 		ev.violation = math.Inf(1)
 		vals[keyInvalid] = 1
 		return ev
