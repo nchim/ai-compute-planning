@@ -69,6 +69,21 @@ The **dev harness** (this session, Playwright) can call `sendCopilot(text)` to d
 loop end-to-end for the validation cases — the harness needs no key of its own; it exercises whatever
 inference transport is configured (BYO-key in dev).
 
+## Implementation map (WS8, `web/src/copilot/`)
+- `client.ts` — `createCopilot({store, engine, apiKey, model?, onUsage?})`: tool runner, streaming,
+  cached system prompt + per-turn ViewContext, transcript persistence; `send` / `abort` / `subscribe`.
+- `tools.ts` — the seven tools; `analysis.ts` — waits for the store's re-analyze to settle;
+  `context.ts` — the ViewContext block; `history.ts` — localStorage transcripts; `research.ts` —
+  the build-time corpus bundle; `prompt.ts` — the PROMPT TEXT import.
+- `CopilotRail.tsx` reads the engine from `EngineProvider` (wrapped around `<App/>` in `main.tsx`) and
+  registers the live Copilot's `send` with the dev harness via `window.__harness.setCopilot`, so the
+  harness's `sendCopilot(text)` drives the real loop.
+- `run_optimize` never flips the live plan's `phasing.mode`: it patches objective/constraints/decision
+  vars/policy, then calls `store.optimize()`, which optimizes an OPTIMIZE-mode clone and stores the reply
+  under the store's stale-reply guard.
+- Mutation tools (`edit_site_plan`, `set_control`) return the settled analysis (summary + diagnostics +
+  conservation) so the model self-corrects within one turn without an extra `run_analyze`.
+
 ## Deferred to pre-deployment
 - The thin serverless relay (key custody, per-user auth, rate limiting) replacing BYO-key mode.
 - **Conversation compaction / context management** for long sessions (beta compaction or context editing).

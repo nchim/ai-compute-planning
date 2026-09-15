@@ -1,5 +1,8 @@
+import { clone, create } from "@bufbuild/protobuf";
+
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
+import { PhasingMode, PhasingSchema, SitePlanSchema, type Result } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -17,6 +20,12 @@ export interface Store {
   dispatch(command: Command): void;
   /** Convenience over `proposeChange`: mints the proposal id and returns it. */
   proposeChange(summary: string, patch: readonly PatchOp[]): string;
+  /**
+   * Runs the optimizer on a clone of the current plan with `phasing.mode=OPTIMIZE` — the live plan is
+   * untouched. The reply is stored via `resultReceived` under the same stale-reply guard as analyze,
+   * and returned.
+   */
+  optimize(): Promise<Result>;
   getLog(): readonly LogEntry[];
   /** Resolves once no analyze is debounced or in flight (also after a failed analyze). */
   whenIdle(): Promise<void>;
@@ -72,25 +81,42 @@ export function createStore(options: StoreOptions): Store {
       settleIfIdle();
       return;
     }
+    // Fire-and-forget: the guarded handler already reported any failure to the UI.
+    guarded(engine.analyze(plan)).catch(() => undefined);
+  };
+
+  /** Tracks an engine reply as in flight and applies it only while it is still the latest request. */
+  const guarded = (reply: Promise<Result>): Promise<Result> => {
     const request = ++latestRequest;
     inFlight++;
-    engine
-      .analyze(plan)
+    return reply
       .then(
         (result) => {
           if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
+          return result;
         },
         (err: unknown) => {
-          if (request !== latestRequest || disposed) return;
-          const kind = err instanceof EngineError ? err.kind : "worker";
-          const message = err instanceof Error ? err.message : String(err);
-          dispatch({ type: "errorRaised", error: { kind, message } });
+          if (request === latestRequest && !disposed) {
+            const kind = err instanceof EngineError ? err.kind : "worker";
+            const message = err instanceof Error ? err.message : String(err);
+            dispatch({ type: "errorRaised", error: { kind, message } });
+          }
+          throw err;
         },
       )
       .finally(() => {
         inFlight--;
         settleIfIdle();
       });
+  };
+
+  const optimize = (): Promise<Result> => {
+    if (disposed) return Promise.reject(new Error("store is disposed"));
+    if (state.plan === null) return Promise.reject(new Error("no plan loaded"));
+    const candidate = clone(SitePlanSchema, state.plan);
+    candidate.phasing ??= create(PhasingSchema);
+    candidate.phasing.mode = PhasingMode.OPTIMIZE;
+    return guarded(engine.optimize(candidate));
   };
 
   return {
@@ -105,6 +131,7 @@ export function createStore(options: StoreOptions): Store {
       dispatch({ type: "proposeChange", id, summary, patch });
       return id;
     },
+    optimize,
     getLog: () => log,
     whenIdle: () =>
       new Promise((resolve) => {

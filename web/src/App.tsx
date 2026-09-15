@@ -1,6 +1,6 @@
 import { useStore, type Tab } from "./bus";
 import { Canvas } from "./components/Canvas";
-import { CopilotRail } from "./components/CopilotRail";
+import { CopilotRail } from "./copilot";
 
 const tabs: readonly { id: Tab; label: string; enabled: boolean }[] = [
   { id: "portfolio", label: "Portfolio", enabled: false },
