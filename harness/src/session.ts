@@ -1,8 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, HarnessApi, Json, PatchEntry } from "../../web/src/harness/api";
 
@@ -19,7 +22,17 @@ export interface LaunchOptions {
   readonly maskSelectors?: readonly string[];
   /** Runs before the page loads on every navigation (e.g. seeding sessionStorage). */
   readonly initScript?: string;
+  /**
+   * Record `<runDir>/run.webm` (+ `run.mp4` when ffmpeg is available) and a Playwright trace
+   * (`<runDir>/trace.zip`, open with `npx playwright show-trace`). Default: `HARNESS_VIDEO=1`.
+   * Recording slows the browser slightly (`slowMo`) so a viewer can follow along.
+   */
+  readonly video?: boolean;
 }
+
+const viewport = { width: 1440, height: 900 } as const;
+const videoSlowMo = 150;
+
 
 /** The `__harness` methods a Session can proxy (setCopilot takes functions, which cannot cross the wire). */
 type Proxied = Exclude<keyof HarnessApi, "setCopilot">;
@@ -47,9 +60,11 @@ export class Session {
 
   private constructor(
     private readonly browser: Browser,
+    private readonly context: BrowserContext,
     readonly page: Page,
     runDir: string,
     maskSelectors: readonly string[],
+    private readonly video: boolean,
   ) {
     this.runDir = runDir;
     this.maskSelectors = maskSelectors;
@@ -65,9 +80,12 @@ export class Session {
     const runDir = options.runDir ?? path.join(runsRoot, timestamp());
     await mkdir(runDir, { recursive: true });
 
-    const browser = await chromium.launch({ headless });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    const session = new Session(browser, page, runDir, options.maskSelectors ?? []);
+    const video = options.video ?? process.env.HARNESS_VIDEO === "1";
+    const browser = await chromium.launch({ headless, ...(video ? { slowMo: videoSlowMo } : {}) });
+    const context = await browser.newContext({ viewport, ...(video ? { recordVideo: { dir: runDir, size: viewport } } : {}) });
+    if (video) await context.tracing.start({ screenshots: true, snapshots: true });
+    const page = await context.newPage();
+    const session = new Session(browser, context, page, runDir, options.maskSelectors ?? [], video);
     try {
       if (options.initScript !== undefined) await page.addInitScript(options.initScript);
       await page.goto(baseURL, { waitUntil: "load" });
@@ -202,11 +220,37 @@ export class Session {
     return outcome.value;
   }
 
-  /** Closes the browser; still fails if the page raised an uncaught error outside any step. */
+  /**
+   * Closes the browser (finalizing the video and trace when recording); still fails if the page
+   * raised an uncaught error outside any step.
+   */
   async close(): Promise<void> {
+    if (this.video) await this.context.tracing.stop({ path: path.join(this.runDir, "trace.zip") });
+    await this.context.close(); // flushes the .webm
     await this.browser.close();
+    if (this.video) await this.finalizeVideo();
     const pageErrors = this.freshPageErrors();
     if (pageErrors.length > 0) throw new Error(`uncaught page error outside any step: ${pageErrors.join("; ")}`);
+  }
+
+  /** Renames Playwright's random `<hash>.webm` to `run.webm` and adds `run.mp4` when ffmpeg is around. */
+  private async finalizeVideo(): Promise<void> {
+    const webm = (await readdir(this.runDir)).find((f) => f.endsWith(".webm") && f !== "run.webm");
+    if (webm === undefined) return;
+    const source = path.join(this.runDir, "run.webm");
+    await rename(path.join(this.runDir, webm), source);
+    const ffmpeg = await bundledFfmpeg();
+    if (ffmpeg === null) {
+      console.log(`[harness] ${source} recorded; no ffmpeg found for an mp4 (Playwright's bundle or PATH)`);
+      return;
+    }
+    const mp4 = path.join(this.runDir, "run.mp4");
+    try {
+      await execFileAsync(ffmpeg, ["-y", "-loglevel", "error", "-i", source, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-preset", "veryfast", mp4]);
+      console.log(`[harness] video: ${mp4} (${((await stat(mp4)).size / 1e6).toFixed(1)} MB), trace: ${path.join(this.runDir, "trace.zip")}`);
+    } catch (err) {
+      console.log(`[harness] ${source} recorded; mp4 conversion failed: ${describe(err)}`);
+    }
   }
 
   private capture(file: string): Promise<Buffer> {
@@ -257,6 +301,42 @@ export class Session {
       },
       { method, args: args as unknown[] },
     ) as ReturnType<HarnessApi[K]>;
+  }
+}
+
+const execFileAsync = promisify(execFile);
+
+/** Playwright's bundled ffmpeg (macOS/Linux cache layouts), else `ffmpeg` on PATH, else null. */
+async function bundledFfmpeg(): Promise<string | null> {
+  const caches = [path.join(homedir(), "Library", "Caches", "ms-playwright"), path.join(homedir(), ".cache", "ms-playwright")];
+  for (const cache of caches) {
+    let dirs: string[];
+    try {
+      dirs = (await readdir(cache)).filter((d) => d.startsWith("ffmpeg-"));
+    } catch {
+      continue;
+    }
+    for (const dir of dirs) {
+      for (const bin of ["ffmpeg-mac-arm64", "ffmpeg-mac", "ffmpeg-linux", "ffmpeg-win64.exe"]) {
+        const candidate = path.join(cache, dir, bin);
+        if (await exists(candidate)) return candidate;
+      }
+    }
+  }
+  try {
+    await execFileAsync("ffmpeg", ["-version"]);
+    return "ffmpeg";
+  } catch {
+    return null;
+  }
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await stat(file);
+    return true;
+  } catch {
+    return false;
   }
 }
 

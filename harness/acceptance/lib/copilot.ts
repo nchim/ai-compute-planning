@@ -104,12 +104,12 @@ const maxCardsPerTurn = 3;
  */
 export async function copilotTurn(s: Session, prompt: string): Promise<Turn> {
   const before = (await copilotSnapshot(s)).messages.length;
-  await s.sendCopilot(prompt);
+  await send(s, prompt);
   const resultsAfterCards: Result[] = [];
   for (let i = 0; i < maxCardsPerTurn && (await acceptPendingCard(s)); i++) {
     await s.waitIdle();
     resultsAfterCards.push(parseResult(await s.getResult()));
-    await s.sendCopilot(acceptedFollowUp);
+    await send(s, acceptedFollowUp);
   }
   const snap = await copilotSnapshot(s);
   if (snap.error !== null) throw new Error(`Copilot error: ${snap.error}`);
@@ -122,6 +122,21 @@ export async function copilotTurn(s: Session, prompt: string): Promise<Turn> {
     resultsAfterCards,
     messageCount: snap.messages.length,
   };
+}
+
+/** Sends one message and keeps the Copilot thread scrolled to its newest content while it streams. */
+async function send(s: Session, text: string): Promise<void> {
+  const thread = s.page.locator(".rail .thread");
+  await thread.scrollIntoViewIfNeeded();
+  const turn = s.sendCopilot(text);
+  const follow = setInterval(() => {
+    thread.evaluate((el) => el.scrollTo({ top: el.scrollHeight })).catch(() => undefined); // best effort: the turn may already be over
+  }, 500);
+  try {
+    await turn;
+  } finally {
+    clearInterval(follow);
+  }
 }
 
 /** True when a pending card was accepted; false when there was none. Anything else is an error. */

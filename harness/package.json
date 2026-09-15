@@ -8,7 +8,7 @@
     "test": "playwright test",
     "smoke": "playwright test tests/smoke.spec.ts",
     "acceptance": "COPILOT_MODE=scripted playwright test acceptance/",
-    "acceptance:live": "COPILOT_MODE=live playwright test acceptance/abilene-1.spec.ts",
+    "acceptance:live": "COPILOT_MODE=live HARNESS_VIDEO=${HARNESS_VIDEO-1} playwright test acceptance/abilene-1.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

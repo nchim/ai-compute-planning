@@ -11,7 +11,7 @@ import { expect, test, type TestInfo } from "@playwright/test";
 
 import { Session, type Json, type PatchEntry } from "../src/session";
 import { KEY_PANEL_SELECTOR, copilotSnapshot, copilotTurn, keyInitScript, loadApiKey, turnMarkdown, type Turn } from "./lib/copilot";
-import { lastSeq, mutationsSince } from "./lib/log";
+import { lastOptimization, lastSeq, mutationsSince } from "./lib/log";
 import { deltaFacts, missingDimensions, numbersIn, traceable, untraceable } from "./lib/narration";
 import { conservationGreen, findDiagnostic, metric, numbersOf, parsePlan, parseResult, type Result } from "./lib/result";
 
@@ -26,14 +26,21 @@ const H = {
   t1: "Give me the picture on Abilene-1.",
   t2: "Push density to 130 kW/rack so we shrink the footprint.",
   t3: "We can't wait until 2029. Phase this to track demand and keep cost sane. Cap capex at $8B and never be short more than 20 MW.",
+  t3b: "How much better is this than the baseline?",
   t4: "How robust is our LCOC, and where's the downside?",
   t5: "What if utilization is only 65%?",
   t6: "What just changed?",
   t7: "Summarize the recommendation for the steering committee across space, time, capital and risk, and remind me why a gas bridge is worth the premium.",
 } as const;
 
-/** Cross-cutting performance budgets (WASM): a plain Analyze, and one carrying 1,000 Monte Carlo draws. */
-const budgetMs = { analyze: 100, monteCarlo: 1000 } as const;
+/**
+ * Cross-cutting performance budgets (WASM): a plain Analyze, and one carrying 1,000 Monte Carlo
+ * draws. Live runs are recorded with `slowMo`, which taxes every harness call; they get some slack.
+ */
+const slowMoSlackMs = live ? 300 : 0;
+const budgetMs = { analyze: 100 + slowMoSlackMs, monteCarlo: 1000 + slowMoSlackMs } as const;
+/** Timings the run archives (timings.json) so a budget miss in CI can be read, not guessed. */
+const timings: Record<string, number> = {};
 const gridMonth = 30;
 
 // T3's acceptance inputs: the BTM gas bridge, the phasing policy and the capex cap.
@@ -124,7 +131,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         await s.setControl("compute.cooling", "LIQUID_DTC");
         await s.setControl("site.floor_load_psf", requiredPsf(firstResult));
         await s.setControl("compute.gpus_per_rack", 72);
-        fixMs = await timedIdle(s);
+        fixMs = timings["T2 analyze after fix"] = await timedIdle(s);
       }
       expect(firstResult.status).toBe("INVALID_INPUT");
       expect(findDiagnostic(firstResult, "DENSITY_EXCEEDS_COOLING")?.proto_path).toBe("compute.kw_per_rack");
@@ -145,11 +152,14 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
     });
 
     // ---- T3 — Phase to the demand ramp ---------------------------------------------------------
-    await session.step("T3 optimize phasing", async (s) => {
+    const t3 = await session.step("T3 optimize phasing", async (s) => {
+      // T3b: the human pins the single-shot plan before anything is optimized.
+      await s.setBaseline("single-shot");
       let optimization: Result;
       if (live) {
         const turn = await grounding.turn(s, "T3", H.t3);
-        optimization = optimizeToolResult(turn);
+        expect(turn.toolCalls.some((c) => c.name === "run_optimize" && !c.isError), "the Copilot ran the optimizer").toBe(true);
+        optimization = lastOptimization(await s.getCommandLog(), t2.seq);
       } else {
         await s.acceptCard(await s.proposeChange("Add a BTM gas bridge and the optimizer policy", [...gasSource, ...optimizerSetup]));
         await s.waitIdle();
@@ -188,6 +198,35 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       return checkpoint(s, result);
     });
 
+    // ---- T3b — Pin and compare -----------------------------------------------------------------
+    await session.step("T3b baseline compare", async (s) => {
+      const baseline = await s.getBaseline();
+      expect(baseline?.label).toBe("single-shot");
+      const baselineSummary = baseline?.summary as Record<string, unknown>;
+      expect(baselineSummary["time_to_energize_months"], "baseline is the pre-optimization single shot").toBe(gridMonth);
+      expect(baselineSummary["demand_capture_pct"]).toBe(metric(t2.result, "demand_capture_pct"));
+
+      // Undo/redo move the plan, never the baseline.
+      await s.undo();
+      await s.waitIdle();
+      expect((await s.getBaseline())?.label).toBe("single-shot");
+      await s.redo();
+      await s.waitIdle();
+      expect(await s.getPlan()).toBe(t3.plan);
+
+      await s.toggleCompare();
+      expect(((await s.getViewContext()) as { compare: boolean }).compare).toBe(true);
+      const tiles = s.page.locator(".tile");
+      await expect(s.page.locator(".tile .delta[data-delta]"), "every metric tile shows a Δ vs. baseline").toHaveCount(await tiles.count());
+      const captureDelta = Number(await s.page.locator('[data-metric="demand_capture_pct"] .delta').getAttribute("data-delta"));
+      expect(captureDelta).toBeCloseTo(metric(t3.result, "demand_capture_pct") - (baselineSummary["demand_capture_pct"] as number), 6);
+      await expect(s.page.locator(".step-chart .line.baseline"), "ghosted baseline demand + capacity").toHaveCount(2);
+      if (live) {
+        grounding.addFacts(deltaFacts(baselineSummary, (t3.result.summary ?? {}) as Record<string, unknown>));
+        await grounding.turn(s, "T3b", H.t3b);
+      }
+    });
+
     // ---- T4 — Monte Carlo + sensitivity --------------------------------------------------------
     const t4 = await session.step("T4 monte carlo", async (s) => {
       let mcMs = 0;
@@ -195,7 +234,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         await grounding.turn(s, "T4", H.t4);
       } else {
         await s.acceptCard(await s.proposeChange("Distributions on the master levers; Monte Carlo + sensitivity", riskSetup));
-        mcMs = await timedIdle(s);
+        mcMs = timings["T4 monte carlo"] = await timedIdle(s);
       }
       const before = await s.getResult();
       const result = parseResult(before);
@@ -217,7 +256,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
 
       // Same seed → byte-identical Result (the seed write forces a re-analyze of an identical plan).
       await s.setControl("run.monte_carlo.seed", 42);
-      const rerunMs = await timedIdle(s);
+      const rerunMs = (timings["T4 monte carlo rerun"] = await timedIdle(s));
       expect(await s.getResult(), "Monte Carlo is deterministic for a fixed seed").toBe(before);
       expect(Math.max(mcMs, rerunMs), "1,000-iteration Monte Carlo").toBeLessThanOrEqual(budgetMs.monteCarlo);
       return checkpoint(s, result);
@@ -248,7 +287,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       const afterUndo = lastSeq(await s.getCommandLog());
 
       await s.page.locator('[data-path="costs.gpu.depreciation_years"] input[type="range"]').fill("4");
-      const analyzeMs = await timedIdle(s);
+      const analyzeMs = (timings["T6 slider analyze"] = await timedIdle(s));
       expect(mutationsSince(await s.getCommandLog(), afterUndo).map((m) => m.paths)).toEqual([["costs.gpu.depreciation_years"]]);
       expect(analyzeMs, "slider re-analyze (Monte Carlo still enabled)").toBeLessThanOrEqual(budgetMs.monteCarlo);
       const result = parseResult(await s.getResult());
@@ -291,6 +330,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
     });
     await session.screenshot("final");
   } finally {
+    await session.writeArtifact("timings.json", JSON.stringify(timings, null, 2));
     await grounding.flush();
     await session.close();
   }
@@ -373,6 +413,14 @@ function expectStrictlyIncreasing(xs: readonly number[], what: string): void {
   for (let i = 1; i < xs.length; i++) expect(xs[i]!, `${what} strictly increasing at ${i}: ${xs.join(", ")}`).toBeGreaterThan(xs[i - 1]!);
 }
 
+/** Numbers quoted inside a tool output's prose (research excerpts, glossary text). */
+function numbersInStrings(value: Json): number[] {
+  if (typeof value === "string") return numbersIn(value);
+  if (Array.isArray(value)) return value.flatMap(numbersInStrings);
+  if (value !== null && typeof value === "object") return Object.values(value).flatMap(numbersInStrings);
+  return [];
+}
+
 function sum(xs: readonly number[]): number {
   return xs.reduce((a, b) => a + b, 0);
 }
@@ -396,26 +444,23 @@ function analysisOf(output: Json | null): Result | null {
   return inner as unknown as Result;
 }
 
-/** Live T3: the run_optimize tool output, reshaped to the Result fields `expectConvergedAndBetter` reads. */
-function optimizeToolResult(turn: Turn): Result {
-  const call = turn.toolCalls.find((c) => c.name === "run_optimize" && !c.isError && c.output !== null);
-  if (call === undefined) throw new Error(`T3: no successful run_optimize call (tools: ${turn.toolCalls.map((c) => c.name).join(", ")})`);
-  const out = call.output as { status: string; converged: boolean; frontier?: Json; decision_var_values?: Json; conservation?: Json };
-  return { status: out.status, optimization: { converged: out.converged, frontier: out.frontier as never, decision_var_values: out.decision_var_values as never }, conservation: out.conservation as never };
-}
-
 /**
  * Live-mode narration grounding. Collects every number the engine has produced (Results, tool
  * outputs) and the plan's inputs, plus per-metric deltas between consecutive summaries, so a stated
  * figure must trace to one of them within two significant figures.
  */
 class Grounding {
-  private facts: number[] = [];
+  /** Benchmarks the system prompt itself cites (interconnection years, $/MW…) are fair to quote. */
+  private facts: number[] = numbersIn(readFileSync(fileURLToPath(new URL("../../docs/agent-system-prompt.md", import.meta.url)), "utf8"));
   private lastSummary: Record<string, unknown> | null = null;
   private markdown = "";
   private transcriptPath: string | null = null;
 
   constructor(private readonly session: Session) {}
+
+  addFacts(facts: readonly number[]): void {
+    this.facts.push(...facts);
+  }
 
   async learn(s: Session): Promise<void> {
     const result = await s.getResult();
@@ -432,7 +477,7 @@ class Grounding {
   async turn(s: Session, label: string, prompt: string): Promise<Turn> {
     const turn = await copilotTurn(s, prompt);
     for (const r of turn.resultsAfterCards) this.facts.push(...numbersOf(r as unknown as Json));
-    for (const c of turn.toolCalls) if (c.output !== null) this.facts.push(...numbersOf(c.output));
+    for (const c of turn.toolCalls) if (c.output !== null) this.facts.push(...numbersOf(c.output), ...numbersInStrings(c.output));
     await this.learn(s);
     this.markdown += turnMarkdown(label, turn);
     await this.flush();
