@@ -196,10 +196,11 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       // The timeline scrubber reveals the phases one by one (a human control; it dispatches `select`).
       const scrubber = s.page.locator('input[aria-label="time scrubber (month)"]');
       await scrubber.fill(String(first.energize_month));
-      await expect(s.page.locator('[data-block^="hall_"]')).toHaveCount(1);
+      // `.block` scopes to the live plan's halls (compare mode also draws the baseline's, ghosted).
+      await expect(s.page.locator('.block[data-block^="hall_"]')).toHaveCount(1);
       await s.screenshot("T3 scrubber at first phase");
       await scrubber.fill(String(phases.at(-1)?.energize_month));
-      await expect(s.page.locator('[data-block^="hall_"]')).toHaveCount(phases.length);
+      await expect(s.page.locator('.block[data-block^="hall_"]')).toHaveCount(phases.length);
       return checkpoint(s, result);
     });
 
@@ -219,7 +220,9 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       await s.waitIdle();
       expect(await s.getPlan()).toBe(t3.plan);
 
-      await s.toggleCompare();
+      // A live Copilot may already have switched compare on itself (it has the tool); the human only
+      // toggles when it is off.
+      if (!((await s.getViewContext()) as { compare: boolean }).compare) await s.toggleCompare();
       expect(((await s.getViewContext()) as { compare: boolean }).compare).toBe(true);
       const tiles = s.page.locator(".tile");
       await expect(s.page.locator(".tile .delta[data-delta]"), "every metric tile shows a Δ vs. baseline").toHaveCount(await tiles.count());
