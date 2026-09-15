@@ -74,7 +74,7 @@ try {
 }
 ```
 
-`Session` methods mirror `window.__harness` one-to-one (`loadPlan`, `getPlan`, `getResult`, `setControl`,
+`Session` methods mirror `window.__harness` one-to-one (`loadPlan`, `loadFixture(name)` for any `fixtures/*.json`, `getPlan`, `getResult`, `setControl`,
 `listControls`, `sendCopilot`, `acceptCard`, `rejectCard`, `undo`, `redo`, `getViewContext`,
 `getCommandLog`, `waitIdle`, `getConsoleErrors`) plus `screenshot(name)`, `step(name, fn)` and `close()`.
 Plans and Results come back as protojson strings with proto (snake_case) field names, so keys line up with bus paths. Every call is a Promise that rejects with the in-page error message; a step fails if its function threw

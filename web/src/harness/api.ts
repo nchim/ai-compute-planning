@@ -35,6 +35,8 @@ export interface BaselineSnapshot {
 
 export interface HarnessApi {
   loadPlan(protojson: string): Promise<void>;
+  /** Loads `fixtures/<name>.json` (a name from the Canvas dropdown, e.g. "abilene-1"); rejects naming the known fixtures. */
+  loadFixture(name: string): Promise<void>;
   getPlan(): Promise<string>;
   getResult(): Promise<string | null>;
   setControl(path: string, value: ControlValue): Promise<void>;
