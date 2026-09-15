@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import { ResultSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, ResultSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { logToJson } from "./log";
 import { createStore } from "./store";
 import { loadAbilene } from "./testPlan";
@@ -158,6 +158,37 @@ describe("store", () => {
     engine.calls[1]!.reject(new EngineError("decode", "bad"));
     await waiting;
     expect(store.getState().error?.kind).toBe("decode"); // idle even when the analyze failed
+  });
+
+  test("optimize sends a clone in OPTIMIZE mode, leaves the live plan untouched, and stores the reply", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+
+    const pending = store.optimize();
+    expect(engine.calls).toHaveLength(2);
+    expect(engine.calls[1]!.plan.phasing?.mode).toBe(PhasingMode.OPTIMIZE);
+    expect(store.getState().plan?.phasing?.mode).toBe(PhasingMode.SINGLE_SHOT);
+    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived"]);
+
+    engine.calls[1]!.resolve(resultWithMw(2));
+    expect((await pending).summary?.mwOnlineFinal).toBe(2);
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
+
+    // A newer analyze supersedes an optimize still in flight: its reply is returned but not stored.
+    const stale = store.optimize();
+    store.dispatch({ type: "setField", path: "compute.pue", value: 1.3 });
+    vi.advanceTimersByTime(16);
+    engine.calls[3]!.resolve(resultWithMw(4));
+    engine.calls[2]!.resolve(resultWithMw(3));
+    expect((await stale).summary?.mwOnlineFinal).toBe(3);
+    await flush();
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(4);
+
+    await expect(createStore({ engine }).optimize()).rejects.toThrow("no plan loaded");
   });
 
   test("dispose cancels pending work and disposes the engine", () => {
