@@ -80,7 +80,7 @@ describe("propose_change and run_optimize", () => {
     expect(h.store.getState().proposals).toHaveLength(1);
   });
 
-  test("run_optimize writes phasing.mode=OPTIMIZE and the objective/constraints/policy, then stores the result", async () => {
+  test("run_optimize writes objective/constraints/policy (not phasing.mode) and optimizes via the store", async () => {
     const h = harness();
     await failure(h.run("run_optimize", {
       objective: "MIN_STRANDED_PLUS_LCOC",
@@ -89,12 +89,12 @@ describe("propose_change and run_optimize", () => {
       policy: { max_phases: 4, min_phase_mw: null, max_phase_mw: null, min_months_between_phases: null, max_shortfall_mw: 20 },
     }));
     const plan = h.store.getState().plan!;
-    expect(plan.phasing?.mode).toBe(3);
+    expect(plan.phasing?.mode).toBe(1); // SINGLE_SHOT: the live plan never flips to OPTIMIZE
     expect(plan.optimization?.objective?.type).toBe(1);
     expect(plan.optimization?.constraints[0]).toMatchObject({ metric: "total_capex", op: 1, value: 8e9 });
     expect(plan.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
     const log = h.store.getLog().map((e) => e.command.type);
-    // The load's debounced analyze is superseded by the patch's; then the optimize Result is stored.
+    // The load's debounced analyze is superseded by the patch's; then store.optimize stores its reply.
     expect(log).toEqual(["loadPlan", "applyPatch", "resultReceived", "resultReceived"]);
     // The fake engine returns no OptimizationResult, which is reported — not hidden.
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });

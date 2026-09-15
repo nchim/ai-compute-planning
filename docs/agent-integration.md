@@ -76,7 +76,11 @@ inference transport is configured (BYO-key in dev).
   `context.ts` — the ViewContext block; `history.ts` — localStorage transcripts; `research.ts` —
   the build-time corpus bundle; `prompt.ts` — the PROMPT TEXT import.
 - `CopilotRail.tsx` reads the engine from `EngineProvider` (wrapped around `<App/>` in `main.tsx`) and
-  registers the live Copilot so `sendCopilot(text)` (`registry.ts`) works for the harness.
+  registers the live Copilot's `send` with the dev harness via `window.__harness.setCopilot`, so the
+  harness's `sendCopilot(text)` drives the real loop.
+- `run_optimize` never flips the live plan's `phasing.mode`: it patches objective/constraints/decision
+  vars/policy, then calls `store.optimize()`, which optimizes an OPTIMIZE-mode clone and stores the reply
+  under the store's stale-reply guard.
 - Mutation tools (`edit_site_plan`, `set_control`) return the settled analysis (summary + diagnostics +
   conservation) so the model self-corrects within one turn without an extra `run_analyze`.
 

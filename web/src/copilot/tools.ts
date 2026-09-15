@@ -85,7 +85,7 @@ export type OptimizeInput = z.infer<typeof optimizeInput>;
 
 /** All Copilot tools, each strict and each reporting failures as `is_error` tool results. */
 export function createTools(deps: ToolDeps): BetaRunnableTool[] {
-  const { store, engine, tracker } = deps;
+  const { store, tracker } = deps;
 
   return [
     define(deps, {
@@ -119,18 +119,15 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
     define(deps, {
       name: "run_optimize",
       description:
-        "Set phasing.mode=OPTIMIZE plus the given objective/constraints/decision vars/policy, run the " +
-        "optimizer and return converged, evaluations, frontier size, best_metrics and the best plan's phasing.",
+        "Write the given objective/constraints/decision vars/policy into the plan, then run the optimizer " +
+        "(on an OPTIMIZE-mode copy; the live plan's phasing.mode is untouched) and return converged, " +
+        "evaluations, frontier size, best_metrics and the best plan's phasing.",
       inputSchema: optimizeInput,
       run: async (input) => {
         const patch = optimizePatch(input);
-        mutate(store, patch, { type: "applyPatch", patch });
+        if (patch.length > 0) mutate(store, patch, { type: "applyPatch", patch });
         await tracker.settle();
-        const result = await engine.optimize(planOrThrow(store));
-        // STUB: the store has no optimize cycle yet (WS7 may add one); storing the Result directly
-        // bypasses the store's stale-reply guard. Swap to store.optimize(...) when it exists.
-        store.dispatch({ type: "resultReceived", result });
-        return optimizationJson(result);
+        return optimizationJson(await store.optimize());
       },
     }),
     define(deps, {
@@ -220,7 +217,7 @@ function rejectIfRefused(store: Store): void {
 }
 
 function optimizePatch(input: OptimizeInput): PatchOp[] {
-  const patch: PatchOp[] = [{ path: "phasing.mode", value: PhasingMode[PhasingMode.OPTIMIZE] }];
+  const patch: PatchOp[] = [];
   if (input.objective !== null) patch.push({ path: "optimization.objective.type", value: input.objective });
   // Repeated fields are written by index; entries beyond the new list are left untouched (index writes only).
   input.constraints?.forEach((c, i) => {

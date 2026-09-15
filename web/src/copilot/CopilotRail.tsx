@@ -6,7 +6,6 @@ import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
 import { safeStorage, type Message } from "./history";
 import { renderMarkdownLite } from "./markdownLite";
-import { registerCopilot } from "./registry";
 import type { ToolEvent } from "./tools";
 import "./CopilotRail.css";
 
@@ -23,15 +22,18 @@ export function CopilotRail() {
   const [apiKey, setApiKey] = useState(() => safeStorage("session")?.getItem(KEY_STORAGE) ?? "");
   const [draft, setDraft] = useState("");
 
-  // One Copilot per (store, engine, key); the effect owns its lifetime and the harness registration.
+  // One Copilot per (store, engine, key); the effect owns its lifetime and registers it with the dev
+  // harness (`window.__harness` exists only in dev/harness builds, hence the guard).
   const copilot = useMemo<Copilot | null>(
     () => (apiKey === "" ? null : createCopilot({ store, engine, apiKey })),
     [store, engine, apiKey],
   );
   useEffect(() => {
-    registerCopilot(copilot);
+    const register = (fn: ((text: string) => Promise<void>) | null) =>
+      window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
+    register(copilot === null ? null : copilot.send);
     return () => {
-      registerCopilot(null);
+      register(null);
       copilot?.dispose();
     };
   }, [copilot]);
