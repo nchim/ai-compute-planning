@@ -170,3 +170,38 @@ export function applyPatch(plan: SitePlan, patch: readonly PatchOp[]): SitePlan 
   resolved.forEach((r, i) => write(next, r, (patch[i] as PatchOp).path));
   return next;
 }
+
+/**
+ * Returns a new plan with element `index` removed from the repeated field at `listPath`
+ * (e.g. `phasing.phases`), or throws `PathError` when the path is not a repeated field or the index
+ * is out of range. The input plan is never mutated.
+ */
+export function removeAt(plan: SitePlan, listPath: string, index: number): SitePlan {
+  const segments = parsePath(listPath);
+  const last = segments[segments.length - 1] as Segment;
+  if (last.index !== null) throw new PathError(`"${listPath}": name the repeated field itself, without [i]`);
+  if (!Number.isInteger(index) || index < 0) throw new PathError(`"${listPath}": index ${index} is not a non-negative integer`);
+  let desc: DescMessage = SitePlanSchema;
+  const fields: DescField[] = [];
+  segments.forEach((seg, i) => {
+    const isLast = i === segments.length - 1;
+    const field = isLast ? desc.fields.find((f) => f.name === seg.name || f.jsonName === seg.name) : findField(desc, seg, listPath);
+    if (field === undefined) throw new PathError(`"${listPath}": ${desc.name} has no field "${seg.name}"`);
+    fields.push(field);
+    if (!isLast) desc = messageOf(field, listPath);
+  });
+  const listField = fields[fields.length - 1] as DescField;
+  if (listField.fieldKind !== "list") throw new PathError(`"${listPath}": "${listField.name}" is not a repeated field`);
+  const next = clone(SitePlanSchema, plan);
+  let node: Mutable = next as unknown as Mutable;
+  segments.slice(0, -1).forEach((seg, i) => {
+    const field = fields[i] as DescField;
+    const child = seg.index === null ? node[field.localName] : (node[field.localName] as unknown[] | undefined)?.[seg.index];
+    if (child === undefined || child === null) throw new PathError(`"${listPath}": "${seg.name}" is not set`);
+    node = child as Mutable;
+  });
+  const list = node[listField.localName] as unknown[];
+  if (index >= list.length) throw new PathError(`"${listPath}": index ${index} out of range (length ${list.length})`);
+  list.splice(index, 1);
+  return next;
+}

@@ -1,8 +1,8 @@
-import { toBinary } from "@bufbuild/protobuf";
+import { create, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
 
 import { fakeResult } from "../engine/fake";
-import { CoolingMode, SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { CoolingMode, PhaseSchema, SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { reduce } from "./reducer";
 import { loadAbilene } from "./testPlan";
 import { initialState, type Command, type State } from "./types";
@@ -300,5 +300,34 @@ describe("baseline and compare", () => {
     expect(redone.plan!.compute!.pue).toBe(1.5);
     expect(redone.baseline).toBe(edited.baseline);
     expect(redone.history.past.every((p) => p !== edited.baseline!.plan)).toBe(true);
+  });
+});
+
+describe("removeAt", () => {
+  test("removes one element of a repeated field, is undoable, and rejects bad paths or indexes", () => {
+    const plan = loadAbilene();
+    plan.phasing!.phases = [
+      create(PhaseSchema, { id: "p1", itLoadMw: 50 }),
+      create(PhaseSchema, { id: "p2", itLoadMw: 60 }),
+      create(PhaseSchema, { id: "p3", itLoadMw: 70 }),
+    ];
+    let state = reduce(initialState, { type: "loadPlan", plan });
+    state = reduce(state, { type: "removeAt", path: "phasing.phases", index: 1 });
+    expect(state.error).toBeNull();
+    expect(state.plan?.phasing?.phases.map((p) => p.id)).toEqual(["p1", "p3"]);
+    expect(plan.phasing?.phases).toHaveLength(3); // the input plan is untouched
+    state = reduce(state, { type: "undo" });
+    expect(state.plan?.phasing?.phases.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+
+    for (const [path, index, message] of [
+      ["phasing.phases", 7, /out of range/],
+      ["phasing.phases[0]", 0, /without \[i\]/],
+      ["compute.kw_per_rack", 0, /not a repeated field/],
+      ["phasing.nope", 0, /no field/],
+    ] as const) {
+      const rejected = reduce(state, { type: "removeAt", path, index });
+      expect(rejected.error?.message).toMatch(message);
+      expect(rejected.plan).toBe(state.plan);
+    }
   });
 });
