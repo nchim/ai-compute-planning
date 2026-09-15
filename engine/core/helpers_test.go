@@ -47,17 +47,26 @@ func protoDiff(got, want protoreflect.Message, path string) (string, bool) {
 	for _, n := range nums {
 		fd := fields[protoreflect.FieldNumber(n)]
 		p := path + "." + string(fd.Name())
-		if got.Has(fd) != want.Has(fd) {
-			return p + " (presence)", false
-		}
-		if !got.Has(fd) {
-			continue
+		// Presence only matters for singular messages. A proto3 scalar at its zero value is "unset",
+		// and a residual of 8.9e-15 (arm64 FMA) vs 0 (amd64) must compare as close, not as present vs
+		// absent; Get returns the zero default for unset scalars, lists and maps.
+		if singularMessage(fd) {
+			if got.Has(fd) != want.Has(fd) {
+				return p + " (presence)", false
+			}
+			if !got.Has(fd) {
+				continue
+			}
 		}
 		if q, ok := valueDiff(fd, got.Get(fd), want.Get(fd), p); !ok {
 			return q, false
 		}
 	}
 	return "", true
+}
+
+func singularMessage(fd protoreflect.FieldDescriptor) bool {
+	return fd.Kind() == protoreflect.MessageKind && !fd.IsList() && !fd.IsMap()
 }
 
 func valueDiff(fd protoreflect.FieldDescriptor, got, want protoreflect.Value, path string) (string, bool) {
@@ -182,6 +191,12 @@ func TestRequireProtoCloseHelper(t *testing.T) {
 	got.Summary.Npv *= 1 + 1e-12 // last-bit drift (FMA) must be tolerated
 	if path, ok := protoDiff(got.ProtoReflect(), base.ProtoReflect(), ""); !ok {
 		t.Fatalf("1e-12 drift reported as a difference at %s", path)
+	}
+	// A scalar at exactly zero is "unset" in proto3; FMA drift to 1e-15 on the other platform must
+	// still compare as close (this is the arm64-vs-amd64 residual case).
+	got.Conservation.Checks[6].Residual, base.Conservation.Checks[6].Residual = 1e-15, 0
+	if path, ok := protoDiff(got.ProtoReflect(), base.ProtoReflect(), ""); !ok {
+		t.Fatalf("zero vs 1e-15 residual reported as a difference at %s", path)
 	}
 	got.Summary.Npv *= 1.01
 	if path, ok := protoDiff(got.ProtoReflect(), base.ProtoReflect(), ""); ok || !strings.HasPrefix(path, ".summary.npv") {
