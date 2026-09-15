@@ -63,11 +63,11 @@ export function PhasingLever() {
             {phases.map((p, i) => (
               <fieldset key={i} className="phase" data-phase={p.id}>
                 <legend>{p.id || `phase ${i + 1}`}</legend>
-                <TextField path={`phasing.phases[${i}].id`} label="id" />
-                <NumberField path={`phasing.phases[${i}].it_load_mw`} label="IT MW" />
-                <NumberField path={`phasing.phases[${i}].start_month`} label="start m" integer />
-                <NumberField path={`phasing.phases[${i}].energize_month`} label="energize m" integer />
-                <TextField path={`phasing.phases[${i}].power_source_id`} label="power source" />
+                <TextField path={`phasing.phases[${i}].id`} label="Phase id" />
+                <NumberField path={`phasing.phases[${i}].it_load_mw`} label="IT load (MW)" />
+                <NumberField path={`phasing.phases[${i}].start_month`} label="Construction start (month)" integer />
+                <NumberField path={`phasing.phases[${i}].energize_month`} label="Energize (month)" integer />
+                <TextField path={`phasing.phases[${i}].power_source_id`} label="Power source id" />
               </fieldset>
             ))}
             <button
