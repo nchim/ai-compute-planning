@@ -1,6 +1,8 @@
 # Product Brief — AI-Lab Data Center Capacity Decision-Support Tool
 
-**Status:** DRAFT v0.1 — 2026-09-15. Framework-first; initial scope modest, mostly mock data.
+**Status:** v0.2 — 2026-09-15. Framework-first. The single-site POC is built and deployed for testers
+(WS1–WS9, WS11, WS13 merged; the acceptance session WS10 and the grounding scenarios WS12 are open
+PRs; fidelity follow-ups #28–#30 in flight). Portfolio, scenario and demand tabs remain greyed.
 
 ## One-liner
 A decision-support cockpit that helps an **AI lab** plan data-center capacity, run **site feasibility
@@ -57,22 +59,35 @@ sizing, floor planning).
 
 ## Locked decisions (2026-09-15)
 - Flagship optimization: **phasing-to-demand-ramp**; v1 engine scope: **single site**; fidelity:
-  **deterministic + sensitivity + Monte Carlo**; map: **real tiles in production SPA, schematic in mock**.
+  **deterministic + sensitivity + Monte Carlo**; map: **schematic provider behind a `MapProvider`
+  seam**, real tiles deferred.
 - Engine = **pure Go function → WASM**, proto contract in/out; SPA routes all state through a **command
-  bus** shared by human, embedded Copilot, and a **developer remote-control harness** (this session
-  drives + debugs the app via Playwright + `window.__harness`).
+  bus** shared by human, embedded Copilot, and a **developer remote-control harness** (a Claude Code
+  session drives + debugs the app via Playwright + `window.__harness`).
+- Copilot = `claude-sonnet-5` tool loop in the browser; **relay mode** for the deployed build (key held
+  by our Cloud Run server behind a shared password + daily cap), BYO key in dev only.
+- Scenario comparison in v1 = **baseline pin + compare mode** on the Site Feasibility view (Δ tiles,
+  ghosted baseline series, Copilot narrates deltas) rather than a separate scenario tab.
+- Fidelity is grounded, not tuned: three fixtures (`abilene-1`, A.CRE `nova-colo`, Epoch
+  `epoch-100mw`) with reconciliation tests that pin every known gap (#28–#30).
 
 ## Document map (source of truth for the build)
 - `docs/architecture.md` — components, command bus, harness, locked decisions.
 - `proto/capplanner/v1/engine.proto` — the `SitePlan → Result` contract (the seam).
 - `docs/engine-design.md` — engine internals, conservation checks, Monte Carlo, optimizer, TDD.
 - `docs/ui-spec.md` — UI behavior + Site Feasibility view.
-- `docs/validation-cases.md` — 3 simulated sessions (acceptance criteria).
-- `docs/implementation-plan.md` — fan-out workstreams + milestones.
+- `docs/agent-integration.md` + `docs/agent-system-prompt.md` — the embedded Copilot and its prompt.
+- `docs/acceptance-session.md` — the acceptance criterion (T1–T7); `docs/validation-cases.md` — the
+  three unit-level cases it embeds.
+- `docs/implementation-plan.md` — workstreams, status, merge process, deferred list.
+- `deploy/cloudrun.md` — the tester deployment runbook; `harness/README.md` — driving the app.
 - `.claude/skills/development/` — shared, living dev process every worker follows.
 - `research/` — grounding research; `research/02-kpi-architecture.md` is the analytical spine.
 
 ## Process
-Research → KPI/model architecture → Claude Design wireframe → **design + scoping docs (done)** →
-fan-out implementation (Fable orchestrator + subagent workers, per `implementation-plan.md`) →
-validation cases → stakeholder demo.
+Research → KPI/model architecture → Claude Design wireframe → design + scoping docs → **fan-out
+implementation** (Fable orchestrator + subagent workers in worktrees, one PR per workstream merged
+through a queue, per `implementation-plan.md`) → **acceptance session** (scripted in CI, live run
+reviewed) → **grounding against external models** (A.CRE, Epoch) → **tester deployment** (Cloud Run)
+→ stakeholder demo. Status: implementation and deployment done; acceptance and grounding PRs open;
+docs are kept current with each PR that changes a contract, process or scope.
