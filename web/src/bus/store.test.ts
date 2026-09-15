@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import { PhasingMode, ResultSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, ResultSchema, Severity, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { defaultBaselineLabel } from "./baseline";
 import { fakeResult } from "../engine/fake";
 import { logToJson } from "./log";
@@ -216,6 +216,33 @@ describe("store", () => {
     expect(store.getState().result?.summary?.mwOnlineFinal).toBe(4);
 
     await expect(createStore({ engine }).optimize()).rejects.toThrow("no plan loaded");
+  });
+
+  test("optimize fills in the default policy when the plan has none, and a refused optimization keeps the last good Result", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+    expect(store.getState().plan?.phasing?.policy).toBeUndefined();
+
+    const pending = store.optimize();
+    const sent = engine.calls[1]!.plan;
+    expect(sent.phasing?.policy?.maxPhases).toBe(4);
+    expect(sent.phasing?.policy?.maxShortfallMw).toBe(20);
+    expect(store.getState().plan?.phasing?.policy).toBeUndefined(); // the live plan is not touched
+
+    const refused = create(ResultSchema, {
+      status: Status.INVALID_INPUT,
+      diagnostics: [{ severity: Severity.ERROR, code: "MISSING_REQUIRED", message: "phasing.policy is required", hint: "set a policy" }],
+    });
+    engine.calls[1]!.resolve(refused);
+    expect((await pending).status).toBe(Status.INVALID_INPUT);
+    await flush();
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(1); // last good Result kept
+    expect(store.getState().error).toEqual({ kind: "optimize", message: "MISSING_REQUIRED: phasing.policy is required — set a policy" });
+    expect(store.getState().engine.optimizing).toBe(false);
   });
 
   test("optimizing clears when the optimizer rejects", async () => {

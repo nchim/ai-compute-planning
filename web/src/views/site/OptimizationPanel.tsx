@@ -1,4 +1,4 @@
-import { useStore, type PatchOp } from "../../bus";
+import { defaultPhasingPolicy, useStore, type PatchOp } from "../../bus";
 import {
   CompareOpSchema,
   ObjectiveTypeSchema,
@@ -49,13 +49,13 @@ export function patchFromBestPlan(best: SitePlan): PatchOp[] {
   return ops;
 }
 
-/** Sensible starting policy for the optimizer, applied atomically when the plan has none. */
+/** The store's default policy as an atomic patch, for when the user wants it written into the plan. */
 export const defaultPolicyPatch: readonly PatchOp[] = [
-  { path: "phasing.policy.max_phases", value: 4 },
-  { path: "phasing.policy.min_phase_mw", value: 25 },
-  { path: "phasing.policy.max_phase_mw", value: 100 },
-  { path: "phasing.policy.min_months_between_phases", value: 6 },
-  { path: "phasing.policy.max_shortfall_mw", value: 20 },
+  { path: "phasing.policy.max_phases", value: defaultPhasingPolicy.maxPhases },
+  { path: "phasing.policy.min_phase_mw", value: defaultPhasingPolicy.minPhaseMw },
+  { path: "phasing.policy.max_phase_mw", value: defaultPhasingPolicy.maxPhaseMw },
+  { path: "phasing.policy.min_months_between_phases", value: defaultPhasingPolicy.minMonthsBetweenPhases },
+  { path: "phasing.policy.max_shortfall_mw", value: defaultPhasingPolicy.maxShortfallMw },
 ];
 
 export function OptimizationPanel() {

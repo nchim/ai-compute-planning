@@ -2,9 +2,19 @@ import { clone, create } from "@bufbuild/protobuf";
 
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import { PhasingMode, PhasingSchema, SitePlanSchema, type Result } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, SitePlanSchema, Status, type Result } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type EngineActivity, type LogEntry, type PatchOp, type State } from "./types";
+
+/** Policy used when a plan has none: up to 4 phases of 25–100 MW, 6 months apart, ≤ 20 MW average shortfall. */
+export const defaultPhasingPolicy = { maxPhases: 4, minPhaseMw: 25, maxPhaseMw: 100, minMonthsBetweenPhases: 6, maxShortfallMw: 20 } as const;
+
+/** One line for the banner: the first ERROR diagnostic (code, message, hint), else the status. */
+function optimizeFailureMessage(result: Result): string {
+  const first = result.diagnostics.find((d) => d.severity === Severity.ERROR) ?? result.diagnostics[0];
+  if (first === undefined) return `optimizer returned ${Status[result.status]}`;
+  return `${first.code}: ${first.message}${first.hint ? ` — ${first.hint}` : ""}`;
+}
 
 export interface StoreOptions {
   readonly engine: Engine;
@@ -104,13 +114,16 @@ export function createStore(options: StoreOptions): Store {
       });
   };
 
-  /** Tracks an engine reply as in flight and applies it only while `request` is still the latest. */
-  const guarded = (request: number, reply: Promise<Result>): Promise<Result> => {
+  /**
+   * Tracks an engine reply as in flight and applies it only while `request` is still the latest.
+   * `accept` decides whether a reply becomes the current Result (default: always).
+   */
+  const guarded = (request: number, reply: Promise<Result>, accept: (r: Result) => boolean = () => true): Promise<Result> => {
     inFlight++;
     return reply
       .then(
         (result) => {
-          if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
+          if (request === latestRequest && !disposed && accept(result)) dispatch({ type: "resultReceived", result });
           return result;
         },
         (err: unknown) => {
@@ -134,8 +147,17 @@ export function createStore(options: StoreOptions): Store {
     const candidate = clone(SitePlanSchema, state.plan);
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
+    // The optimizer needs a policy; a plan without one gets the default so "Optimize" always works.
+    candidate.phasing.policy ??= create(PhasingPolicySchema, defaultPhasingPolicy);
     setEngine({ optimizing: true });
-    return guarded(++latestRequest, engine.optimize(candidate)).finally(() => setEngine({ optimizing: false }));
+    const request = ++latestRequest;
+    return guarded(request, engine.optimize(candidate), (result) => {
+      if (result.status === Status.OK || result.status === Status.OK_WITH_WARNINGS) return true;
+      // A refused or infeasible optimization keeps the last good Result on screen; the reason goes to
+      // the banner (and back to the caller, who still receives the diagnostics).
+      dispatch({ type: "errorRaised", error: { kind: "optimize", message: optimizeFailureMessage(result) } });
+      return false;
+    }).finally(() => setEngine({ optimizing: false }));
   };
 
   return {
