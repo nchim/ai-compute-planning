@@ -57,11 +57,6 @@ export function SiteFeasibilityView() {
         </span>
       </header>
 
-      {error !== null && (
-        <p className="app-error" role="alert">
-          {error.kind}: {error.message}
-        </p>
-      )}
       {plan === null && <NotComputed what="Plan" />}
       {topDiagnostics.length > 0 && (
         <ul className="diags top">

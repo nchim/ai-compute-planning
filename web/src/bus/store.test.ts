@@ -245,6 +245,32 @@ describe("store", () => {
     expect(store.getState().engine.optimizing).toBe(false);
   });
 
+  test("optimize(overrides) applies the overrides to the candidate only and rejects a bad override path", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+
+    const pending = store.optimize([
+      { path: "optimization.objective.type", value: "MIN_LCOC" },
+      { path: "optimization.constraints[0].metric", value: "total_capex" },
+      { path: "optimization.constraints[0].op", value: "LE" },
+      { path: "optimization.constraints[0].value", value: 8e9 },
+    ]);
+    const sent = engine.calls[1]!.plan;
+    expect(sent.optimization?.objective?.type).toBe(2); // MIN_LCOC
+    expect(sent.optimization?.constraints).toHaveLength(1);
+    expect(store.getState().plan?.optimization?.constraints ?? []).toHaveLength(0); // live plan untouched
+    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived"]);
+    engine.calls[1]!.resolve(resultWithMw(2));
+    await pending;
+
+    await expect(store.optimize([{ path: "optimization.nope", value: 1 }])).rejects.toThrow(/no field/);
+    expect(store.getState().engine.optimizing).toBe(false);
+  });
+
   test("optimizing clears when the optimizer rejects", async () => {
     const engine = controllableEngine();
     const store = createStore({ engine });

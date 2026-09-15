@@ -142,10 +142,10 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
         "evaluations, frontier size, best_metrics and the best plan's phasing.",
       inputSchema: optimizeInput,
       run: async (input) => {
-        const patch = optimizePatch(input);
-        if (patch.length > 0) mutate(store, patch, { type: "applyPatch", patch });
-        await tracker.settle();
-        return optimizationJson(await store.optimize());
+        // Objective/constraints/policy go on the optimizer's candidate only: a refused or infeasible run
+        // must leave the live plan (and the screen) exactly as it was. Apply the winner via propose_change.
+        planOrThrow(store);
+        return optimizationJson(await store.optimize(optimizePatch(input)));
       },
     }),
     define(deps, {

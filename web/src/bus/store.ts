@@ -3,6 +3,7 @@ import { clone, create } from "@bufbuild/protobuf";
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
 import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, SitePlanSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { applyPatch } from "./paths";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type EngineActivity, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -43,7 +44,11 @@ export interface Store {
    * untouched. The reply is stored via `resultReceived` under the same stale-reply guard as analyze,
    * and returned.
    */
-  optimize(): Promise<Result>;
+  /**
+   * Runs the optimizer on a clone of the current plan; `overrides` (objective, constraints, policy…)
+   * are applied to that clone only, so a failed run leaves the live plan untouched.
+   */
+  optimize(overrides?: readonly PatchOp[]): Promise<Result>;
   getLog(): readonly LogEntry[];
   /** Resolves once no analyze is debounced or in flight (also after a failed analyze). */
   whenIdle(): Promise<void>;
@@ -149,10 +154,15 @@ export function createStore(options: StoreOptions): Store {
       });
   };
 
-  const optimize = (): Promise<Result> => {
+  const optimize = (overrides: readonly PatchOp[] = []): Promise<Result> => {
     if (disposed) return Promise.reject(new Error("store is disposed"));
     if (state.plan === null) return Promise.reject(new Error("no plan loaded"));
-    const candidate = clone(SitePlanSchema, state.plan);
+    let candidate: SitePlan;
+    try {
+      candidate = applyPatch(state.plan, overrides); // a fresh clone; the live plan is never mutated
+    } catch (err) {
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+    }
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
     // The optimizer needs a policy; a plan without one gets the default so "Optimize" always works.
