@@ -1,7 +1,8 @@
 import { create } from "@bufbuild/protobuf";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { EngineError, type Engine } from "../engine/types";
+import type { Engine } from "../engine/client";
+import { EngineError } from "../engine/protocol";
 import { ResultSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { logToJson } from "./log";
 import { createStore } from "./store";
@@ -78,7 +79,7 @@ describe("store", () => {
     expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
 
     // A stale *rejection* is dropped too — it must not raise an error over the newer result.
-    engine.calls[0]!.reject(new EngineError("internal", "late"));
+    engine.calls[0]!.reject(new EngineError("worker", "late"));
     await flush();
     expect(store.getState().error).toBeNull();
   });
@@ -96,7 +97,7 @@ describe("store", () => {
     vi.advanceTimersByTime(16);
     engine.calls[1]!.reject(new Error("plain"));
     await flush();
-    expect(store.getState().error).toEqual({ kind: "internal", message: "plain" });
+    expect(store.getState().error).toEqual({ kind: "worker", message: "plain" });
   });
 
   test("the log carries caller-supplied seq/ts, rejections, and serializes to JSON", () => {
