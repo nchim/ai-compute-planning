@@ -6,7 +6,7 @@ import type { Engine } from "../engine";
 import type { SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createAnalysisTracker } from "./analysis";
 import { viewContextBlock } from "./context";
-import { emptyTranscript, loadTranscript, safeStorage, saveTranscript, type Message, type Transcript } from "./history";
+import { clearTranscript, emptyTranscript, loadTranscript, safeStorage, saveTranscript, type Message, type Transcript } from "./history";
 import { SYSTEM_PROMPT } from "./prompt";
 import { createTools, type ToolEvent } from "./tools";
 import { createClient, transport } from "./transport";
@@ -59,6 +59,8 @@ export interface Copilot {
   /** Runs one turn — all tool rounds — and resolves when it ends. Rejects on API failure or misuse. */
   send(text: string): Promise<void>;
   abort(): void;
+  /** Forgets the current plan's conversation (in memory and in storage). Rejects while a turn runs. */
+  clear(): void;
   subscribe(listener: (event: CopilotEvent | null, snapshot: CopilotSnapshot) => void): () => void;
   getSnapshot(): CopilotSnapshot;
   dispose(): void;
@@ -207,9 +209,17 @@ export function createCopilot(options: CopilotOptions): Copilot {
     }
   };
 
+  const clear = () => {
+    if (snapshot.running) throw new Error("the Copilot is still working; stop it before clearing");
+    const planId = planIdOf(store.getState().plan);
+    const warning = planId === null ? null : clearTranscript(storage, planId);
+    update({ transcript: emptyTranscript, toolEvents: [], streamingText: "", error: null, notice: warning ?? "Conversation cleared." });
+  };
+
   return {
     send,
     abort: () => controller?.abort(),
+    clear,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

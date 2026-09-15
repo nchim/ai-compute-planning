@@ -72,6 +72,17 @@ export function saveTranscript(
   }
 }
 
+/** Removes the stored transcript for a plan; a failed removal is reported, not thrown. */
+export function clearTranscript(storage: Storage | null, planId: string): string | null {
+  if (storage === null) return null;
+  try {
+    storage.removeItem(historyKey(planId));
+    return null;
+  } catch (err) {
+    return `could not clear the stored transcript: ${describe(err)}`;
+  }
+}
+
 /** A turn starts at a user message that is not just tool results. */
 export function isTurnStart(m: Message): boolean {
   if (m.role !== "user") return false;

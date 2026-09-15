@@ -150,6 +150,24 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(copilot.getSnapshot().running).toBe(false);
   });
 
+  test("clear() forgets the conversation in memory and in storage, and refuses while a turn is running", async () => {
+    window.localStorage.clear();
+    const storage = window.localStorage;
+    const api = scriptedApi([{ content: [{ type: "text", text: "Hello." }] }]);
+    const store = loadedStore(t2Engine());
+    const copilot = createCopilot({ store, engine: t2Engine(), apiKey: "sk-test", client: api.client, storage });
+    await copilot.send("Hi");
+    expect(copilot.getSnapshot().transcript.messages).toHaveLength(2);
+    expect(storage.length).toBeGreaterThan(0);
+
+    copilot.clear();
+    expect(copilot.getSnapshot().transcript.messages).toHaveLength(0);
+    expect(copilot.getSnapshot().notice).toBe("Conversation cleared.");
+    expect(storage.length).toBe(0);
+    // A fresh Copilot on the same storage sees nothing.
+    expect(createCopilot({ store, engine: t2Engine(), apiKey: "sk-test", client: api.client, storage }).getSnapshot().transcript.messages).toHaveLength(0);
+  });
+
   test("an unknown path is refused before dispatch and returned as an is_error tool_result", async () => {
     const api = scriptedApi([
       { content: [{ type: "tool_use", id: "toolu_1", name: "set_control", input: { path: "compute.nope", value: 1 } }] },
