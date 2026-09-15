@@ -197,13 +197,13 @@ With a baseline pinned and Compare on:
 ## Remote-control harness (dev/test)
 Guarded `window.__harness` over the command bus (dev builds or `VITE_HARNESS=1`; absent in production):
 `loadPlan`, `loadFixture(name)`, `getPlan`, `getResult`, `setControl(path, value)`, `listControls`,
-`sendCopilot` / `setCopilot`, `acceptCard` / `rejectCard`, `undo` / `redo`, `setBaseline` /
-`clearBaseline` / `toggleCompare` / `getBaseline`, `getViewContext`, `getCommandLog`, `waitIdle`,
-`getConsoleErrors` (`web/src/harness/api.ts`); the WS10 branch adds `optimize`, `proposeChange` and
-`getCopilotSnapshot`. Playwright drives it through `harness/src/session.ts`; see `harness/README.md`
-and `acceptance-session.md`. The rail registers the live Copilot's `send` both with the harness
-(`setCopilot`) and with the in-app `CopilotHandleProvider`, so a harness `sendCopilot` and a schematic
-"Explain →" click take the same path.
+`optimize`, `proposeChange(summary, patch)`, `sendCopilot(text, {effort?})` / `setCopilot` /
+`getCopilotSnapshot`, `acceptCard` / `rejectCard`, `undo` / `redo`, `setBaseline` / `clearBaseline` /
+`toggleCompare` / `getBaseline`, `getViewContext`, `getCommandLog`, `waitIdle`, `getConsoleErrors`
+(`web/src/harness/api.ts`). Playwright drives it through `harness/src/session.ts`; see
+`harness/README.md` and `acceptance-session.md`. The rail registers the live Copilot both with the
+harness (`setCopilot`) and with the in-app `CopilotHandleProvider`, so a harness `sendCopilot` and a
+schematic "Explain →" click take the same path.
 
 ## Tech (as built)
 - Vite + React 18 + TypeScript strict; `@bufbuild/protobuf` v2; charts are plain SVG components under

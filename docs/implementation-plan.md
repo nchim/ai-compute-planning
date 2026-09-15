@@ -6,9 +6,9 @@ Every worker follows the **`development` skill** (`.claude/skills/development/SK
 truth: `architecture.md`, `proto/capplanner/v1/engine.proto`, `engine-design.md`, `ui-spec.md`,
 `agent-integration.md`. Scope: single-site Site-Feasibility POC.
 
-Every workstream except WS10 is merged, as are the fidelity follow-ups (#35), the schematic fix (#40)
-and the UX feedback loop PRs #41–#52 that followed the first tester sessions; WS10 (acceptance) is
-the one PR still in flight. Status per workstream and per follow-up is in the tables below.
+Every workstream is merged — WS10 (acceptance, PR #54) last — as are the fidelity follow-ups (#35),
+the schematic fix (#40) and the UX feedback loop PRs #41–#52 that followed the first tester sessions.
+Status per workstream and per follow-up is in the tables below.
 
 ## Tracking
 - One GitHub issue per workstream (`WS*` labels) in `nchim/ai-compute-planning`; each PR references its
@@ -87,7 +87,7 @@ loop** (#41–#52, serial, each deployed).
 | WS7 Site Feasibility view | #7 | #18 | merged |
 | WS8 embedded Copilot | #8 | #19 | merged |
 | WS9 remote-control harness | #9 | #17 | merged |
-| WS10 acceptance session T1–T8 | #10 | branch `ws10-acceptance` | in progress (PR open) |
+| WS10 acceptance session T1–T8 | #10 | #54 | merged (scripted in CI; live T1–T3b pass, T4–T8 → #53) |
 | WS11 baseline pin + compare mode | #21 | #24 | merged |
 | WS12 grounding scenarios + reconciliation | #27 | #31 | merged |
 | WS13 Cloud Run deploy + relay | #11 | #32 | merged |
@@ -170,13 +170,19 @@ asserted on the second turn.
 and per-step artifact archiving under `harness/runs/<ts>/`.
 **Done:** the smoke spec loads the fixture, moves a slider, reads the Result, screenshots — in CI.
 
-### WS10 — Acceptance session  *(#10 → branch `ws10-acceptance`, PR open)*
-`harness/acceptance/abilene-1.spec.ts` runs `docs/acceptance-session.md` T1–T7 (+ T3b) over one
-`Session` in `scripted` (CI gate) and `live` (real Copilot, narration checks, video + trace) modes,
-run with the branch's `make acceptance` / `cd harness && npm run acceptance:live` (neither target
-exists on `main` yet); the branch also carries the fixture, prompt and tool-schema
-adjustments the session surfaced. See `harness/README.md` on that branch for the design.
-**DoD:** `scripted` green in CI; one `live` run archived and reviewed by the orchestrator.
+### WS10 — Acceptance session  *(#10 → PR #54, merged)*
+`harness/acceptance/abilene-1.spec.ts` runs `docs/acceptance-session.md` T1–T8 (+ T3b) over one
+`Session` in `scripted` mode (`make acceptance`, the CI gate: the harness issues the tool calls the
+Copilot is expected to make and asserts every engine/UI fact, determinism, budgets) and `live` mode
+(`cd harness && npm run acceptance:live`: the real Copilot, narration checks, video + trace;
+`acceptance:live:iterate` + `ACCEPTANCE_RESUME_FROM=<turn>` to re-verify from a failed turn). The PR
+also carried the harness `optimize` / `proposeChange` / `getCopilotSnapshot` hooks, per-turn effort,
+the fixture (no `residual_curve`, so depreciation life is a real lever), the prompt's SitePlan
+path/enum cheat-sheet and the strict-tool reduction. See `harness/README.md`.
+**Status:** scripted green in CI; the archived live run (`harness/runs/2026-09-15T18-39-32-291Z-live`)
+passes T1, T2, T3 and T3b with grounded narration; **T4 is a known gap and T5–T8 are not yet green
+live — tracked in #53** (the Copilot disabled Monte Carlo after a stale-analysis confusion that #25
+and #51 have since addressed; derived-delta grounding).
 
 ### WS11 — Baseline pin + comparison mode  *(#21 → PR #24; user request 2026-09-15)*
 Bus commands `setBaseline` / `clearBaseline` / `toggleCompare`; the baseline is a cloned plan + Result
@@ -215,6 +221,7 @@ PR #43 added `POST /api/session` (opt-in session sharing → Cloud Logging) and 
 - **#33** (open) — Copilot prompt refinement pass from the archived live run: score each turn against
   the narration rubric in `acceptance-session.md`, tighten the system prompt in one batch (an edit is
   a cache miss), re-run live and compare.
+- **#53** (open) — live acceptance T4–T8 not yet green end-to-end (see WS10 above).
 - **#38** (open) — deploy: `strings.TrimSpace` the secret env values (a `--data-file` secret with a
   trailing newline made every login fail on the first revision) and investigate `GET /healthz`
   answering Google's 404 on Cloud Run.
@@ -243,6 +250,7 @@ PR #43 added `POST /api/session` (opt-in session sharing → Cloud Logging) and 
 - **M2** WS3+WS4 — risk + flagship optimizer. ✅
 - **M3** WS5+WS6+WS7 — SPA renders Site Feasibility live from WASM. ✅
 - **M4** WS8+WS9+WS11 — Copilot operates the view; harness drives it; baseline/compare. ✅
-- **M5** WS10 — acceptance session passes (scripted in CI, live run archived). In progress.
+- **M5** WS10 — acceptance session passes (scripted in CI, live run archived). ✅ scripted; live
+  T1–T3b, remainder #53.
 - **M6** WS12+WS13 — grounded fixtures reconciled; tester deployment on Cloud Run. ✅
 - **M7** UX feedback loop — testers on the deployment, findings fixed and redeployed (#41–#52). Ongoing.

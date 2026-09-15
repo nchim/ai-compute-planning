@@ -56,8 +56,9 @@ Behaviors: view-aware (ViewContext each turn), interprets `Result.summary`, **se
 Order matters for cache reuse (prefix match: `tools` → `system` → `messages`):
 1. **Cached, stable prefix:** tool definitions + the system prompt (`docs/agent-system-prompt.md`,
    imported verbatim at build time; sections: How you operate · The four dimensions · The strategic
-   frame · Benchmarks · Honest data gaps · Running risk analyses (Monte Carlo and sensitivity) ·
-   Research corpus). One `system` block with the `cache_control` breakpoint at its end.
+   frame · SitePlan paths and enum names · Benchmarks · Honest data gaps · Running risk analyses
+   (Monte Carlo and sensitivity) · Research corpus). One `system` block with the `cache_control`
+   breakpoint at its end.
 2. **Volatile, after the breakpoint:** the current **ViewContext** (active tab, selected site, current
    `SitePlan`, last `Result` summary + diagnostics, baseline label/summary, compare flag, pending
    proposals) as the first text block of the user message, then the user's text. These change every
@@ -67,7 +68,9 @@ Order matters for cache reuse (prefix match: `tools` → `system` → `messages`
 ## Request features (as sent by `client.ts`)
 - `stream: true`; text deltas and `tool_use` starts drive the rail's activity indicator;
   `.finalMessage()` per iteration.
-- `thinking: {type: "adaptive"}` (Sonnet 5's on-mode); `max_tokens` 32,000; `max_iterations` 16.
+- `thinking: {type: "adaptive"}` (Sonnet 5's on-mode); `max_tokens` 32,000; `max_iterations` 16;
+  `output_config.effort` only when the caller passes one (`send(text, {effort})` — the acceptance spec
+  uses `high` for T3/T7/T8 and `low` for the what-ifs; the rail sends none, i.e. the API default).
 - **Strict tools** (`strict: true`) on the plan-writing tools only (`edit_site_plan`, `set_control`,
   `remove_list_item`, `propose_change`): every strict schema joins one compiled grammar with a size cap
   — nine strict tools returned 400 "compiled grammar is too large". The rest are validated by the zod
@@ -109,10 +112,10 @@ inference transport is configured (BYO-key in dev, the relay in `make serve`).
   `Markdown.tsx` — react-markdown + GFM rendering of assistant text; `handle.tsx` —
   `CopilotHandleProvider` / `useCopilotSend`, the in-app handle other views use to send a message.
 - `CopilotRail.tsx` reads the engine from `EngineProvider` (wrapped around `<App/>` in `main.tsx`) and
-  registers the live Copilot's `send` with both the in-app handle and the dev harness
-  (`window.__harness.setCopilot`), so a schematic "Explain →" click and the harness's
-  `sendCopilot(text)` drive the same loop; it also attaches the Copilot to the session share so each
-  turn can be reported.
+  registers the live Copilot with both the in-app handle (`send`) and the dev harness
+  (`window.__harness.setCopilot({send, snapshot})`), so a schematic "Explain →" click and the
+  harness's `sendCopilot(text)` drive the same loop and `getCopilotSnapshot()` can assert on the
+  transcript; it also attaches the Copilot to the session share so each turn can be reported.
 - `run_optimize` never touches the live plan: its objective/constraints/decision vars/policy become
   `overrides` for `store.optimize(overrides)`, which applies them to the OPTIMIZE-mode candidate only
   and stores an OK reply under the store's stale-reply guard; a refused/infeasible run leaves the
@@ -123,5 +126,7 @@ inference transport is configured (BYO-key in dev, the relay in `make serve`).
 ## Deferred
 - Per-user auth and a cross-instance rate limit on the relay (#11 remainder).
 - **Conversation compaction / context management** for long sessions (beta compaction or context editing).
-- Optional per-turn model escalation (Sonnet 5 → Opus 5) for reasoning-heavy turns.
+- Optional per-turn model escalation (Sonnet 5 → Opus 5) for reasoning-heavy turns (per-turn
+  *effort* already exists; the rail does not yet choose one).
+- Prompt refinement from the archived live run (#33) and the live T4–T8 gaps (#53).
 - Move transcript persistence from localStorage to a durable/shared store if sessions need to sync.

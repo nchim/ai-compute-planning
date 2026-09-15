@@ -12,8 +12,10 @@ after the `## PROMPT TEXT` heading verbatim (trimmed). Edit the prompt here and 
 heading text exactly as it is, and keep the tool names in sync with `web/src/copilot/tools.ts`
 (`client.test.ts` pins the list of ten: `edit_site_plan`, `set_control`, `remove_list_item`,
 `run_analyze`, `run_optimize`, `propose_change`, `set_baseline`, `toggle_compare`, `explain`,
-`query_research` — all named in "How you operate" below). The "Running risk analyses" section (#51)
-exists because the model otherwise flips `iterations`/`seed` and concludes Monte Carlo is not wired.
+`query_research` — all named in "How you operate" below). The "SitePlan paths and enum names"
+cheat-sheet (WS10, #54) and the "Running risk analyses" section (#51) exist because the live
+acceptance run showed the model guessing enum spellings and flipping `iterations`/`seed` before
+concluding Monte Carlo was not wired.
 
 **Knowledge-access strategy (hybrid):** the strategic digest + research index below live in this cached
 prompt, so the agent can orient and "continue the conversation" with zero file reads. The

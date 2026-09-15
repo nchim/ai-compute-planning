@@ -117,13 +117,15 @@ scheduled is discarded.
 A Claude Code session can **operate and debug the running SPA itself**, not just the embedded Copilot:
 - The SPA (dev/harness builds, `VITE_HARNESS=1`) exposes **`window.__harness`** over the bus
   (`web/src/harness/api.ts`): `loadPlan`, `loadFixture`, `getPlan`, `getResult`, `setControl`,
-  `listControls`, `sendCopilot` / `setCopilot`, `acceptCard` / `rejectCard`, `undo` / `redo`,
-  `setBaseline` / `clearBaseline` / `toggleCompare` / `getBaseline`, `getViewContext`,
-  `getCommandLog`, `waitIdle`, `getConsoleErrors`. The WS10 branch adds `optimize`, `proposeChange`
-  and `getCopilotSnapshot`.
+  `listControls`, `optimize` (the "Run optimize" button), `proposeChange` (the Copilot's
+  `propose_change`), `sendCopilot(text, {effort?})` / `setCopilot` / `getCopilotSnapshot`,
+  `acceptCard` / `rejectCard`, `undo` / `redo`, `setBaseline` / `clearBaseline` / `toggleCompare` /
+  `getBaseline`, `getViewContext`, `getCommandLog`, `waitIdle`, `getConsoleErrors` — so a scripted
+  session can issue exactly the Copilot's tool calls.
 - `harness/` drives headless **Chromium via Playwright** with a `Session` helper that mirrors the API
   and archives per-step artifacts (screenshot, plan, Result, command log, console errors) under
-  `harness/runs/<ts>/`. The smoke spec runs in CI; the acceptance session (WS10) is the POC gate.
+  `harness/runs/<ts>/`. The smoke spec and the scripted acceptance session (`make acceptance`) run in
+  CI; the live acceptance run is manual and archived (`harness/README.md`).
 - Same-origin, dev-only: the API is not installed in production builds and never bypasses the bus.
 
 ### Inference transport (relay vs BYO key)

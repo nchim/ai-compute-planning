@@ -39,10 +39,6 @@
 .site-view .tile .kpi { font-size: 20px; font-weight: 600; color: var(--ink); }
 .site-view .kpi-s { font-size: 11px; color: var(--muted); }
 .site-view .chip { border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; font-size: 11px; color: #52525b; background: var(--soft); white-space: nowrap; }
-.site-view .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
-.site-view .seg button { border: none; border-right: 1px solid #e4e4e7; background: #fff; padding: 3px 9px; font-size: 11px; color: #52525b; cursor: pointer; }
-.site-view .seg button:last-child { border-right: none; }
-.site-view .seg button.on { background: #eef2f6; color: #1e293b; font-weight: 600; }
 .site-view .btnp { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 13px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .site-view .btnp:disabled { opacity: .5; cursor: default; }
 .site-view .mini { font-size: 11px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 4px 10px; background: #fff; color: var(--accent); cursor: pointer; }
