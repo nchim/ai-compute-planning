@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/nchim/ai-compute-planning/engine/core"
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
 
@@ -290,7 +291,7 @@ func (s *search) toPlan(c candidate) *pb.SitePlan {
 			id = s.srcs[ph.src].id
 		}
 		p.Phasing.Phases[k] = &pb.Phase{
-			Id: fmt.Sprintf("p%d", k+1), ItLoadMw: ph.mw, StartMonth: int32(max(ph.energize-constructionLeadMonths, 0)),
+			Id: fmt.Sprintf("p%d", k+1), ItLoadMw: ph.mw, StartMonth: int32(max(ph.energize-core.ConstructionLeadMonths, 0)),
 			EnergizeMonth: int32(ph.energize), PowerSourceId: id,
 		}
 	}
