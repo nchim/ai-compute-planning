@@ -84,23 +84,51 @@ describe("harness api", () => {
     expect(byPath.get("compute.cooling")).toMatchObject({ type: "CoolingMode", value: "AIR" });
     expect(byPath.get("compute.cooling")?.options).toContain("LIQUID_DTC");
     expect(byPath.get("power.sources[0].capacity_mw")?.value).toBe(260);
-    expect(byPath.get("costs.gpu.residual_curve[2]")?.value).toBe(0.5);
+    expect(byPath.get("demand.points[1].demand_mw")?.value).toBe(100);
     expect(byPath.get("run.monte_carlo.seed")?.value).toBe(42);
     expect(byPath.get("run.sensitivity.delta_pct")).toBeDefined(); // unset sub-message: still settable
     for (const c of controls) await api.setControl(c.path, c.value); // every listed path round-trips
   });
 
-  test("sendCopilot rejects until a Copilot is registered", async () => {
+  test("sendCopilot/getCopilotSnapshot reject until a Copilot is registered", async () => {
     const { api } = await loaded();
     await expect(api.sendCopilot("hi")).rejects.toThrow("Copilot not installed");
-    const copilot = vi.fn(async () => undefined);
-    await api.setCopilot(copilot);
+    await expect(api.getCopilotSnapshot()).rejects.toThrow("Copilot not installed");
+    await expect(api.setCopilot({ send: async () => undefined } as never)).rejects.toThrow("expected { send, snapshot }");
+    const send = vi.fn(async () => undefined);
+    await api.setCopilot({ send, snapshot: () => ({ messages: 2 }) });
     await api.sendCopilot("hi");
-    expect(copilot).toHaveBeenCalledWith("hi");
-    await api.setCopilot(async () => {
-      throw new Error("turn failed");
+    expect(send).toHaveBeenCalledWith("hi", undefined);
+    await api.sendCopilot("careful", { effort: "low" });
+    expect(send).toHaveBeenLastCalledWith("careful", { effort: "low" });
+    await expect(api.sendCopilot("x", { effort: "max" } as never)).rejects.toThrow("effort must be low, medium or high");
+    expect(await api.getCopilotSnapshot()).toEqual({ messages: 2 });
+    await api.setCopilot({
+      send: async () => {
+        throw new Error("turn failed");
+      },
+      snapshot: () => null,
     });
     await expect(api.sendCopilot("again")).rejects.toThrow("turn failed");
+  });
+
+  test("proposeChange opens a card the way the Copilot does and rejects a bad patch at the boundary", async () => {
+    const { api, store } = await loaded();
+    await expect(api.proposeChange("bad", [{ path: "compute.nope", value: 1 }])).rejects.toThrow('ComputeSpec has no field "nope"');
+    await expect(api.proposeChange("empty", [])).rejects.toThrow("non-empty array");
+    const id = await api.proposeChange("denser", [{ path: "compute.kw_per_rack", value: 130 }]);
+    expect(store.getState().proposals).toEqual([{ id, summary: "denser", patch: [{ path: "compute.kw_per_rack", value: 130 }], status: "pending" }]);
+    await api.acceptCard(id);
+    expect(JSON.parse(await api.getPlan()).compute.kw_per_rack).toBe(130);
+  });
+
+  test("optimize runs the optimizer on the current plan and returns the Result", async () => {
+    const { api } = harness();
+    await expect(api.optimize()).rejects.toThrow("no plan loaded");
+    const loadedApi = (await loaded()).api;
+    const result = JSON.parse(await loadedApi.optimize()) as { status: string; optimization?: unknown };
+    expect(result.status).toBeTruthy();
+    expect(JSON.parse(await loadedApi.getPlan()).phasing.mode).toBe("SINGLE_SHOT"); // the live plan is untouched
   });
 
   test("acceptCard/rejectCard settle the latest pending proposal by default", async () => {

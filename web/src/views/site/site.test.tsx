@@ -222,7 +222,7 @@ describe("regions render from the golden Result", () => {
   test("pro forma renders the KPI tiles, the capex stack and the table", () => {
     const { container } = mount(harness(), <ProForma />);
     const tiles = within(container.querySelector(".tiles") as HTMLElement);
-    expect(tiles.getByText("$2.16")).toBeTruthy();
+    expect(tiles.getByText("$2.32")).toBeTruthy();
     expect(tiles.getByText("$6.5B")).toBeTruthy();
     expect(tiles.getByText("26.4%")).toBeTruthy();
     expect(container.querySelectorAll(".stackbar rect")).toHaveLength(7);
@@ -359,7 +359,7 @@ describe("compare mode", () => {
     h.store.dispatch({ type: "setBaseline", label: "golden" });
     const moved = loadGoldenResult();
     moved.summary!.lcocPerGpuHour *= 1.1;
-    moved.summary!.npv *= 0.9;
+    moved.summary!.npv -= Math.abs(moved.summary!.npv) * 0.1; // 10% worse whatever the golden's sign
     moved.summary!.demandCapturePct += 5;
     for (const p of moved.charts.find((c) => c.id === "demand_vs_capacity")!.series.find((s) => s.name === "capacity")!.points) p.y *= 0.8;
     h.store.dispatch({ type: "resultReceived", result: moved });
@@ -371,7 +371,7 @@ describe("compare mode", () => {
     const { container } = mount(compared(), <ProForma />);
     const lcoc = container.querySelector('[data-metric="lcoc_per_gpu_hour"] .delta') as HTMLElement;
     expect(lcoc.className).toBe("delta worse");
-    expect(lcoc.textContent).toBe("+$0.22 (+10.0%) vs. baseline");
+    expect(lcoc.textContent).toBe(`+$${(loadGoldenResult().summary!.lcocPerGpuHour * 0.1).toFixed(2)} (+10.0%) vs. baseline`);
     const npv = container.querySelector('[data-metric="npv"] .delta') as HTMLElement;
     expect(npv.className).toBe("delta worse");
     expect(npv.textContent?.startsWith("-$")).toBe(true);

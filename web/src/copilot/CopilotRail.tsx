@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Compon
 
 import { useStore, viewContext, type Proposal } from "../bus";
 import { saveSharePreference, useSessionShare } from "../telemetry";
-import { createCopilot, emptySnapshot, type Activity, type Copilot } from "./client";
+import { createCopilot, emptySnapshot, type Activity, type Copilot, type CopilotSnapshot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
 import { useRegisterCopilotSend } from "./handle";
 import { resetSession } from "../session/reset";
+import type { CopilotHandle, Json } from "../harness/api";
 import { safeStorage, type Message } from "./history";
 import { Markdown } from "./Markdown";
 import type { ToolEvent } from "./tools";
@@ -37,11 +38,11 @@ export function CopilotRail() {
   const registerSend = useRegisterCopilotSend();
   const share = useSessionShare();
   useEffect(() => {
-    const register = (fn: ((text: string) => Promise<void>) | null) => {
-      registerSend(fn); // in-app readers ("Explain" links)
-      window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
+    const register = (handle: CopilotHandle | null) => {
+      registerSend(handle === null ? null : (text) => handle.send(text)); // in-app readers ("Explain" links)
+      window.__harness?.setCopilot(handle).catch((err: unknown) => console.error("harness.setCopilot failed", err));
     };
-    register(copilot === null ? null : copilot.send);
+    register(copilot === null ? null : { send: (text, options) => copilot.send(text, options), snapshot: () => snapshotJson(copilot.getSnapshot()) });
     const detachShare = copilot === null ? null : share?.attachCopilot(copilot); // session sharing sees each turn
     return () => {
       detachShare?.();
@@ -181,6 +182,13 @@ export function CopilotRail() {
       )}
     </aside>
   );
+}
+
+/** The harness's view of the Copilot: transcript, tool events and usage (all plain JSON already). */
+function snapshotJson(s: CopilotSnapshot): Json {
+  return JSON.parse(
+    JSON.stringify({ messages: s.transcript.messages, droppedTurns: s.transcript.droppedTurns, toolEvents: s.toolEvents, lastUsage: s.lastUsage, running: s.running, error: s.error }),
+  ) as Json;
 }
 
 /** A single-line textarea that grows with its content up to `maxRows`, then scrolls. */

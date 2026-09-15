@@ -235,3 +235,29 @@ func BenchmarkOptimize(b *testing.B) {
 		}
 	}
 }
+
+// WS10 live run: dense racks round each phase's load up, so three small gas phases nominally within
+// the 150 MW bridge drew 150.23 MW and the winner failed power_supply_ge_demand_t. Such a candidate
+// must be reported as invalid, never chosen. (Root cause — the optimizer's per-source cap uses nominal
+// MW while the core rounds to whole racks — is tracked as a follow-up.)
+func TestOptimizeNeverPicksAConservationFailure(t *testing.T) {
+	plan := t3Plan(t)
+	plan.Compute.KwPerRack, plan.Compute.GpusPerRack, plan.Compute.Cooling = 130, 72, pb.CoolingMode_LIQUID_DTC
+	plan.Site.FloorLoadPsf = 300
+	gas := plan.Power.Sources[1]
+	gas.CapacityMw, gas.CapexPerKw, gas.LeadTimeMonths, gas.CostPerMwh = 150, 700, 15, 90
+	plan.Phasing.Policy = &pb.PhasingPolicy{MaxPhases: 6, MinPhaseMw: 10, MaxPhaseMw: 100, MinMonthsBetweenPhases: 6, MaxShortfallMw: 20}
+	plan.Optimization.Constraints = append(plan.Optimization.Constraints, &pb.Constraint{Metric: "shortfall_mw_months", Op: pb.CompareOp_LE, Value: 400})
+	res := Optimize(plan)
+	if res.GetStatus() == pb.Status_INVALID_INPUT {
+		t.Fatalf("unexpected INVALID_INPUT: %v", res.GetDiagnostics())
+	}
+	if res.GetOptimization().GetBestPlan() != nil && !res.GetConservation().GetAllPassed() {
+		t.Fatalf("winner fails conservation: %v", res.GetDiagnostics())
+	}
+	for _, c := range res.GetOptimization().GetFrontier() {
+		if c.GetFeasible() && c.GetDecisionVarValues()[keyInvalid] == 1 {
+			t.Fatal("an invalid candidate is marked feasible")
+		}
+	}
+}

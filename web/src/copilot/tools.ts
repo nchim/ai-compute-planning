@@ -139,7 +139,8 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
       description:
         "Write the given objective/constraints/decision vars/policy into the plan, then run the optimizer " +
         "(on an OPTIMIZE-mode copy; the live plan's phasing.mode is untouched) and return converged, " +
-        "evaluations, frontier size, best_metrics and the best plan's phasing.",
+        "evaluations, frontier size, best_metrics and the best plan's phasing. Lists are written by index: " +
+        "a constraint or decision var set on an earlier call stays in the plan unless you overwrite that index.",
       inputSchema: optimizeInput,
       run: async (input) => {
         // Objective/constraints/policy go on the optimizer's candidate only: a refused or infeasible run

@@ -12,7 +12,7 @@ GCP_PROJECT ?= ai-compute-planner
 GCP_REGION  ?= us-central1
 SERVICE     ?= capplanner
 
-.PHONY: deps gen lint test check wasm web harness serve deploy sessions
+.PHONY: deps gen lint test check wasm web harness acceptance serve deploy sessions
 HOURS ?= 4
 
 ## deps: install JS dependencies (run once, and after lockfile changes)
@@ -50,7 +50,7 @@ wasm:
 web:
 	cd web && npm run build
 
-## harness: Playwright smoke + acceptance against the dev server (uses engine.wasm when built, else the fake engine)
+## harness: harness typecheck + Playwright smoke against the dev server (uses engine.wasm when built, else the fake engine)
 harness:
 	cd harness && npm run typecheck && npm test
 

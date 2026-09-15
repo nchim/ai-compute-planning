@@ -28,7 +28,7 @@ export function Tornado(props: { swings: readonly Swing[] }) {
           return <rect className={`bar ${cls}`} x={Math.min(mid, px(f))} y={y + 3} width={Math.abs(px(f) - mid)} height={rowH - 8} />;
         };
         return (
-          <g key={s.label} data-input={s.label}>
+          <g key={`${s.target}:${s.label}`} data-input={s.label} data-target={s.target}>
             <text x={labelWidth - 6} y={y + 14} textAnchor="end">{s.label} <tspan className="muted">→ {s.target}</tspan></text>
             {bar(s.low, "low")}
             {bar(s.high, "high")}

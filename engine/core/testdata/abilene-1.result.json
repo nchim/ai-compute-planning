@@ -1,32 +1,32 @@
 {
   "status": "OK",
   "summary": {
-    "lcocPerGpuHour": 2.163712267071654,
+    "lcocPerGpuHour": 2.3166847482702533,
     "totalCapex": 6524000000,
     "capexPerMw": 32620000,
     "yieldOnCostPct": 26.38278422073972,
     "devSpreadBps": 1938.2784220739718,
-    "unleveredIrrPct": 10.8791611621327,
-    "npv": 163900160.20716777,
+    "unleveredIrrPct": 8.997858348484588,
+    "npv": -177484914.45712036,
     "timeToEnergizeMonths": 30,
     "mwOnlineFinal": 200,
     "demandCapturePct": 82.09247648902821,
     "strandedCapacityMwMonths": 325,
     "shortfallMwMonths": 2285,
-    "compositeRiskScore": 60.539217332000156,
-    "utilizationBreakevenPct": 77.16418385255652,
+    "compositeRiskScore": 61.248171368861016,
+    "utilizationBreakevenPct": 83.07086085644431,
     "extra": {
-      "exit_value_asset_basis": 3074880000,
+      "exit_value_asset_basis": 2414880000,
       "exit_value_cap_rate": 17720472033.933666,
       "facility_mw": 240,
       "gpus": 110000,
       "opex_total": 872946400.3514426,
       "power_cost_total": 340588800,
       "pv_gpu_hours": 2231676390.3507543,
-      "pv_lifecycle_cost": 4828705581.936116,
+      "pv_lifecycle_cost": 5170090656.600405,
       "racks": 5000,
       "revenue_total": 7658213345.048089,
-      "terminal_value": 3074880000
+      "terminal_value": 2414880000
     }
   },
   "conservation": {
@@ -2841,13 +2841,13 @@
               "n": 0
             },
             {
-              "n": 3074880000
+              "n": 2414880000
             },
             {
-              "n": 4315313042.375357
+              "n": 3655313042.3753567
             },
             {
-              "n": 2995558144.696646
+              "n": 2335558144.696646
             }
           ]
         }
@@ -4203,7 +4203,7 @@
             },
             {
               "x": 7,
-              "y": 4315313042.375357
+              "y": 3655313042.3753567
             }
           ]
         },
@@ -4356,7 +4356,7 @@
             },
             {
               "x": 2,
-              "y": 96.45522981569566,
+              "y": 100,
               "label": "utilization"
             },
             {
@@ -4373,7 +4373,7 @@
         }
       ],
       "meta": {
-        "composite": "60.5",
+        "composite": "61.2",
         "dimension": "risk",
         "y": "score 0..100"
       }

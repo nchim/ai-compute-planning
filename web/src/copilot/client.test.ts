@@ -52,6 +52,17 @@ const mutationPaths = (store: Store) =>
     return [];
   });
 
+describe("per-turn effort", () => {
+  test("send(text, { effort }) sets output_config.effort on that turn's requests only", async () => {
+    const api = scriptedApi([{ content: [{ type: "text", text: "ok" }] }, { content: [{ type: "text", text: "ok" }] }]);
+    const copilot = createCopilot({ store: loadedStore(t2Engine()), engine: t2Engine(), apiKey: "sk-test", client: api.client, storage: null });
+    await copilot.send("cheap question", { effort: "low" });
+    await copilot.send("default question");
+    expect(api.requests[0]?.["output_config"]).toEqual({ effort: "low" });
+    expect(api.requests[1]?.["output_config"]).toBeUndefined();
+  });
+});
+
 describe("copilot tool loop (scripted API, real SDK)", () => {
   test("T2: diagnostic → edit on the named proto_path → re-run OK; only those paths are mutated", async () => {
     const turns: ScriptedTurn[] = [

@@ -59,10 +59,10 @@ describe("setField", () => {
     const state = run(
       { type: "loadPlan", plan: loadAbilene() },
       { type: "setField", path: "run.monte_carlo.seed", value: 7 },
-      { type: "setField", path: "costs.gpu.residual_curve[1]", value: 0.6 },
+      { type: "setField", path: "costs.gpu.residual_curve[0]", value: 0.6 },
     );
     expect(state.plan!.run!.monteCarlo!.seed).toBe(7n);
-    expect(state.plan!.costs!.gpu!.residualCurve[1]).toBe(0.6);
+    expect(state.plan!.costs!.gpu!.residualCurve[0]).toBe(0.6);
   });
 
   test("creates missing sub-messages and appends at index == length", () => {

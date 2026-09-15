@@ -109,8 +109,8 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). If `buf` complains about an invalid API token, a stale `~/.netrc` is being sent: `NETRC=/dev/null make gen`. `make lint` runs `buf lint`.
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev` (`VITE_ENGINE=wasm` after `make wasm`, else the fake engine; `VITE_HARNESS=1` installs `window.__harness`).
-- Harness: `make harness` (typecheck + every Playwright spec; `make wasm` first for the real engine; see `harness/README.md`) · smoke only: `cd harness && npm run smoke`.
-- Acceptance (WS10 branch, until merged): `cd harness && npm run acceptance` (scripted, the CI gate) · `npm run acceptance:live` (real Copilot, needs `ANTHROPIC_API_KEY`); the branch adds `make acceptance`.
+- Harness: `make harness` (typecheck + smoke; `make wasm` first for the real engine; see `harness/README.md`) · every spec: `cd harness && npm test`.
+- Acceptance: `make acceptance` (scripted, the CI gate) · `cd harness && npm run acceptance:live` (real Copilot, key from `ANTHROPIC_API_KEY` or `~/.config/capplanner/anthropic_key`, records a video) · `npm run acceptance:live:iterate` + `ACCEPTANCE_RESUME_FROM=<turn>` to re-verify from a failed turn.
 - Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`) · `make sessions` (`HOURS=24`) prints shared tester sessions from Cloud Logging as transcripts.
 
 ## Improve this skill (living doc)
@@ -244,3 +244,11 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   with default options gives `planId` (lowerCamel) while `useProtoFieldName` gives `plan_id` — a reader
   that mixes the two (bus log vs. Result summary) must know which it is looking at. `findLast` is
   ES2023 and the web tsconfig lib is ES2022.
+- 2026-09-15 (WS10) — Acceptance gotchas: `fixtures/abilene-1.json` must not carry `costs.gpu.residual_curve`
+  or `depreciation_years` (a master lever) has no effect. Sensitivity on `compute.pue` ±10% trips
+  `POWER_UNDERSUPPLY` on the fixture (240 MW facility vs 260 MW grid) → `OK_WITH_WARNINGS`; pick levers
+  with headroom. Playwright `fill()` works on `<input type=range>` (sets value + fires input/change), so
+  slider turns can be driven as a human would. The command log serializes Results lowerCamel (`toJson`
+  default) while `getResult()` is snake_case — convert before comparing. Every `.tile` renders a Δ in
+  compare mode, so `.tile .delta` count == `.tile` count is the "every tile" assertion. Live runs: read
+  `runs/<ts>/transcript.md` before touching the prompt; `HARNESS_VIDEO=1` adds `run.mp4` + `trace.zip`.

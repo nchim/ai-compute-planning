@@ -4,6 +4,7 @@ import type { BetaToolRunner } from "@anthropic-ai/sdk/lib/tools/BetaToolRunner"
 import type { Store } from "../bus";
 import type { Engine } from "../engine";
 import type { SitePlan } from "../gen/capplanner/v1/engine_pb";
+import type { SendOptions } from "../harness/api";
 import { createAnalysisTracker } from "./analysis";
 import { viewContextBlock } from "./context";
 import { clearTranscript, emptyTranscript, loadTranscript, safeStorage, saveTranscript, type Message, type Transcript } from "./history";
@@ -57,7 +58,7 @@ export type CopilotEvent =
 
 export interface Copilot {
   /** Runs one turn — all tool rounds — and resolves when it ends. Rejects on API failure or misuse. */
-  send(text: string): Promise<void>;
+  send(text: string, options?: SendOptions): Promise<void>;
   abort(): void;
   /** Forgets the current plan's conversation (in memory and in storage). Rejects while a turn runs. */
   clear(): void;
@@ -153,7 +154,7 @@ export function createCopilot(options: CopilotOptions): Copilot {
     }
   };
 
-  const send = async (text: string): Promise<void> => {
+  const send = async (text: string, options: SendOptions = {}): Promise<void> => {
     const prompt = text.trim();
     if (prompt === "") throw new Error("message is empty");
     if (snapshot.running) throw new Error("the Copilot is still working on the previous turn");
@@ -175,6 +176,7 @@ export function createCopilot(options: CopilotOptions): Copilot {
       max_tokens: MAX_TOKENS,
       system: [{ type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } }],
       thinking: { type: "adaptive" as const },
+      ...(options.effort === undefined ? {} : { output_config: { effort: options.effort } }),
       tools,
       messages,
       stream: true as const,

@@ -30,6 +30,38 @@ function harness() {
   return { store, engine, events, run, tools };
 }
 
+describe("edit_site_plan under a slow engine", () => {
+  test("returns the analysis of the plan it wrote, never a reply for the plan before it", async () => {
+    // WS10 live run: a reply for the pre-edit plan landed after the edit and was reported as its analysis.
+    const fake = createFakeEngine();
+    const pending: ((r: Awaited<ReturnType<typeof fake.analyze>>) => void)[] = [];
+    const engine = {
+      ...fake,
+      analyze: (plan: Parameters<typeof fake.analyze>[0]) => new Promise<Awaited<ReturnType<typeof fake.analyze>>>((resolve) => pending.push(() => fake.analyze(plan).then(resolve))),
+    };
+    const store = createStore({ engine, debounceMs: 0 });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    await new Promise((r) => setTimeout(r, 1));
+    pending.shift()!(undefined as never); // the load's analyze replies
+    await store.whenIdle();
+    const tools = createTools({ store, engine, tracker: createAnalysisTracker(store, engine), onEvent: () => undefined });
+    const edit = tools.find((t) => t.name === "edit_site_plan")!;
+
+    store.dispatch({ type: "setField", path: "compute.target_it_load_mw", value: 150 }); // a human edit; its analyze is now in flight
+    await new Promise((r) => setTimeout(r, 1));
+    const input = { patch: [{ path: "compute.target_it_load_mw", value: 175 }] };
+    const toolUse = { type: "tool_use" as const, id: "id-edit", name: "edit_site_plan", input };
+    const call = edit.run(edit.parse(input), { toolUse, toolUseBlock: toolUse }) as Promise<string>;
+    await new Promise((r) => setTimeout(r, 1));
+    expect(pending).toHaveLength(2);
+    pending.shift()!(undefined as never); // the 150 MW reply lands after the 175 MW edit: superseded
+    pending.shift()!(undefined as never); // the 175 MW reply
+    const out = JSON.parse(await call) as { analysis: { summary: { mw_online_final: number } } };
+    expect(out.analysis.summary.mw_online_final).toBe(175);
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(175);
+  });
+});
+
 describe("tool schemas", () => {
   test("no integer bounds anywhere (the API rejects minimum/maximum on strict integer properties)", () => {
     // zod's `.int()` emits ±MAX_SAFE_INTEGER bounds; the live API answered 400 on them (WS10 live run).
