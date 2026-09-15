@@ -80,12 +80,13 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - [ ] Docs updated if any contract/interface changed; no proto change without orchestrator sign-off.
 - [ ] Scoped to the assigned workstream; no drive-by edits elsewhere. Playbook entry added if you learned something.
 
-## Commands (WS1 lands these; keep this list current)
-- Everything: `make check` · engine: `go test -race ./engine/...` · lint: `go vet ./... && staticcheck ./...`
-- Proto: `buf lint && buf generate` (from repo root; generated code is committed)
-- WASM: `make wasm` → `web/public/engine.wasm`
-- Web: `cd web && npm ci && npm run typecheck && npm test && npm run dev`
-- Harness: `cd harness && npm ci && npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`
+## Commands (keep this list current)
+- Once: `make deps` (npm ci in `web/` and `harness/`). Everything: `make check` (= `make lint` + `make test`, exactly what CI runs).
+- Engine: `go test -race ./engine/...` · lint: `go vet ./engine/... && staticcheck ./engine/...` (always `./engine/...`, never `./...` — `web/node_modules` contains stray Go code).
+- Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
+- WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
+- Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
+- Harness: `cd harness && npm test` (placeholder until WS9; then `npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`)
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -97,3 +98,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
+- 2026-09-15 (WS1) — Proto enum values share the *package* scope: two enums in one file cannot both
+  define `OPTIMIZE`. `RunMode` values are therefore `RUN_ANALYZE`/`RUN_OPTIMIZE`. `buf lint` passes
+  with `ENUM_VALUE_PREFIX`/`ENUM_ZERO_VALUE_SUFFIX` excepted; do not rename enum values to "fix" lint.
+- 2026-09-15 (WS1) — If `buf generate` fails with "Buf API token ... invalid", a stale `~/.netrc`
+  entry for buf.build is being sent; run `NETRC=/dev/null make gen`. Remote plugins need no login.
+- 2026-09-15 (WS1) — `@bufbuild/protobuf` v2 API: `fromJsonString(SitePlanSchema, s)`, `toBinary`,
+  `fromBinary`, `equals(Schema, a, b)`; messages are plain objects, schemas are `*Schema` exports.
