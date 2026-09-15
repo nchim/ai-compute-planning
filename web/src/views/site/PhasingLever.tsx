@@ -62,7 +62,18 @@ export function PhasingLever() {
             <Explainer term="phasing.phases">Phases</Explainer>
             {phases.map((p, i) => (
               <fieldset key={i} className="phase" data-phase={p.id}>
-                <legend>{p.id || `phase ${i + 1}`}</legend>
+                <legend>
+                  {p.id || `phase ${i + 1}`}
+                  <button
+                    type="button"
+                    className="x"
+                    aria-label={`delete phase ${p.id || i + 1}`}
+                    title="Delete this phase"
+                    onClick={() => store.dispatch({ type: "removeAt", path: "phasing.phases", index: i })}
+                  >
+                    ×
+                  </button>
+                </legend>
                 <TextField path={`phasing.phases[${i}].id`} label="Phase id" />
                 <NumberField path={`phasing.phases[${i}].it_load_mw`} label="IT load (MW)" />
                 <NumberField path={`phasing.phases[${i}].start_month`} label="Construction start (month)" integer />

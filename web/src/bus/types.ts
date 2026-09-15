@@ -69,6 +69,7 @@ export type Command =
   | { readonly type: "loadPlan"; readonly plan: SitePlan }
   | { readonly type: "setField"; readonly path: string; readonly value: FieldValue }
   | { readonly type: "applyPatch"; readonly patch: readonly PatchOp[] }
+  | { readonly type: "removeAt"; readonly path: string; readonly index: number }
   | {
       readonly type: "proposeChange";
       readonly id: string;

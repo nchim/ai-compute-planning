@@ -14,7 +14,7 @@ import { CriticalPath } from "./CriticalPath";
 import { layoutMarkers } from "./charts/Gantt";
 import { columnLabel, formatCell } from "./resultAccess";
 import { OptimizationPanel, patchFromBestPlan } from "./OptimizationPanel";
-import { PhasingLever } from "./PhasingLever";
+import { PhasingLever, newPhasePatch } from "./PhasingLever";
 import { ProForma } from "./ProForma";
 import { Risk } from "./Risk";
 import { SiteFeasibilityView } from "./SiteFeasibilityView";
@@ -183,6 +183,29 @@ describe("regions render from the golden Result", () => {
     expect(formatCell("energize_month", n(30), fmt)).toBe("m30");
     expect(formatCell("component", create(CellSchema, { v: { case: "s", value: "shell" } }), fmt)).toBe("shell");
     expect(["component", "amount_usd", "per_mw_usd", "share_pct"].map(columnLabel)).toEqual(["component", "amount", "per MW", "share"]);
+  });
+
+  test("each phase has a delete control that removes exactly that phase through the bus", () => {
+    const h = harness();
+    h.store.dispatch({ type: "applyPatch", patch: newPhasePatch(0, 0) });
+    h.store.dispatch({ type: "applyPatch", patch: newPhasePatch(1, 12) });
+    h.dispatched.length = 0;
+    mount(h, <PhasingLever />);
+    fireEvent.click(screen.getByRole("button", { name: /delete phase p1/ }));
+    expect(h.dispatched).toEqual([{ type: "removeAt", path: "phasing.phases", index: 0 }]);
+    expect(h.store.getState().plan?.phasing?.phases.map((p) => p.id)).toEqual(["p2"]);
+  });
+
+  test("schematic header states the parcel size in acres", () => {
+    mount(harness(), <SiteSchematic />);
+    expect(screen.getByText(/400 acres · 300 usable/)).toBeTruthy();
+  });
+
+  test("pro forma draws the annual net cashflow line from the cashflow chart", () => {
+    const { container } = mount(harness(), <ProForma />);
+    const net = container.querySelector(".line-chart path.line.net");
+    expect(net).not.toBeNull();
+    expect(net!.getAttribute("d")).toMatch(/^M[\d.]+,[\d.]+( L[\d.]+,[\d.]+)+$/);
   });
 
   test("critical path renders each task and the energize + grid markers", () => {

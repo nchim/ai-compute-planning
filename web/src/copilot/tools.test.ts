@@ -81,6 +81,18 @@ describe("explain", () => {
 });
 
 describe("propose_change and run_optimize", () => {
+  test("remove_list_item deletes one element of a repeated field and rejects bad paths or indexes", async () => {
+    const h = harness();
+    h.store.dispatch({ type: "applyPatch", patch: [{ path: "power.sources[1].id", value: "gas" }, { path: "power.sources[1].type", value: "BTM_GAS" }, { path: "power.sources[1].capacity_mw", value: 80 }] });
+    expect(h.store.getState().plan?.power?.sources.map((s) => s.id)).toEqual(["grid", "gas"]);
+    const out = JSON.parse(String(await h.run("remove_list_item", { path: "power.sources", index: 1 }))) as { removed: string };
+    expect(out.removed).toBe("power.sources[1]");
+    expect(h.store.getState().plan?.power?.sources.map((s) => s.id)).toEqual(["grid"]);
+    expect(await failure(h.run("remove_list_item", { path: "power.sources", index: 5 }))).toContain("out of range");
+    expect(await failure(h.run("remove_list_item", { path: "compute.pue", index: 0 }))).toContain("not a repeated field");
+    expect(h.store.getState().plan?.power?.sources).toHaveLength(1);
+  });
+
   test("propose_change validates the patch and returns a pending proposal id", async () => {
     const h = harness();
     const out = JSON.parse(String(await h.run("propose_change", { summary: "go liquid", patch: [{ path: "compute.cooling", value: "LIQUID_DTC" }] }))) as { proposal_id: string };

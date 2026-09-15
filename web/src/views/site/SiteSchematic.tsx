@@ -112,6 +112,9 @@ export function SiteSchematic() {
       dimensions={["space", "time"]}
       actions={
         <>
+          <span className="chip" data-metric="parcel_acres">
+            {num(state.plan?.site?.landAcres ?? 0)} acres · {num(state.plan?.site?.usableAcres ?? 0)} usable
+          </span>
           <span className="chip" data-metric="footprint_used_pct">footprint {schematic.footprintUsedPct.toFixed(0)}% used</span>
           {baseline !== undefined && <span className="chip" data-metric="baseline_footprint_used_pct">baseline {baseline.footprintUsedPct.toFixed(0)}%</span>}
         </>

@@ -161,6 +161,7 @@
 .site-view .h-sub[data-baseline] { font-weight: 600; color: var(--ink); }
 .site-view .chart .line.baseline { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .5; }
 .site-view .chart .line.zero { stroke: var(--line); stroke-width: 1; }
+.site-view .chart .line.net { stroke: var(--capital, #8a7f5f); }
 .site-view .swatch.baseline { background: transparent; border: 1px dashed var(--ink); opacity: .6; }
 .site-view .swatch.net { background: var(--capital); }
 .site-view .stackbar.with-baseline svg { height: 48px; }
@@ -191,3 +192,7 @@
 .site-view .block-card dt { color: #71717a; }
 .site-view .block-card dd { margin: 0; color: var(--ink); }
 .site-view .block-card .explain { margin-top: 2px; }
+
+.site-view fieldset.phase legend { display: flex; align-items: center; gap: 6px; }
+.site-view fieldset.phase legend .x { border: none; background: none; cursor: pointer; color: #71717a; font-size: 13px; line-height: 1; padding: 0 2px; }
+.site-view fieldset.phase legend .x:hover { color: #9c3b3b; }

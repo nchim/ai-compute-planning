@@ -4,7 +4,7 @@ import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
 import { toJson } from "@bufbuild/protobuf";
 import { z } from "zod";
 
-import { applyPatch, defaultBaselineLabel, type PatchOp, type Store } from "../bus";
+import { applyPatch, defaultBaselineLabel, removeAt, type PatchOp, type Store } from "../bus";
 import type { Engine } from "../engine";
 import {
   DiagnosticSchema,
@@ -112,6 +112,20 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
       run: async ({ path, value }) => {
         mutate(store, [{ path, value }], { type: "setField", path, value });
         return { applied: [path], analysis: analysisJson(await tracker.settle()) };
+      },
+    }),
+    define(deps, {
+      name: "remove_list_item",
+      description:
+        "Delete one element of a repeated SitePlan field (e.g. path phasing.phases, index 1 deletes the second phase; " +
+        "also power.sources, demand.points, risk.distributions, optimization.constraints), then re-analyze.",
+      inputSchema: z.object({ path: z.string().min(1).describe("The repeated field, without [i]"), index: z.number().int().describe("0-based position") }),
+      strict: true,
+      run: async ({ path, index }) => {
+        removeAt(planOrThrow(store), path, index); // validate at the boundary
+        store.dispatch({ type: "removeAt", path, index });
+        rejectIfRefused(store);
+        return { removed: `${path}[${index}]`, analysis: analysisJson(await tracker.settle()) };
       },
     }),
     define(deps, {

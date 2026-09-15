@@ -91,9 +91,9 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(setControl["eager_input_streaming"]).toBeUndefined();
     // Only the plan-writing tools are strict: every strict schema joins one compiled grammar with a
     // size cap, and nine strict tools (run_optimize's nested schema included) tripped it live (WS10).
-    expect(tools.filter((t) => t["strict"] === true).map((t) => t["name"])).toEqual(["edit_site_plan", "set_control", "propose_change"]);
+    expect(tools.filter((t) => t["strict"] === true).map((t) => t["name"])).toEqual(["edit_site_plan", "set_control", "remove_list_item", "propose_change"]);
     expect(tools.map((t) => t["name"])).toEqual([
-      "edit_site_plan", "set_control", "run_analyze", "run_optimize", "propose_change", "set_baseline", "toggle_compare", "explain", "query_research",
+      "edit_site_plan", "set_control", "remove_list_item", "run_analyze", "run_optimize", "propose_change", "set_baseline", "toggle_compare", "explain", "query_research",
     ]);
 
     // ViewContext is the first block of the user message, after the system prompt — never inside it.
