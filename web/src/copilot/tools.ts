@@ -72,10 +72,12 @@ const optimizeInput = z.object({
     .nullable(),
   policy: z
     .object({
-      max_phases: z.number().int().nullable(),
+      // Plain numbers on purpose: zod's `.int()` adds minimum/maximum bounds the API rejects on strict
+      // integer schemas; the bus rejects a non-integer write with a precise message instead.
+      max_phases: z.number().nullable().describe("Integer"),
       min_phase_mw: z.number().nullable(),
       max_phase_mw: z.number().nullable(),
-      min_months_between_phases: z.number().int().nullable(),
+      min_months_between_phases: z.number().nullable().describe("Integer"),
       max_shortfall_mw: z.number().nullable().describe("Never be short more than this many MW"),
     })
     .nullable(),

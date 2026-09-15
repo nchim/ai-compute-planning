@@ -25,8 +25,17 @@ function harness() {
     const toolUse = { type: "tool_use" as const, id: `id-${name}`, name, input };
     return t.run(t.parse(input), { toolUse, toolUseBlock: toolUse });
   };
-  return { store, events, run };
+  return { store, events, run, tools };
 }
+
+describe("tool schemas", () => {
+  test("no integer bounds anywhere (the API rejects minimum/maximum on strict integer properties)", () => {
+    // zod's `.int()` emits ±MAX_SAFE_INTEGER bounds; the live API answered 400 on them (WS10 live run).
+    const bounded = (v: unknown): boolean =>
+      typeof v === "object" && v !== null && (Array.isArray(v) ? v.some(bounded) : ("minimum" in v || "maximum" in v) || Object.values(v).some(bounded));
+    for (const t of harness().tools) expect(bounded((t as { input_schema?: unknown }).input_schema), `${t.name} input_schema carries minimum/maximum`).toBe(false);
+  });
+});
 
 const failure = async (p: Promise<unknown>): Promise<string> => {
   try {

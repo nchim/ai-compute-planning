@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -239,14 +238,13 @@ export class Session {
     if (webm === undefined) return;
     const source = path.join(this.runDir, "run.webm");
     await rename(path.join(this.runDir, webm), source);
-    const ffmpeg = await bundledFfmpeg();
-    if (ffmpeg === null) {
-      console.log(`[harness] ${source} recorded; no ffmpeg found for an mp4 (Playwright's bundle or PATH)`);
+    if (!(await hasFfmpeg())) {
+      console.log(`[harness] ${source} recorded; no ffmpeg on PATH for an mp4 (Playwright's bundled ffmpeg only encodes VP8)`);
       return;
     }
     const mp4 = path.join(this.runDir, "run.mp4");
     try {
-      await execFileAsync(ffmpeg, ["-y", "-loglevel", "error", "-i", source, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-preset", "veryfast", mp4]);
+      await execFileAsync("ffmpeg", ["-y", "-loglevel", "error", "-i", source, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart", mp4]);
       console.log(`[harness] video: ${mp4} (${((await stat(mp4)).size / 1e6).toFixed(1)} MB), trace: ${path.join(this.runDir, "trace.zip")}`);
     } catch (err) {
       console.log(`[harness] ${source} recorded; mp4 conversion failed: ${describe(err)}`);
@@ -306,34 +304,10 @@ export class Session {
 
 const execFileAsync = promisify(execFile);
 
-/** Playwright's bundled ffmpeg (macOS/Linux cache layouts), else `ffmpeg` on PATH, else null. */
-async function bundledFfmpeg(): Promise<string | null> {
-  const caches = [path.join(homedir(), "Library", "Caches", "ms-playwright"), path.join(homedir(), ".cache", "ms-playwright")];
-  for (const cache of caches) {
-    let dirs: string[];
-    try {
-      dirs = (await readdir(cache)).filter((d) => d.startsWith("ffmpeg-"));
-    } catch {
-      continue;
-    }
-    for (const dir of dirs) {
-      for (const bin of ["ffmpeg-mac-arm64", "ffmpeg-mac", "ffmpeg-linux", "ffmpeg-win64.exe"]) {
-        const candidate = path.join(cache, dir, bin);
-        if (await exists(candidate)) return candidate;
-      }
-    }
-  }
+/** A full ffmpeg on PATH (brew/apt); Playwright's bundled one cannot encode H.264. */
+async function hasFfmpeg(): Promise<boolean> {
   try {
     await execFileAsync("ffmpeg", ["-version"]);
-    return "ffmpeg";
-  } catch {
-    return null;
-  }
-}
-
-async function exists(file: string): Promise<boolean> {
-  try {
-    await stat(file);
     return true;
   } catch {
     return false;

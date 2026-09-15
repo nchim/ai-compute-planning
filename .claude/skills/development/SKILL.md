@@ -86,7 +86,7 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
-- Harness: `make harness` (or `cd harness && npm run smoke`; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `npm run acceptance -- --copilot=scripted` (WS10)
+- Harness: `make harness` (typecheck + smoke; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `make acceptance` (scripted, the CI gate) · `cd harness && npm run acceptance:live` (real Copilot, key from `ANTHROPIC_API_KEY` or `~/.config/capplanner/anthropic_key`, records a video)
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -161,3 +161,11 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   nodes (Canvas banner + site view), so query with `getAllByRole`. `client.test.ts` pins the full Copilot
   tool-name list — extend it when adding a tool. Cross-Result overlays: keep one `useCompareBaseline()`
   hook (null when compare is off) so every chart's baseline prop is simply omitted, never branched on.
+- 2026-09-15 (WS10) — Acceptance gotchas: `fixtures/abilene-1.json` must not carry `costs.gpu.residual_curve`
+  or `depreciation_years` (a master lever) has no effect. Sensitivity on `compute.pue` ±10% trips
+  `POWER_UNDERSUPPLY` on the fixture (240 MW facility vs 260 MW grid) → `OK_WITH_WARNINGS`; pick levers
+  with headroom. Playwright `fill()` works on `<input type=range>` (sets value + fires input/change), so
+  slider turns can be driven as a human would. The command log serializes Results lowerCamel (`toJson`
+  default) while `getResult()` is snake_case — convert before comparing. Every `.tile` renders a Δ in
+  compare mode, so `.tile .delta` count == `.tile` count is the "every tile" assertion. Live runs: read
+  `runs/<ts>/transcript.md` before touching the prompt; `HARNESS_VIDEO=1` adds `run.mp4` + `trace.zip`.
