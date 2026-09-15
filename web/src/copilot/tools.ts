@@ -1,0 +1,281 @@
+import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
+import type { BetaRunnableTool, BetaToolRunContext } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
+import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
+import { toJson } from "@bufbuild/protobuf";
+import { z } from "zod";
+
+import { applyPatch, type PatchOp, type Store } from "../bus";
+import type { Engine } from "../engine";
+import {
+  DiagnosticSchema,
+  PhasingMode,
+  Status,
+  SummaryMetricsSchema,
+  type Result,
+  type SitePlan,
+} from "../gen/capplanner/v1/engine_pb";
+import type { AnalysisTracker } from "./analysis";
+import { PROTOJSON } from "./context";
+import { explainTopic } from "./glossary";
+import { readResearch } from "./research";
+
+export type ToolStatus = "running" | "done" | "error";
+
+export interface ToolEvent {
+  readonly id: string;
+  readonly name: string;
+  readonly status: ToolStatus;
+  /** The error message when `status` is "error", else empty. */
+  readonly detail: string;
+}
+
+export interface ToolDeps {
+  readonly store: Store;
+  readonly engine: Engine;
+  readonly tracker: AnalysisTracker;
+  readonly onEvent: (event: ToolEvent) => void;
+}
+
+const fieldValue = z.union([z.string(), z.number(), z.boolean()]).describe("Scalar value, or an enum's name");
+
+const patchOp = z.object({
+  path: z
+    .string()
+    .min(1)
+    .describe("Protojson dotted path into SitePlan, e.g. compute.kw_per_rack or phasing.phases[0].it_load_mw"),
+  value: fieldValue,
+});
+
+const objective = z.enum(["MIN_STRANDED_PLUS_LCOC", "MIN_LCOC", "MIN_TIME_TO_REVENUE", "MAX_MW_CAPTURED", "MIN_RISK"]);
+
+const optimizeInput = z.object({
+  objective: objective.nullable().describe("Objective; null keeps the plan's current one"),
+  constraints: z
+    .array(
+      z.object({
+        metric: z.string().describe("SummaryMetrics field, e.g. total_capex or shortfall_mw_months"),
+        op: z.enum(["LE", "GE", "EQ"]),
+        value: z.number(),
+      }),
+    )
+    .nullable(),
+  decision_vars: z
+    .array(
+      z.object({
+        input_path: z.string().describe("SitePlan path the optimizer may vary"),
+        min: z.number().nullable(),
+        max: z.number().nullable(),
+        step: z.number().nullable(),
+        enum_choices: z.array(z.string()).nullable(),
+      }),
+    )
+    .nullable(),
+  policy: z
+    .object({
+      max_phases: z.number().int().nullable(),
+      min_phase_mw: z.number().nullable(),
+      max_phase_mw: z.number().nullable(),
+      min_months_between_phases: z.number().int().nullable(),
+      max_shortfall_mw: z.number().nullable().describe("Never be short more than this many MW"),
+    })
+    .nullable(),
+});
+
+export type OptimizeInput = z.infer<typeof optimizeInput>;
+
+/** All Copilot tools, each strict and each reporting failures as `is_error` tool results. */
+export function createTools(deps: ToolDeps): BetaRunnableTool[] {
+  const { store, engine, tracker } = deps;
+
+  return [
+    define(deps, {
+      name: "edit_site_plan",
+      description:
+        "Apply a patch of SitePlan field writes through the command bus, then re-analyze. Returns the paths " +
+        "written plus the new Result summary, diagnostics and conservation status. Use for small direct edits; " +
+        "use propose_change for material ones.",
+      inputSchema: z.object({ patch: z.array(patchOp).min(1) }),
+      eager: true,
+      run: async ({ patch }) => {
+        mutate(store, patch, { type: "applyPatch", patch });
+        return { applied: patch.map((p) => p.path), analysis: analysisJson(await tracker.settle()) };
+      },
+    }),
+    define(deps, {
+      name: "set_control",
+      description: "Operate one UI control: write a single SitePlan field, then re-analyze (same return as edit_site_plan).",
+      inputSchema: z.object({ path: patchOp.shape.path, value: fieldValue }),
+      run: async ({ path, value }) => {
+        mutate(store, [{ path, value }], { type: "setField", path, value });
+        return { applied: [path], analysis: analysisJson(await tracker.settle()) };
+      },
+    }),
+    define(deps, {
+      name: "run_analyze",
+      description: "Run Analyze on the current plan and return Result.summary, diagnostics and conservation.",
+      inputSchema: z.object({}),
+      run: async () => analysisJson(await tracker.settle()),
+    }),
+    define(deps, {
+      name: "run_optimize",
+      description:
+        "Set phasing.mode=OPTIMIZE plus the given objective/constraints/decision vars/policy, run the " +
+        "optimizer and return converged, evaluations, frontier size, best_metrics and the best plan's phasing.",
+      inputSchema: optimizeInput,
+      run: async (input) => {
+        const patch = optimizePatch(input);
+        mutate(store, patch, { type: "applyPatch", patch });
+        await tracker.settle();
+        const result = await engine.optimize(planOrThrow(store));
+        // STUB: the store has no optimize cycle yet (WS7 may add one); storing the Result directly
+        // bypasses the store's stale-reply guard. Swap to store.optimize(...) when it exists.
+        store.dispatch({ type: "resultReceived", result });
+        return optimizationJson(result);
+      },
+    }),
+    define(deps, {
+      name: "propose_change",
+      description:
+        "Propose a patch as an accept/undo card instead of applying it; the human decides. Returns the " +
+        "proposal id. Do not assume it was accepted.",
+      inputSchema: z.object({ summary: z.string().min(1).describe("One line the human reads on the card"), patch: z.array(patchOp).min(1) }),
+      run: async ({ summary, patch }) => {
+        applyPatch(planOrThrow(store), patch); // validate at the boundary; a bad path never reaches a card
+        const id = store.proposeChange(summary, patch);
+        rejectIfRefused(store);
+        return { proposal_id: id, status: "pending" };
+      },
+    }),
+    define(deps, {
+      name: "explain",
+      description: "Glossary lookup for a planner term (e.g. LCOC, energization, agility premium).",
+      inputSchema: z.object({ topic: z.string().min(1) }),
+      run: async ({ topic }) => ({ topic, explanation: explainTopic(topic) }),
+    }),
+    define(deps, {
+      name: "query_research",
+      description:
+        "Read a file from the research corpus (paths as listed in your instructions), optionally just one " +
+        "'## section' by its heading text.",
+      inputSchema: z.object({
+        path: z.string().min(1).describe("e.g. research/topics/14-speed-to-market/14-speed-to-market.md"),
+        section: z.string().nullable().describe("Heading text of one section, or null for the whole file"),
+      }),
+      run: async ({ path, section }) => ({ path, section, text: await readResearch(path, section) }),
+    }),
+  ];
+}
+
+interface ToolSpec<S extends z.ZodObject> {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: S;
+  readonly run: (input: z.infer<S>) => Promise<unknown>;
+  /** Stream the input as it is generated (large patches). The zod parse still validates it before `run`. */
+  readonly eager?: boolean;
+}
+
+/**
+ * Wraps a tool so the runner validates its input (betaZodTool's `parse`), the UI sees start/end
+ * events, and any failure becomes a `tool_result` with `is_error` carrying the exact message.
+ */
+function define<S extends z.ZodObject>(deps: ToolDeps, spec: ToolSpec<S>): BetaRunnableTool {
+  const tool = betaZodTool({
+    name: spec.name,
+    description: spec.description,
+    inputSchema: spec.inputSchema,
+    run: async (input, context?: BetaToolRunContext) => {
+      const id = context?.toolUse.id ?? spec.name;
+      deps.onEvent({ id, name: spec.name, status: "running", detail: "" });
+      try {
+        const out = await spec.run(input);
+        deps.onEvent({ id, name: spec.name, status: "done", detail: "" });
+        return JSON.stringify(out);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        deps.onEvent({ id, name: spec.name, status: "error", detail });
+        throw new ToolError(detail);
+      }
+    },
+  });
+  return { ...tool, strict: true, ...(spec.eager ? { eager_input_streaming: true } : {}) };
+}
+
+function planOrThrow(store: Store): SitePlan {
+  const plan = store.getState().plan;
+  if (plan === null) throw new Error("no plan is loaded");
+  return plan;
+}
+
+/** Validates the patch against the schema first, dispatches, and surfaces a reducer rejection. */
+function mutate(store: Store, patch: readonly PatchOp[], command: Parameters<Store["dispatch"]>[0]): void {
+  applyPatch(planOrThrow(store), patch);
+  store.dispatch(command);
+  rejectIfRefused(store);
+}
+
+function rejectIfRefused(store: Store): void {
+  const last = store.getLog().at(-1);
+  if (last?.rejected) throw new Error(last.rejected.message);
+}
+
+function optimizePatch(input: OptimizeInput): PatchOp[] {
+  const patch: PatchOp[] = [{ path: "phasing.mode", value: PhasingMode[PhasingMode.OPTIMIZE] }];
+  if (input.objective !== null) patch.push({ path: "optimization.objective.type", value: input.objective });
+  // Repeated fields are written by index; entries beyond the new list are left untouched (index writes only).
+  input.constraints?.forEach((c, i) => {
+    const base = `optimization.constraints[${i}]`;
+    patch.push({ path: `${base}.metric`, value: c.metric }, { path: `${base}.op`, value: c.op }, { path: `${base}.value`, value: c.value });
+  });
+  input.decision_vars?.forEach((d, i) => {
+    const base = `optimization.decision_vars[${i}]`;
+    patch.push({ path: `${base}.input_path`, value: d.input_path });
+    if (d.min !== null) patch.push({ path: `${base}.min`, value: d.min });
+    if (d.max !== null) patch.push({ path: `${base}.max`, value: d.max });
+    if (d.step !== null) patch.push({ path: `${base}.step`, value: d.step });
+    d.enum_choices?.forEach((e, j) => patch.push({ path: `${base}.enum_choices[${j}]`, value: e }));
+  });
+  if (input.policy !== null) {
+    for (const [k, v] of Object.entries(input.policy)) {
+      if (v !== null) patch.push({ path: `phasing.policy.${k}`, value: v });
+    }
+  }
+  return patch;
+}
+
+export function analysisJson(result: Result): Record<string, unknown> {
+  const failed = result.conservation?.checks.filter((c) => !c.passed).map((c) => c.name) ?? [];
+  return {
+    status: Status[result.status],
+    summary: result.summary === undefined ? null : toJson(SummaryMetricsSchema, result.summary, PROTOJSON),
+    diagnostics: result.diagnostics.map((d) => toJson(DiagnosticSchema, d, PROTOJSON)),
+    conservation: { all_passed: result.conservation?.allPassed ?? null, failed_checks: failed },
+  };
+}
+
+function optimizationJson(result: Result): Record<string, unknown> {
+  const opt = result.optimization;
+  if (opt === undefined) throw new Error("the engine returned no optimization result");
+  const phasing = opt.bestPlan?.phasing;
+  return {
+    status: Status[result.status],
+    converged: opt.converged,
+    evaluations: opt.evaluations,
+    frontier_size: opt.frontier.length,
+    best_metrics: opt.bestMetrics === undefined ? null : toJson(SummaryMetricsSchema, opt.bestMetrics, PROTOJSON),
+    best_plan_phasing:
+      phasing === undefined
+        ? null
+        : {
+            mode: PhasingMode[phasing.mode],
+            phases: phasing.phases.map((p) => ({
+              id: p.id,
+              it_load_mw: p.itLoadMw,
+              start_month: p.startMonth,
+              energize_month: p.energizeMonth,
+              power_source_id: p.powerSourceId,
+            })),
+          },
+    diagnostics: result.diagnostics.map((d) => toJson(DiagnosticSchema, d, PROTOJSON)),
+  };
+}
