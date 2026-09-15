@@ -96,6 +96,20 @@ export function CopilotRail() {
           viewing: {tabLabels[ctx.activeTab]}
           {ctx.selectedSiteId === null ? "" : ` · ${ctx.selectedSiteId}`}
         </span>
+        {copilot !== null && snapshot.transcript.messages.length > 0 && (
+          <button
+            type="button"
+            className="btn mini-btn"
+            data-action="clear-conversation"
+            disabled={snapshot.running}
+            title="Forget this plan's conversation (the plan itself stays; reload a fixture to reset it)"
+            onClick={() => {
+              if (window.confirm("Clear this plan's conversation? The plan and its results stay as they are.")) copilot.clear();
+            }}
+          >
+            Clear
+          </button>
+        )}
       </div>
       {share !== null && <ShareToggle on={sharing} onChange={updateSharing} />}
       {RELAY_MODE ? (
