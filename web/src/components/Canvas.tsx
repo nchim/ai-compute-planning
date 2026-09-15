@@ -1,8 +1,8 @@
 import { fromJsonString, toJson as protoToJson, type DescMessage, type MessageShape } from "@bufbuild/protobuf";
 
-import abileneJson from "../../../fixtures/abilene-1.json?raw";
 import { defaultBaselineLabel, useStore, viewContext, type Proposal } from "../bus";
 import type { Store } from "../bus";
+import { fixtureJson, fixtureNames } from "../fixtures";
 import {
   ConservationReportSchema,
   DiagnosticSchema,
@@ -29,21 +29,32 @@ export function Canvas() {
   const { state, store } = useStore();
   const ctx = viewContext(state);
 
-  const loadFixture = () => {
+  const loadFixture = (name: string) => {
     try {
-      store.dispatch({ type: "loadPlan", plan: fromJsonString(SitePlanSchema, abileneJson) });
+      store.dispatch({ type: "loadPlan", plan: fromJsonString(SitePlanSchema, fixtureJson(name)) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      store.dispatch({ type: "errorRaised", error: { kind: "parse", message: `abilene-1.json: ${message}` } });
+      store.dispatch({ type: "errorRaised", error: { kind: "parse", message: `${name}.json: ${message}` } });
     }
   };
 
   return (
     <main className="canvas">
       <div className="toolbar">
-        <button className="btn primary" onClick={loadFixture}>
-          Load Abilene-1 fixture
-        </button>
+        <select
+          className="btn primary"
+          aria-label="Load fixture"
+          data-action="load-fixture"
+          value=""
+          onChange={(e) => e.target.value !== "" && loadFixture(e.target.value)}
+        >
+          <option value="">Load fixture…</option>
+          {fixtureNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
         <button className="btn" disabled={state.history.past.length === 0} onClick={() => store.dispatch({ type: "undo" })}>
           Undo
         </button>
