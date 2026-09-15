@@ -121,3 +121,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
   `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
   `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
+- 2026-09-15 (WS4) — `core.Analyze` costs ~130 µs on the fixture, so the optimizer's 400-evaluation
+  budget is ~50 ms worst case; a full T3 Optimize converges in ~40 evaluations (~8 ms). Core rejects
+  `run.mode=RUN_OPTIMIZE`, so every cloned candidate must set `RUN_ANALYZE`. Core checks *pooled* firm
+  supply and a phase's source readiness only — it does not cap load per source, and energy is dispatched
+  cheapest-first regardless of `power_source_id`; anything that must respect per-source capacity has to
+  enforce it itself. `phasing.policy.max_shortfall_mw` is applied to the hold-average shortfall
+  (instantaneous is unsatisfiable whenever demand starts before any source is ready).
