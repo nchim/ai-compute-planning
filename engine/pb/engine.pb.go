@@ -1555,9 +1555,11 @@ type PhasingPolicy struct {
 	MinPhaseMw             float64                `protobuf:"fixed64,2,opt,name=min_phase_mw,json=minPhaseMw,proto3" json:"min_phase_mw,omitempty"`
 	MaxPhaseMw             float64                `protobuf:"fixed64,3,opt,name=max_phase_mw,json=maxPhaseMw,proto3" json:"max_phase_mw,omitempty"`
 	MinMonthsBetweenPhases int32                  `protobuf:"varint,4,opt,name=min_months_between_phases,json=minMonthsBetweenPhases,proto3" json:"min_months_between_phases,omitempty"`
-	MaxShortfallMw         float64                `protobuf:"fixed64,5,opt,name=max_shortfall_mw,json=maxShortfallMw,proto3" json:"max_shortfall_mw,omitempty"` // never be short of demand by more than this
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Applied to the hold-average shortfall: shortfall_mw_months / hold_period_months ≤ this. An
+	// instantaneous cap is unsatisfiable when demand precedes the earliest power source.
+	MaxShortfallMw float64 `protobuf:"fixed64,5,opt,name=max_shortfall_mw,json=maxShortfallMw,proto3" json:"max_shortfall_mw,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PhasingPolicy) Reset() {

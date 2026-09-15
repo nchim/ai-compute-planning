@@ -161,6 +161,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   nodes (Canvas banner + site view), so query with `getAllByRole`. `client.test.ts` pins the full Copilot
   tool-name list — extend it when adding a tool. Cross-Result overlays: keep one `useCompareBaseline()`
   hook (null when compare is off) so every chart's baseline prop is simply omitted, never branched on.
+- 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
+  per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
+  optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
+  diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
 - 2026-09-15 (WS10) — Acceptance gotchas: `fixtures/abilene-1.json` must not carry `costs.gpu.residual_curve`
   or `depreciation_years` (a master lever) has no effect. Sensitivity on `compute.pue` ±10% trips
   `POWER_UNDERSUPPLY` on the fixture (240 MW facility vs 260 MW grid) → `OK_WITH_WARNINGS`; pick levers
