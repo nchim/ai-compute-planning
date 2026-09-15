@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 1024, "title": "1 · Portfolio Dashboard" },
+    { "file": "SiteFeasibility.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 1440, "title": "2 · Site Feasibility (POC)" },
+    { "file": "Scenario.dc.html", "x": 0, "y": 1600, "w": 1440, "h": 1024, "title": "3 · Scenario / What-if" },
+    { "file": "DemandPlanning.dc.html", "x": 1560, "y": 1600, "w": 1440, "h": 1024, "title": "4 · Demand & Portfolio Planning" }
+  ],
+  "annotations": [
+    { "id": "concept", "x": 0, "y": -168, "w": 640, "text": "AI-Lab Data Center Capacity Planner — wireframe (v0.1)\nCockpit where a planner + an embedded, research-literate agent co-drive site & portfolio decisions. Persistent chat rail (left) + a canvas the agent draws into. Every screen reads across four dimensions: Space · Time · Capital · Risk. Low-fi, mostly mock data." },
+    { "id": "roadmap", "x": 1560, "y": -168, "w": 640, "text": "Reading the sketch\nGreyed nav items (Financing, Reports, Data Sources) and veiled panels (e.g. correlation engine) = roadmap, shown to provoke scope discussion. The chat 'tool cards' with 'inspect →' stand in for the separate calc engine (pro forma, system sizing, floor planning) — spec'd after we settle the UI." },
+    { "id": "feedback", "x": 0, "y": 1090, "w": 640, "text": "Where I want your feedback\n1) Is chat-rail + canvas the right split?  2) Do the four dimensions read clearly?  3) Site Feasibility (screen 2) is now the built-out POC — right depth, or too much on one screen?  4) Does the phasing lever + optimization panel read as the primary workflow?" }
+  ],
+  "launch": { "view": "focused", "file": "Main.dc.html" }
+}

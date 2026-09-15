@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#e9e9ec;color:#3f3f46;font-size:13px;}
+  a{color:#475569;text-decoration:none;} a:hover{color:#1e293b;}
+  .app{display:flex;flex-direction:column;height:1024px;width:1440px;background:#f6f6f7;overflow:hidden;}
+  .topbar{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:18px;padding:0 16px;background:#fff;border-bottom:1px solid #d4d4d8;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;color:#27272a;}
+  .nav{display:flex;gap:2px;align-items:center;}
+  .tab{padding:6px 10px;border-radius:4px;color:#52525b;}
+  .tab.active{background:#eef2f6;color:#1e293b;font-weight:600;}
+  .tab.dis{color:#c4c4c8;}
+  .spacer{flex:1;}
+  .selector{border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;font-size:12px;color:#3f3f46;background:#fafafa;display:flex;gap:6px;align-items:center;}
+  .avatar{width:26px;height:26px;border-radius:50%;background:#d4d4d8;}
+  .bodyrow{flex:1;display:flex;min-height:0;}
+  .rail{width:320px;flex:0 0 320px;background:#fff;border-right:1px solid #d4d4d8;display:flex;flex-direction:column;}
+  .rail-hd{padding:12px 14px;border-bottom:1px solid #ececee;display:flex;align-items:center;gap:8px;font-weight:600;color:#3f3f46;}
+  .thread{flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:11px;}
+  .msg{max-width:90%;padding:9px 11px;border-radius:8px;font-size:12.5px;line-height:1.45;}
+  .msg.user{align-self:flex-end;background:#eef2f6;color:#334155;border:1px solid #e2e8f0;}
+  .msg.bot{align-self:flex-start;background:#fafafa;color:#3f3f46;border:1px solid #ececee;}
+  .toolcard{align-self:flex-start;width:92%;border:1px solid #d4d4d8;border-radius:8px;padding:10px;background:#fbfbfc;}
+  .toolcard .r{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#52525b;}
+  .composer{border-top:1px solid #ececee;padding:10px 12px;display:flex;gap:8px;align-items:center;}
+  .input{flex:1;border:1px solid #d4d4d8;border-radius:6px;padding:8px 10px;color:#a1a1aa;font-size:12.5px;background:#fff;}
+  .send{width:32px;height:32px;border-radius:6px;background:#334155;flex:0 0 32px;display:flex;align-items:center;justify-content:center;}
+  .canvas{flex:1;min-width:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:13px;background:#f6f6f7;}
+  .canvas-hd{display:flex;align-items:flex-end;gap:14px;}
+  .h-title{font-size:18px;font-weight:600;color:#27272a;}
+  .h-sub{font-size:12px;color:#a1a1aa;}
+  .legend{display:flex;gap:7px;margin-left:auto;}
+  .dim{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#52525b;border:1px solid #e4e4e7;border-radius:20px;padding:3px 9px;background:#fff;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .d-space{background:#6b7a8f;} .d-time{background:#5f8a84;} .d-cap{background:#8a7f5f;} .d-risk{background:#9c6b6b;}
+  .panel{background:#fff;border:1px solid #d4d4d8;border-radius:6px;padding:14px;position:relative;}
+  .panel-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .panel-hd .t{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:#71717a;font-weight:700;}
+  .kpi-s{font-size:11.5px;color:#71717a;}
+  .chip{border:1px solid #d4d4d8;border-radius:4px;padding:3px 8px;font-size:11.5px;color:#52525b;background:#fafafa;}
+  .roadmap{border:1px dashed #c4c4c8;border-radius:10px;padding:2px 8px;font-size:10px;color:#a1a1aa;background:#fafafa;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;font-weight:700;color:#71717a;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid #e4e4e7;}
+  td{padding:6px 8px;border-bottom:1px solid #f0f0f2;color:#3f3f46;}
+  .veil{position:absolute;inset:0;background:rgba(249,249,250,0.62);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#a1a1aa;font-size:12px;}
+</style>
+</helmet>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#27272a" stroke-width="1.4"><rect x="2" y="2" width="14" height="14" rx="1.5"/><line x1="2" y1="7" x2="16" y2="7"/><line x1="2" y1="11.5" x2="16" y2="11.5"/><line x1="7" y1="7" x2="7" y2="16"/></svg>
+      Capacity Planner <span style="font-weight:400;color:#a1a1aa;font-size:11px;">working title</span>
+    </div>
+    <div class="nav">
+      <span class="tab">Portfolio</span>
+      <span class="tab">Site Feasibility</span>
+      <span class="tab">Scenarios</span>
+      <span class="tab active">Demand Planning</span>
+      <span class="tab dis">Financing</span>
+      <span class="tab dis">Reports</span>
+      <span class="tab dis">Data Sources</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="selector">Frontier Labs
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#71717a" stroke-width="1.3"><path d="M2 3.5 L5 6.5 L8 3.5"/></svg>
+    </div>
+    <div class="avatar"></div>
+  </div>
+
+  <div class="bodyrow">
+    <div class="rail">
+      <div class="rail-hd">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#475569" stroke-width="1.4"><path d="M2 3.5h12v7H6l-3 2.5V10.5H2z"/></svg>
+        Copilot
+      </div>
+      <div class="thread">
+        <div class="msg user">Where will we be short vs our own demand?</div>
+        <div class="msg bot">Inference demand (latency-bound, metro) outpaces secured metro capacity from <b>2028</b>. Training demand is covered by Abilene + Ohio.</div>
+        <div class="toolcard">
+          <div class="r"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#52525b" stroke-width="1.3"><rect x="1.5" y="1.5" width="10" height="10" rx="1.5"/><path d="M4 6.5l2 2 3.5-4"/></svg> Ran <b>demand projection</b> · by latency &amp; metro</div>
+          <div class="r" style="margin-top:6px;"><a href="#">inspect assumptions →</a></div>
+        </div>
+        <div class="msg bot">Biggest concentration remains <b>PJM/NoVA (42%)</b>. I'd stage a metro-East inference site to close the gap and cut correlation.</div>
+        <div class="msg user">Draft a staging plan across markets.</div>
+        <div class="msg bot" style="border-style:dashed;color:#71717a;">Note: correlation modeling is on the roadmap — showing a placeholder.</div>
+      </div>
+      <div class="composer">
+        <div class="input">Project inference demand by metro…</div>
+        <div class="send"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#fff" stroke-width="1.5"><path d="M2 7.5h9M7 3.5l4 4-4 4"/></svg></div>
+      </div>
+    </div>
+
+    <div class="canvas">
+      <div class="canvas-hd">
+        <div>
+          <div class="h-title">Demand &amp; Portfolio Planning</div>
+          <div class="h-sub">Frontier Labs · mock data · some modules on roadmap</div>
+        </div>
+        <div class="legend">
+          <span class="dim"><span class="dot d-space"></span>Space</span>
+          <span class="dim"><span class="dot d-time"></span>Time</span>
+          <span class="dim"><span class="dot d-cap"></span>Capital</span>
+          <span class="dim"><span class="dot d-risk"></span>Risk</span>
+        </div>
+      </div>
+
+      <!-- ROW 1: DEMAND BY LATENCY + CONCENTRATION -->
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:13px;">
+        <div class="panel">
+          <div class="panel-hd"><span class="dot d-space"></span><span class="dot d-time" style="margin-left:-4px;"></span><span class="t">Demand by latency class (MW) vs secured</span></div>
+          <svg viewBox="0 0 560 230" style="width:100%;height:220px;">
+            <g stroke="#ececee"><line x1="40" y1="10" x2="40" y2="190"/><line x1="40" y1="190" x2="540" y2="190"/></g>
+            <!-- training-remote area -->
+            <polygon fill="#6b7a8f" opacity="0.20" points="40,170 180,150 320,120 460,96 540,86 540,190 40,190"/>
+            <!-- inference-metro area (stacked on top) -->
+            <polygon fill="#5f8a84" opacity="0.28" points="40,150 180,120 320,74 460,44 540,30 540,86 460,96 320,120 180,150 40,170"/>
+            <!-- secured metro capacity step -->
+            <polyline fill="none" stroke="#9c6b6b" stroke-width="2" stroke-dasharray="5 3" points="40,150 320,150 320,110 540,110"/>
+            <g font-size="10.5" fill="#a1a1aa"><text x="40" y="205">2026</text><text x="180" y="205">2027</text><text x="315" y="205">2028</text><text x="455" y="205">2029</text><text x="525" y="205">2030</text></g>
+            <g font-size="11"><text x="360" y="60" fill="#5f8a84">inference · metro (latency-bound)</text><text x="380" y="140" fill="#6b7a8f">training · remote</text><text x="345" y="106" fill="#9c6b6b">secured metro cap</text></g>
+          </svg>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd"><span class="dot d-risk"></span><span class="t">Market concentration (% of MW)</span><span class="chip" style="margin-left:auto;color:#9c6b6b;">cap: 35%</span></div>
+          <div style="display:flex;flex-direction:column;gap:11px;margin-top:6px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;"><span>PJM · N. Virginia</span><span style="color:#9c6b6b;font-weight:600;">42%</span></div><div style="height:9px;background:#f0f0f2;border-radius:3px;"><div style="width:42%;height:9px;background:#9c6b6b;opacity:.75;border-radius:3px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;"><span>ERCOT · W. Texas</span><span>28%</span></div><div style="height:9px;background:#f0f0f2;border-radius:3px;"><div style="width:28%;height:9px;background:#6b7a8f;opacity:.7;border-radius:3px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;"><span>PJM · Ohio</span><span>18%</span></div><div style="height:9px;background:#f0f0f2;border-radius:3px;"><div style="width:18%;height:9px;background:#6b7a8f;opacity:.7;border-radius:3px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;"><span>NV Energy · Reno</span><span>12%</span></div><div style="height:9px;background:#f0f0f2;border-radius:3px;"><div style="width:12%;height:9px;background:#6b7a8f;opacity:.7;border-radius:3px;"></div></div></div>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:#a1a1aa;">PJM exposure (NoVA+Ohio) = 60% — above single-ISO comfort.</div>
+        </div>
+      </div>
+
+      <!-- ROW 2: STAGING TIMELINE -->
+      <div class="panel">
+        <div class="panel-hd"><span class="dot d-time"></span><span class="dot d-space" style="margin-left:-4px;"></span><span class="t">Portfolio staging across markets</span><span class="chip" style="margin-left:auto;">phasing triggered by demand certainty</span></div>
+        <svg viewBox="0 0 900 165" style="width:100%;height:155px;">
+          <g stroke="#ececee"><line x1="170" y1="6" x2="170" y2="140"/><line x1="320" y1="6" x2="320" y2="140"/><line x1="470" y1="6" x2="470" y2="140"/><line x1="620" y1="6" x2="620" y2="140"/><line x1="770" y1="6" x2="770" y2="140"/></g>
+          <g font-size="10" fill="#a1a1aa"><text x="170" y="156">2026</text><text x="320" y="156">2027</text><text x="470" y="156">2028</text><text x="620" y="156">2029</text><text x="770" y="156">2030</text></g>
+          <g font-size="11" fill="#3f3f46">
+            <text x="8" y="26">Abilene TX (train)</text><rect x="120" y="16" width="200" height="13" rx="2" fill="#6b7a8f" opacity="0.75"/>
+            <text x="8" y="48">Ohio (train)</text><rect x="200" y="38" width="180" height="13" rx="2" fill="#6b7a8f" opacity="0.6"/>
+            <text x="8" y="70">Reno (mixed)</text><rect x="320" y="60" width="150" height="13" rx="2" fill="#6b7a8f" opacity="0.5"/>
+            <text x="8" y="92">Metro-East (infer) — proposed</text><rect x="440" y="82" width="180" height="13" rx="2" fill="#5f8a84" opacity="0.55" stroke="#5f8a84" stroke-dasharray="3 2"/>
+            <text x="8" y="114">Iowa (prospect)</text><rect x="560" y="104" width="150" height="13" rx="2" fill="#e4e4e7" stroke="#c4c4c8" stroke-dasharray="3 2"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- ROW 3: CORRELATION (roadmap) + GAP BY MARKET -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;flex:1;min-height:0;">
+        <div class="panel">
+          <div class="panel-hd"><span class="dot d-risk"></span><span class="t">Market correlation matrix</span><span class="roadmap" style="margin-left:auto;">roadmap</span></div>
+          <div style="height:170px;position:relative;">
+            <svg viewBox="0 0 300 170" style="width:100%;height:170px;opacity:.5;">
+              <g>
+                <rect x="70" y="10" width="34" height="34" fill="#9c6b6b" opacity="0.6"/><rect x="106" y="10" width="34" height="34" fill="#9c6b6b" opacity="0.5"/><rect x="142" y="10" width="34" height="34" fill="#9c6b6b" opacity="0.2"/><rect x="178" y="10" width="34" height="34" fill="#9c6b6b" opacity="0.15"/>
+                <rect x="70" y="46" width="34" height="34" fill="#9c6b6b" opacity="0.5"/><rect x="106" y="46" width="34" height="34" fill="#9c6b6b" opacity="0.6"/><rect x="142" y="46" width="34" height="34" fill="#9c6b6b" opacity="0.2"/><rect x="178" y="46" width="34" height="34" fill="#9c6b6b" opacity="0.12"/>
+                <rect x="70" y="82" width="34" height="34" fill="#9c6b6b" opacity="0.2"/><rect x="106" y="82" width="34" height="34" fill="#9c6b6b" opacity="0.2"/><rect x="142" y="82" width="34" height="34" fill="#9c6b6b" opacity="0.55"/><rect x="178" y="82" width="34" height="34" fill="#9c6b6b" opacity="0.15"/>
+                <rect x="70" y="118" width="34" height="34" fill="#9c6b6b" opacity="0.15"/><rect x="106" y="118" width="34" height="34" fill="#9c6b6b" opacity="0.12"/><rect x="142" y="118" width="34" height="34" fill="#9c6b6b" opacity="0.15"/><rect x="178" y="118" width="34" height="34" fill="#9c6b6b" opacity="0.55"/>
+              </g>
+              <g font-size="9" fill="#71717a"><text x="20" y="30">NoVA</text><text x="20" y="66">ERCOT</text><text x="26" y="102">Ohio</text><text x="26" y="138">Reno</text></g>
+            </svg>
+            <div class="veil">correlation engine — coming soon</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd"><span class="dot d-space"></span><span class="t">Capacity vs demand — gap by market (MW, 2028)</span></div>
+          <table>
+            <thead><tr><th>Market</th><th>Demand</th><th>Secured</th><th>Gap</th></tr></thead>
+            <tbody>
+              <tr><td>Metro-East (inference)</td><td>180</td><td>0</td><td style="color:#9c6b6b;font-weight:600;">−180</td></tr>
+              <tr><td>PJM · N. Virginia</td><td>150</td><td>208</td><td style="color:#5f8a84;">+58</td></tr>
+              <tr><td>ERCOT · W. Texas</td><td>160</td><td>200</td><td style="color:#5f8a84;">+40</td></tr>
+              <tr><td>PJM · Ohio</td><td>110</td><td>120</td><td style="color:#5f8a84;">+10</td></tr>
+              <tr><td style="font-weight:600;">Net</td><td style="font-weight:600;">600</td><td style="font-weight:600;">528</td><td style="color:#9c6b6b;font-weight:600;">−72</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#e9e9ec;color:#3f3f46;font-size:13px;}
+  a{color:#475569;text-decoration:none;} a:hover{color:#1e293b;}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+  .app{display:flex;flex-direction:column;height:1024px;width:1440px;background:#f6f6f7;overflow:hidden;}
+  .topbar{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:18px;padding:0 16px;background:#fff;border-bottom:1px solid #d4d4d8;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;color:#27272a;}
+  .nav{display:flex;gap:2px;align-items:center;}
+  .tab{padding:6px 10px;border-radius:4px;color:#52525b;}
+  .tab.active{background:#eef2f6;color:#1e293b;font-weight:600;}
+  .tab.dis{color:#c4c4c8;}
+  .spacer{flex:1;}
+  .selector{border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;font-size:12px;color:#3f3f46;background:#fafafa;display:flex;gap:6px;align-items:center;}
+  .avatar{width:26px;height:26px;border-radius:50%;background:#d4d4d8;}
+  .bodyrow{flex:1;display:flex;min-height:0;}
+  .rail{width:320px;flex:0 0 320px;background:#fff;border-right:1px solid #d4d4d8;display:flex;flex-direction:column;}
+  .rail-hd{padding:12px 14px;border-bottom:1px solid #ececee;display:flex;align-items:center;gap:8px;font-weight:600;color:#3f3f46;}
+  .thread{flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:11px;}
+  .msg{max-width:90%;padding:9px 11px;border-radius:8px;font-size:12.5px;line-height:1.45;}
+  .msg.user{align-self:flex-end;background:#eef2f6;color:#334155;border:1px solid #e2e8f0;}
+  .msg.bot{align-self:flex-start;background:#fafafa;color:#3f3f46;border:1px solid #ececee;}
+  .toolcard{align-self:flex-start;width:92%;border:1px solid #d4d4d8;border-radius:8px;padding:10px;background:#fbfbfc;}
+  .toolcard .r{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#52525b;}
+  .composer{border-top:1px solid #ececee;padding:10px 12px;display:flex;gap:8px;align-items:center;}
+  .input{flex:1;border:1px solid #d4d4d8;border-radius:6px;padding:8px 10px;color:#a1a1aa;font-size:12.5px;background:#fff;}
+  .send{width:32px;height:32px;border-radius:6px;background:#334155;flex:0 0 32px;display:flex;align-items:center;justify-content:center;}
+  .canvas{flex:1;min-width:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:13px;background:#f6f6f7;}
+  .canvas-hd{display:flex;align-items:flex-end;gap:14px;}
+  .h-title{font-size:18px;font-weight:600;color:#27272a;}
+  .h-sub{font-size:12px;color:#a1a1aa;}
+  .legend{display:flex;gap:7px;margin-left:auto;}
+  .dim{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#52525b;border:1px solid #e4e4e7;border-radius:20px;padding:3px 9px;background:#fff;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .d-space{background:#6b7a8f;} .d-time{background:#5f8a84;} .d-cap{background:#8a7f5f;} .d-risk{background:#9c6b6b;}
+  .panel{background:#fff;border:1px solid #d4d4d8;border-radius:6px;padding:14px;}
+  .panel-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .panel-hd .t{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:#71717a;font-weight:700;}
+  .ph{background:repeating-linear-gradient(45deg,#f1f1f3,#f1f1f3 7px,#e7e7ea 7px,#e7e7ea 14px);border:1px dashed #c4c4c8;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#9a9aa2;font-size:12px;}
+  .kpi{font-size:21px;font-weight:600;color:#27272a;}
+  .kpi-l{font-size:10.5px;color:#a1a1aa;text-transform:uppercase;letter-spacing:.05em;}
+  .kpi-s{font-size:11.5px;color:#71717a;}
+  .chip{border:1px solid #d4d4d8;border-radius:4px;padding:3px 8px;font-size:11.5px;color:#52525b;background:#fafafa;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;font-weight:700;color:#71717a;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:7px 8px;border-bottom:1px solid #e4e4e7;}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f2;color:#3f3f46;}
+  .badge{font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid #d4d4d8;color:#52525b;background:#fafafa;}
+  .disabled{color:#c4c4c8 !important;}
+</style>
+</helmet>
+
+<div class="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#27272a" stroke-width="1.4"><rect x="2" y="2" width="14" height="14" rx="1.5"/><line x1="2" y1="7" x2="16" y2="7"/><line x1="2" y1="11.5" x2="16" y2="11.5"/><line x1="7" y1="7" x2="7" y2="16"/></svg>
+      Capacity Planner <span style="font-weight:400;color:#a1a1aa;font-size:11px;">working title</span>
+    </div>
+    <div class="nav">
+      <span class="tab active">Portfolio</span>
+      <span class="tab">Site Feasibility</span>
+      <span class="tab">Scenarios</span>
+      <span class="tab">Demand Planning</span>
+      <span class="tab dis">Financing</span>
+      <span class="tab dis">Reports</span>
+      <span class="tab dis">Data Sources</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="selector">Portfolio: Frontier Labs
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#71717a" stroke-width="1.3"><path d="M2 3.5 L5 6.5 L8 3.5"/></svg>
+    </div>
+    <div class="avatar"></div>
+  </div>
+
+  <div class="bodyrow">
+    <!-- CHAT RAIL -->
+    <div class="rail">
+      <div class="rail-hd">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#475569" stroke-width="1.4"><path d="M2 3.5h12v7H6l-3 2.5V10.5H2z"/></svg>
+        Copilot
+      </div>
+      <div class="thread">
+        <div class="msg bot">Portfolio loaded: <b>4 active sites</b>, 496 MW. Want the health read across space, time, capital and risk?</div>
+        <div class="msg user">Yes — and where are we most exposed?</div>
+        <div class="msg bot">Top exposure is <b>concentration</b>: Northern Virginia is 42% of portfolio MW. Energization risk is next — Abilene's transformers land Q1-2027.</div>
+        <div class="toolcard">
+          <div class="r"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#52525b" stroke-width="1.3"><rect x="1.5" y="1.5" width="10" height="10" rx="1.5"/><path d="M4 6.5l2 2 3.5-4"/></svg> Ran <b>portfolio&nbsp;roll-up</b> · 4 sites</div>
+          <div class="r" style="margin-top:6px;"><a href="#">inspect computation →</a></div>
+        </div>
+        <div class="msg user">Draft a plan to cut the NoVA concentration.</div>
+      </div>
+      <div class="composer">
+        <div class="input">Ask about a site, scenario, or the portfolio…</div>
+        <div class="send"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#fff" stroke-width="1.5"><path d="M2 7.5h9M7 3.5l4 4-4 4"/></svg></div>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas">
+      <div class="canvas-hd">
+        <div>
+          <div class="h-title">Portfolio Dashboard</div>
+          <div class="h-sub">Frontier Labs · 4 active sites · mock data</div>
+        </div>
+        <div class="legend">
+          <span class="dim"><span class="dot d-space"></span>Space</span>
+          <span class="dim"><span class="dot d-time"></span>Time</span>
+          <span class="dim"><span class="dot d-cap"></span>Capital</span>
+          <span class="dim"><span class="dot d-risk"></span>Risk</span>
+        </div>
+      </div>
+
+      <!-- ROW: MAP + SCORECARD -->
+      <div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:13px;">
+        <div class="panel" style="min-height:360px;">
+          <div class="panel-hd"><span class="dot d-space"></span><span class="t">Space · Markets &amp; latency zones (schematic)</span></div>
+          <svg viewBox="0 0 640 320" style="width:100%;height:320px;">
+            <rect x="0" y="0" width="640" height="320" fill="#fbfbfc" stroke="#eef0f2"/>
+            <g stroke="#eef0f2" stroke-width="1">
+              <line x1="0" y1="80" x2="640" y2="80"/><line x1="0" y1="160" x2="640" y2="160"/><line x1="0" y1="240" x2="640" y2="240"/>
+              <line x1="160" y1="0" x2="160" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="480" y1="0" x2="480" y2="320"/>
+            </g>
+            <!-- latency rings around inference metros -->
+            <circle cx="560" cy="150" r="52" fill="none" stroke="#6b7a8f" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+            <circle cx="150" cy="205" r="44" fill="none" stroke="#6b7a8f" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+            <!-- nodes: r ~ MW -->
+            <g font-size="11" fill="#52525b">
+              <circle cx="560" cy="150" r="17" fill="#6b7a8f" opacity="0.85"/><text x="560" y="185" text-anchor="middle">NoVA · 208 MW</text>
+              <circle cx="470" cy="132" r="11" fill="#6b7a8f" opacity="0.7"/><text x="470" y="112" text-anchor="middle">Ohio · 120</text>
+              <circle cx="330" cy="238" r="16" fill="#6b7a8f" opacity="0.85"/><text x="330" y="270" text-anchor="middle">Abilene TX · 200</text>
+              <circle cx="150" cy="205" r="10" fill="#6b7a8f" opacity="0.7"/><text x="150" y="232" text-anchor="middle">Reno · 80</text>
+              <circle cx="360" cy="120" r="7" fill="#c4c4c8" opacity="0.9"/><text x="360" y="102" text-anchor="middle" fill="#a1a1aa">Iowa · prospect</text>
+            </g>
+            <g font-size="10.5" fill="#9a9aa2">
+              <circle cx="30" cy="298" r="6" fill="#6b7a8f" opacity="0.8"/><text x="42" y="301">dot size ≈ MW</text>
+              <circle cx="150" cy="298" r="7" fill="none" stroke="#6b7a8f" stroke-dasharray="3 3"/><text x="162" y="301">dashed = latency zone (inference)</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr;">
+          <div class="panel"><div class="panel-hd"><span class="dot d-space"></span><span class="t">Space</span></div>
+            <div class="kpi">496 MW</div><div class="kpi-s">376 MW operational + build</div>
+            <div style="margin-top:8px;" class="kpi-s">4 active sites · avg 128 kW/rack</div></div>
+          <div class="panel"><div class="panel-hd"><span class="dot d-time"></span><span class="t">Time</span></div>
+            <div class="kpi">18 mo</div><div class="kpi-s">wtd. time-to-energize</div>
+            <div style="margin-top:8px;" class="kpi-s">Next: Abilene transformers Q1-27</div></div>
+          <div class="panel"><div class="panel-hd"><span class="dot d-cap"></span><span class="t">Capital</span></div>
+            <div class="kpi">$14.8B</div><div class="kpi-s">committed capex</div>
+            <div style="margin-top:8px;" class="kpi-s">LCOC $1.93/GPU-hr · YoC 11.6%</div></div>
+          <div class="panel"><div class="panel-hd"><span class="dot d-risk"></span><span class="t">Risk</span></div>
+            <div class="kpi">62 <span style="font-size:12px;color:#9c6b6b;">Elevated</span></div><div class="kpi-s">portfolio risk score /100</div>
+            <div style="margin-top:8px;" class="kpi-s">Top: NoVA concentration 42%</div></div>
+        </div>
+      </div>
+
+      <!-- ROW: DEMAND-VS-CAPACITY GAP -->
+      <div class="panel">
+        <div class="panel-hd"><span class="dot d-time"></span><span class="dot d-space" style="margin-left:-4px;"></span><span class="t">Demand vs. secured capacity (MW · 2026–2030) · mock</span>
+          <span class="chip" style="margin-left:auto;">gap peaks 2028: −140 MW</span></div>
+        <svg viewBox="0 0 900 150" style="width:100%;height:140px;">
+          <g stroke="#ececee"><line x1="40" y1="10" x2="40" y2="120"/><line x1="40" y1="120" x2="880" y2="120"/></g>
+          <!-- demand line -->
+          <polyline fill="none" stroke="#5f8a84" stroke-width="2" points="40,105 250,86 460,52 670,34 880,22"/>
+          <!-- capacity steps -->
+          <polyline fill="none" stroke="#6b7a8f" stroke-width="2" stroke-dasharray="5 3" points="40,108 250,108 250,92 460,92 460,70 670,70 670,40 880,40"/>
+          <!-- gap shade -->
+          <polygon fill="#9c6b6b" opacity="0.10" points="460,52 670,34 670,70 460,92"/>
+          <g font-size="10.5" fill="#a1a1aa"><text x="40" y="135">2026</text><text x="250" y="135">2027</text><text x="455" y="135">2028</text><text x="665" y="135">2029</text><text x="855" y="135">2030</text></g>
+          <g font-size="11"><text x="700" y="20" fill="#5f8a84">demand</text><text x="700" y="58" fill="#6b7a8f">secured capacity</text></g>
+        </svg>
+      </div>
+
+      <!-- ROW: SITE LIST -->
+      <div class="panel" style="flex:1;min-height:0;">
+        <div class="panel-hd"><span class="t">Sites</span><span class="chip" style="margin-left:auto;">+ Add site</span></div>
+        <table>
+          <thead><tr><th>Site</th><th>Market / ISO</th><th>Status</th><th>MW</th><th>Energize</th><th>LCOC</th><th>Risk</th></tr></thead>
+          <tbody>
+            <tr><td><b>Ashburn-3</b></td><td>PJM / N. Virginia</td><td><span class="badge">Operational</span></td><td>96</td><td>live</td><td>$2.14</td><td><span class="dot d-risk" style="opacity:.9"></span> High</td></tr>
+            <tr><td><b>Abilene-1</b></td><td>ERCOT / W. Texas</td><td><span class="badge">In build</span></td><td>200</td><td>Q3-2027</td><td>$1.72</td><td><span class="dot d-risk" style="opacity:.55"></span> Med</td></tr>
+            <tr><td><b>New Albany-2</b></td><td>PJM / Ohio</td><td><span class="badge">Powered shell</span></td><td>120</td><td>Q1-2028</td><td>$1.90</td><td><span class="dot d-risk" style="opacity:.55"></span> Med</td></tr>
+            <tr><td><b>Reno-1</b></td><td>NV Energy</td><td><span class="badge">Feasibility</span></td><td>80</td><td>Q4-2028</td><td>$2.05</td><td><span class="dot d-risk" style="opacity:.3"></span> Low</td></tr>
+            <tr class="disabled"><td>Site TBD (Iowa)</td><td>MISO</td><td><span class="badge disabled">Prospect</span></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

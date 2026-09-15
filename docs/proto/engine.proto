@@ -1,0 +1,363 @@
+// AI-Lab Capacity Planner — Engine contract (v0.1, 2026-09-15).
+// SitePlan (input) → Result (output). This is the stable seam between the SPA, the agent, and the
+// Go/WASM engine. Units are in field names/comments; the engine enforces them via conservation checks.
+// proto3. Package/versioning to be finalized with `buf` in the engine workstream.
+
+syntax = "proto3";
+package capplanner.v1;
+
+// ============================================================================
+// INPUT: SitePlan
+// ============================================================================
+
+message SitePlan {
+  Meta meta = 1;
+  Site site = 2;
+  ComputeSpec compute = 3;
+  PowerPlan power = 4;
+  Phasing phasing = 5;          // first-class: how capacity is staged over time
+  DemandRamp demand = 6;        // the site's addressable demand over time
+  CostModel costs = 7;
+  RevenueModel revenue = 8;
+  FinanceParams finance = 9;
+  RiskParams risk = 10;         // input distributions for Monte Carlo
+  Optimization optimization = 11; // objective/constraints/decision-vars (used when mode=OPTIMIZE)
+  RunOptions run = 12;
+}
+
+message Meta {
+  string plan_id = 1;
+  string site_name = 2;
+  string scenario_name = 3;     // e.g. "BTM gas bridge"
+  string schema_version = 4;    // proto contract version the client authored against
+}
+
+message Site {
+  double land_acres = 1;           // total parcel
+  double usable_acres = 2;         // buildable after setbacks/easements
+  double floor_load_psf = 3;       // structural capacity (gates rack density / liquid)
+  string market = 4;               // e.g. "ERCOT / W. Texas"
+  string iso = 5;                  // PJM | ERCOT | MISO | ...
+  GeoPoint location = 6;
+  LatencyClass latency_tier = 7;   // what demand class the location can serve
+  double water_stress_index = 8;   // 0..1 (siting/cooling constraint)
+  double avg_temp_c = 9;           // affects cooling / free-cooling hours
+}
+
+message GeoPoint { double lat = 1; double lng = 2; }
+
+enum LatencyClass {
+  LATENCY_UNSPECIFIED = 0;
+  TRAINING_REMOTE = 1;    // latency-tolerant, batch
+  INFERENCE_REGIONAL = 2; // some latency tolerance
+  INFERENCE_METRO = 3;    // latency-sensitive, near demand
+}
+
+message ComputeSpec {
+  string accelerator = 1;          // e.g. "GB300"
+  double gpus_per_rack = 2;
+  double kw_per_rack = 3;          // rack density (drives cooling mode feasibility)
+  double target_it_load_mw = 4;    // total critical IT load target
+  double pue = 5;                  // facility power = it_load * pue
+  CoolingMode cooling = 6;
+  string network_fabric = 7;       // InfiniBand | Ethernet
+}
+
+enum CoolingMode {
+  COOLING_UNSPECIFIED = 0;
+  AIR = 1;                 // ceiling ~30-40 kW/rack
+  LIQUID_DTC = 2;          // direct-to-chip, ~60-120+ kW/rack
+  IMMERSION = 3;
+}
+
+message PowerPlan {
+  repeated PowerSource sources = 1;
+  Interconnection interconnection = 2;
+}
+
+message PowerSource {
+  string id = 1;
+  PowerType type = 2;
+  double capacity_mw = 3;
+  int32 available_month = 4;       // month index from t0 when this source can energize
+  double cost_per_mwh = 5;         // all-in delivered
+  double capex_per_kw = 6;
+  int32 lead_time_months = 7;
+}
+
+enum PowerType {
+  POWER_UNSPECIFIED = 0;
+  GRID = 1;
+  BTM_GAS = 2;             // behind-the-meter gas (speed-to-power bridge)
+  SOLAR_PPA = 3;
+  WIND_PPA = 4;
+  NUCLEAR_PPA = 5;
+  BESS = 6;               // storage
+}
+
+message Interconnection {
+  int32 queue_start_month = 1;
+  int32 grid_energize_month = 2;   // when grid power is available (the critical path)
+  int32 transformer_lead_months = 3;
+}
+
+// --- Phasing: FIRST-CLASS. Either explicit phases, or a policy for the optimizer to design. ---
+message Phasing {
+  PhasingMode mode = 1;
+  repeated Phase phases = 2;        // used when mode = EXPLICIT
+  PhasingPolicy policy = 3;         // used when mode = OPTIMIZE (optimizer designs the phases)
+}
+
+enum PhasingMode {
+  PHASING_UNSPECIFIED = 0;
+  SINGLE_SHOT = 1;   // one build
+  EXPLICIT = 2;      // caller-specified phases
+  OPTIMIZE = 3;      // optimizer designs phase count/size/timing (flagship use case)
+}
+
+message Phase {
+  string id = 1;
+  double it_load_mw = 2;           // capacity added by this phase
+  int32 start_month = 3;           // construction start
+  int32 energize_month = 4;        // when this phase comes online (revenue-bearing)
+  string power_source_id = 5;      // ref into PowerPlan.sources
+  CoolingMode cooling = 6;
+  double footprint_acres = 7;      // land this phase consumes
+}
+
+message PhasingPolicy {
+  int32 max_phases = 1;
+  double min_phase_mw = 2;
+  double max_phase_mw = 3;
+  int32 min_months_between_phases = 4;
+  double max_shortfall_mw = 5;      // never be short of demand by more than this
+}
+
+message DemandRamp {
+  repeated DemandPoint points = 1;  // stepwise or interpolated addressable demand
+  LatencyClass class = 2;
+}
+message DemandPoint { int32 month = 1; double demand_mw = 2; }
+
+message CostModel {
+  // Capex expressed per-MW by component (engine multiplies by MW; conservation: components sum to total).
+  double shell_capex_per_mw = 1;
+  double electrical_capex_per_mw = 2;
+  double cooling_capex_per_mw = 3;
+  double network_capex_per_mw = 4;
+  double land_capex_per_acre = 5;
+  GpuCost gpu = 6;
+  OpexModel opex = 7;
+  double agility_premium_pct = 8;   // uplift for liquid-ready / high floor-load / modular (adaptability)
+}
+
+message GpuCost {
+  double unit_cost = 1;             // $ per GPU (or per rack via ComputeSpec)
+  int32 depreciation_years = 2;     // the contested lever (3..7); scenario-able
+  repeated double residual_curve = 3; // residual value fraction by year (secondary-market)
+}
+
+message OpexModel {
+  double staffing_per_mw_yr = 1;
+  double maintenance_pct_of_capex = 2;
+  double insurance_pct_of_capex = 3;
+  double mgmt_fee_pct_of_egr = 4;
+  double property_tax_per_yr = 5;
+}
+
+message RevenueModel {
+  RevenueMode mode = 1;
+  ColoTerms colo = 2;               // COLO_LEASE
+  ComputeTerms compute = 3;         // COMPUTE_SALES
+}
+enum RevenueMode { REVENUE_UNSPECIFIED = 0; COLO_LEASE = 1; COMPUTE_SALES = 2; }
+message ColoTerms { double rate_per_kw_month = 1; double annual_escalation_pct = 2; double vacancy_pct = 3; }
+message ComputeTerms { double gpu_hour_price = 1; double utilization_pct = 2; double price_decay_pct_yr = 3; }
+
+message FinanceParams {
+  double discount_rate = 1;
+  int32 hold_period_months = 2;
+  double exit_cap_rate = 3;         // light: financing deprioritized in v1
+}
+
+// --- Monte Carlo: declare distributions on any numeric input path ---
+message RiskParams {
+  repeated InputDistribution distributions = 1;
+}
+message InputDistribution {
+  string input_path = 1;            // dotted path into SitePlan, e.g. "revenue.compute.gpu_hour_price"
+  DistributionType type = 2;
+  repeated double params = 3;        // NORMAL[mean,sd] | TRIANGULAR[min,mode,max] | UNIFORM[min,max]
+}
+enum DistributionType { DIST_UNSPECIFIED = 0; NORMAL = 1; TRIANGULAR = 2; UNIFORM = 3; }
+
+// --- Optimization: objective + constraints + decision variables ---
+message Optimization {
+  Objective objective = 1;
+  repeated Constraint constraints = 2;
+  repeated DecisionVar decision_vars = 3;
+}
+message Objective { ObjectiveType type = 1; }
+enum ObjectiveType {
+  OBJECTIVE_UNSPECIFIED = 0;
+  MIN_STRANDED_PLUS_LCOC = 1;  // flagship: phasing-to-demand-ramp
+  MIN_LCOC = 2;
+  MIN_TIME_TO_REVENUE = 3;
+  MAX_MW_CAPTURED = 4;
+  MIN_RISK = 5;
+}
+message Constraint {
+  string metric = 1;    // a Result.summary_metrics key, e.g. "total_capex", "energize_month"
+  CompareOp op = 2;
+  double value = 3;
+}
+enum CompareOp { OP_UNSPECIFIED = 0; LE = 1; GE = 2; EQ = 3; }
+message DecisionVar {
+  string input_path = 1;  // a SitePlan path the optimizer may vary
+  double min = 2;
+  double max = 3;
+  double step = 4;        // 0 = continuous
+  repeated string enum_choices = 5; // for categorical vars (e.g. power source type)
+}
+
+message RunOptions {
+  RunMode mode = 1;
+  MonteCarloOptions monte_carlo = 2;
+  SensitivityOptions sensitivity = 3;
+}
+enum RunMode { RUN_UNSPECIFIED = 0; ANALYZE = 1; OPTIMIZE = 2; }
+message MonteCarloOptions { bool enabled = 1; int32 iterations = 2; int64 seed = 3; }
+message SensitivityOptions { bool enabled = 1; repeated string input_paths = 2; double delta_pct = 3; }
+
+// ============================================================================
+// OUTPUT: Result
+// ============================================================================
+
+message Result {
+  Status status = 1;
+  repeated Diagnostic diagnostics = 2;      // errors/warnings/info — the agent's correction channel
+  SummaryMetrics summary = 3;               // for agent interpretation
+  ConservationReport conservation = 4;      // invariant checks (model-correctness proof)
+  repeated Table tables = 5;                // named tabular outputs (UI + agent)
+  repeated Chart charts = 6;                // graphical object specs (UI renders)
+  Schematic schematic = 7;                  // parametric site model for the schematic renderer
+  MonteCarloResult monte_carlo = 8;
+  SensitivityResult sensitivity = 9;
+  OptimizationResult optimization = 10;     // populated when mode = OPTIMIZE
+}
+
+enum Status { STATUS_UNSPECIFIED = 0; OK = 1; OK_WITH_WARNINGS = 2; INVALID_INPUT = 3; INFEASIBLE = 4; }
+
+message Diagnostic {
+  Severity severity = 1;
+  string code = 2;           // stable machine code, e.g. "POWER_UNDERSUPPLY"
+  string message = 3;        // human/agent-readable, instructive
+  string proto_path = 4;     // where in SitePlan to fix
+  string expected = 5;
+  string actual = 6;
+  string hint = 7;           // suggested correction for the agent
+}
+enum Severity { SEVERITY_UNSPECIFIED = 0; ERROR = 1; WARNING = 2; INFO = 3; }
+
+message SummaryMetrics {
+  double lcoc_per_gpu_hour = 1;
+  double total_capex = 2;
+  double capex_per_mw = 3;
+  double yield_on_cost_pct = 4;
+  double dev_spread_bps = 5;
+  double unlevered_irr_pct = 6;
+  double npv = 7;
+  int32 time_to_energize_months = 8;   // first revenue-bearing capacity
+  double mw_online_final = 9;
+  double demand_capture_pct = 10;       // ∫min(demand,capacity)/∫demand
+  double stranded_capacity_mw_months = 11;
+  double shortfall_mw_months = 12;
+  double composite_risk_score = 13;     // 0..100
+  double utilization_breakeven_pct = 14;
+  map<string, double> extra = 15;       // forward-compatible additional metrics
+}
+
+message ConservationReport {
+  repeated ConservationCheck checks = 1;
+  bool all_passed = 2;
+}
+message ConservationCheck {
+  string name = 1;        // "capital_uses_eq_sources", "land_footprint_le_parcel", ...
+  bool passed = 2;
+  double residual = 3;    // should be ~0 within tolerance
+  double tolerance = 4;
+}
+
+message Table {
+  string id = 1;          // "capex_stack" | "phase_schedule" | "cashflow_annual" | "power_schedule" | "sizing"
+  string title = 2;
+  repeated string columns = 3;
+  repeated Row rows = 4;
+}
+message Row { repeated Cell cells = 1; }
+message Cell { oneof v { string s = 1; double n = 2; bool b = 3; } }
+
+message Chart {
+  string id = 1;
+  ChartType type = 2;
+  string title = 3;
+  repeated Series series = 4;
+  map<string, string> meta = 5;   // axis labels, units, dimension tag (space/time/capital/risk)
+}
+enum ChartType { CHART_UNSPECIFIED = 0; GANTT = 1; AREA = 2; STEP = 3; TORNADO = 4; RADAR = 5; BAR = 6; LINE = 7; }
+message Series { string name = 1; repeated Point points = 2; }
+message Point { double x = 1; double y = 2; string label = 3; }
+
+// Parametric site model so the SPA can render scale + phasing spatially.
+message Schematic {
+  double parcel_w_m = 1;
+  double parcel_h_m = 2;
+  double footprint_used_pct = 3;
+  repeated Block blocks = 4;
+}
+message Block {
+  string id = 1;
+  BlockKind kind = 2;
+  double x_m = 3; double y_m = 4; double w_m = 5; double h_m = 6;
+  string phase_id = 7;       // which phase this belongs to (for phasing visualization)
+  int32 energize_month = 8;  // for time-based reveal
+}
+enum BlockKind {
+  BLOCK_UNSPECIFIED = 0; DATA_HALL = 1; SUBSTATION = 2; COOLING_YARD = 3;
+  GAS_PAD = 4; EXPANSION_PAD = 5; WATER = 6; SETBACK = 7;
+}
+
+message MonteCarloResult {
+  int32 iterations = 1;
+  map<string, Distribution> metrics = 2;  // metric key → distribution
+}
+message Distribution {
+  double p10 = 1; double p50 = 2; double p90 = 3; double mean = 4; double stddev = 5;
+  repeated HistBin histogram = 6;
+}
+message HistBin { double low = 1; double high = 2; int32 count = 3; }
+
+message SensitivityResult {
+  repeated SensitivityVar vars = 1;  // ordered by impact (for the tornado)
+}
+message SensitivityVar {
+  string input_path = 1;
+  string target_metric = 2;
+  double low_output = 3;   // metric at -delta
+  double high_output = 4;  // metric at +delta
+  double base_output = 5;
+}
+
+message OptimizationResult {
+  SitePlan best_plan = 1;              // the winning plan (full, ready to apply)
+  SummaryMetrics best_metrics = 2;
+  repeated Candidate frontier = 3;     // explored candidates (for a frontier plot)
+  map<string, double> decision_var_values = 4; // chosen values per decision var
+  int32 evaluations = 5;
+  bool converged = 6;
+}
+message Candidate {
+  map<string, double> decision_var_values = 1;
+  SummaryMetrics metrics = 2;
+  bool feasible = 3;
+}

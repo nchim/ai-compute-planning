@@ -1,0 +1,13 @@
+# Build artifact — the seeded Claude Design payload (~2 MB, regenerate via design/seed)
+design/ai-capacity-planner-wireframe.html
+
+# Third-party / copyrighted source binaries — kept locally for reference only, NOT redistributed.
+# Source URLs are logged in research/sources/README.md.
+research/sources/*.pdf
+research/sources/*.zip
+research/sources/*.xlsm
+research/sources/*.skill
+
+# OS / editor cruft
+.DS_Store
+*.swp

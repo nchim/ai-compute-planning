@@ -1,0 +1,44 @@
+# Competing Deployment Models — Do They Cap Centralized DC Demand? (17)
+
+**Status:** 🟢 Shallow pass — 2026-09-15
+**Scope:** US-primary; lens = DC developer/operator + AI-lab compute buyer
+
+## Summary
+Three alternative deployment vectors — distributed/multi-datacenter training, edge/on-device inference, and enterprise on-prem/private AI — are all real and growing in 2026, but none appear on track to meaningfully cap centralized hyperscale data center demand in the near term. Distributed training (Google DeepMind's Decoupled DiLoCo, used to help train Gemini 2.5 across nearby DC buildings; Nvidia's 340B-parameter test across two DCs 1,000km apart) is mainly a resilience/flexibility tool for hyperscalers to pool their own centralized capacity more efficiently, not a decentralization threat. On-device NPUs (Apple A19: 38 TOPS; Qualcomm Snapdragon 8 Elite Gen 5: ~100 TOPS) now run 7-8B parameter models locally at 15-30 tokens/sec under 10W, which caps *some* inference demand for lightweight/latency-sensitive tasks, but frontier reasoning workloads stay firmly cloud-bound. Enterprise on-prem/private AI is genuinely bifurcating — Forrester predicts at least 15% of enterprises shift toward private AI on private clouds in 2026 as breakeven vs on-demand cloud now lands inside ~4 months at modest utilization — but this substitutes hyperscale cloud DCs for enterprise-owned or colo DCs rather than eliminating DC demand altogether. Overall, the Jevons paradox dominates: cheaper/more efficient compute (via quantization, distillation, edge chips) has historically increased total consumption rather than reducing it, since cheaper inference invites more inference (e.g., more sampled reasoning paths per query).
+
+## Key findings
+- Apple A19 Neural Engine: 38 TOPS; Qualcomm Snapdragon X2 Elite (laptop): 80 TOPS INT8; Snapdragon 8 Elite Gen 5 (Samsung Galaxy S26): ~100 TOPS claimed — but raw TOPS is a poor proxy: iPhone 17 sustains ~52 tok/s on-device LLM inference vs Pixel 10's ~10.4 tok/s despite lower Apple TOPS ([Next Waves Insight](https://nextwavesinsight.com/on-device-ai-2026-apple-pixel-galaxy-npu/), [AlephZero Labs](https://www.alephzerolabs.com/blog/on-device-ai-2026-sub-20ms)).
+- 2026-generation edge chips sustain 15-30 tokens/sec on a 4-bit 8B-parameter model at under 10W; 7-8B LLMs now run on consumer hardware with sub-50ms latency ([GeniusTechLab](https://geniustechlab.com/posts/2026-06-23-edge-ai-inference-2026), [AlephZero Labs](https://www.alephzerolabs.com/blog/on-device-ai-2026-sub-20ms)).
+- Edge AI hardware market: ~$30.7B in 2026, projected to grow to $68.7B by 2031 ([search synthesis, multiple sources]).
+- Google DeepMind's "Decoupled DiLoCo" combines Pathways orchestration with bandwidth-minimizing DiLoCo to enable multi-datacenter training; used for parts of Gemini 2.5's training split across nearby DC buildings ([Google DeepMind blog](https://deepmind.google/blog/decoupled-diloco/)).
+- Nvidia tested training a 340B-parameter model split across two datacenters 1,000km apart, demonstrating geographically distributed training is technically viable at scale ([Epoch AI](https://epoch.ai/blog/could-decentralized-training-solve-ais-power-problem), search synthesis).
+- Enterprise on-prem AI: Forrester predicts ≥15% of enterprises shift toward private AI on private clouds in 2026, driven by rising AI/API costs, data lock-in, and operational risk; IDC/Lenovo CIO Playbook 2026 finds 84% of organizations expect to run AI across on-prem or edge alongside cloud ([Forrester](https://www.forrester.com/blogs/predictions-2026-cloud-outages-private-ai-on-private-clouds-and-the-rise-of-the-neoclouds), [sixfivemedia](https://www.sixfivemedia.com/blog/on-premise-ai-for-enterprise-strategy-costs-and-vendor-selection-in-2026)).
+- On-prem breakeven vs on-demand cloud now lands inside ~4 months at modest utilization (2026), reversing prior conventional wisdom that cloud was always cheaper for bursty AI workloads ([sixfivemedia](https://www.sixfivemedia.com/blog/on-premise-ai-for-enterprise-strategy-costs-and-vendor-selection-in-2026)); note this is a single-source claim and should be sanity-checked against vendor bias (article does not name an independent methodology).
+- Jevons paradox mechanism: if inference cost falls by half but usage more than doubles (e.g., to 2.6x), total spend still rises (1.00 → 1.30) even though unit cost halved; cheaper inference invites sampling more reasoning paths per query, substituting compute for algorithmic elegance ([JAAI](https://jaai.pub/papers/the-jevons-paradox-of-ai-efficiency-why-better-models-lead), [NavoKit](https://www.navokit.com/en/blog/jevons-paradox-ai-compute), [SSRN paper](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6775299)).
+- Global AI spending: ~$1.5T in 2025, forecast ~$2.5T in 2026 (+44% YoY) — demand growth outpaces any visible substitution effect from edge/on-prem so far (search synthesis).
+
+## Insights & implications (developers / compute buyers)
+- For DC developers: enterprise on-prem/private-AI growth is a real but narrow substitution — it shifts some demand from hyperscaler-owned DCs to enterprise-owned or colo facilities, which is arguably still "data center demand," just a different buyer/owner. Colo and edge/regional DC operators may be net beneficiaries rather than losers from this trend.
+- For AI labs/compute buyers: on-device inference caps demand only for latency-sensitive, low-complexity tasks (assistants, autocomplete, simple classification); frontier reasoning, agentic workflows, and long-context tasks remain centralized-DC-bound for the foreseeable future — the "cap" is a ceiling on a subset of workloads, not aggregate demand.
+- Distributed/multi-datacenter training (DiLoCo-style) is best read as an operational efficiency tool that lets hyperscalers pool geographically dispersed centralized capacity — it increases flexibility in DC siting (opens power-constrained regions to participate in training) rather than reducing the need for large DC campuses.
+- The Jevons paradox evidence strongly suggests developers should plan for continued demand growth even as efficiency improves — efficiency gains are more likely to expand the addressable market (more use cases become cost-viable) than shrink DC footprint requirements.
+
+## Open questions for deep dive
+- What share of total inference token volume could realistically move to on-device by 2028-2030, and does that meaningfully change hyperscaler capex plans, or is it rounding error against agentic/reasoning-driven demand growth?
+- Is the enterprise on-prem "breakeven within 4 months" claim robust across utilization scenarios and vendor-neutral analyses — needs a dedicated TCO deep dive comparing on-prem GPU clusters vs cloud/neocloud rental.
+- Could multi-datacenter distributed training (DiLoCo-style) eventually enable smaller players / consortiums to pool sub-hyperscale compute competitively, and if so, on what timeline — this is the closest thing to a genuine decentralization threat to the centralized-DC model.
+
+## Cross-links
+- Relates to [[16-innovation-frontier]] — algorithmic efficiency (quantization/distillation/MoE) is the shared mechanism behind both cheaper edge inference and the Jevons-paradox demand rebound.
+
+## Sources
+- [On-Device AI in 2026: Why TOPS Don't Tell the Whole Story](https://nextwavesinsight.com/on-device-ai-2026-apple-pixel-galaxy-npu/) — Next Waves Insight, 2026
+- [On-Device AI Inference in 2026: Sub-20ms on Android](https://www.alephzerolabs.com/blog/on-device-ai-2026-sub-20ms) — AlephZero Labs, 2026
+- [Edge AI Inference in 2026](https://geniustechlab.com/posts/2026-06-23-edge-ai-inference-2026) — GeniusTechLab, June 2026
+- [Decoupled DiLoCo: Resilient, Distributed AI Training at Scale](https://deepmind.google/blog/decoupled-diloco/) — Google DeepMind
+- [Could decentralized training solve AI's power problem?](https://epoch.ai/blog/could-decentralized-training-solve-ais-power-problem) — Epoch AI
+- [Predictions 2026: Cloud Outages, Private AI On Private Clouds, And The Rise Of The Neoclouds](https://www.forrester.com/blogs/predictions-2026-cloud-outages-private-ai-on-private-clouds-and-the-rise-of-the-neoclouds) — Forrester, 2026
+- [On-Premise AI for Enterprise: Strategy, Costs, and Vendor Selection in 2026](https://www.sixfivemedia.com/blog/on-premise-ai-for-enterprise-strategy-costs-and-vendor-selection-in-2026) — sixfivemedia, 2026
+- [The Jevons Paradox of AI Efficiency](https://jaai.pub/papers/the-jevons-paradox-of-ai-efficiency-why-better-models-lead) — JAAI
+- [The Jevons Paradox in AI Infrastructure: Efficiency, Rebound, and the Limits of Cost Reduction](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6775299) — Tuan Anh Do, SSRN
+- **Archive-worthy artifacts:** none identified this pass (no PDFs/decks surfaced beyond the CPO PDF filed under topic 16)

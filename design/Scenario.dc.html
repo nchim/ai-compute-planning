@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#e9e9ec;color:#3f3f46;font-size:13px;}
+  a{color:#475569;text-decoration:none;} a:hover{color:#1e293b;}
+  .app{display:flex;flex-direction:column;height:1024px;width:1440px;background:#f6f6f7;overflow:hidden;}
+  .topbar{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:18px;padding:0 16px;background:#fff;border-bottom:1px solid #d4d4d8;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;color:#27272a;}
+  .nav{display:flex;gap:2px;align-items:center;}
+  .tab{padding:6px 10px;border-radius:4px;color:#52525b;}
+  .tab.active{background:#eef2f6;color:#1e293b;font-weight:600;}
+  .tab.dis{color:#c4c4c8;}
+  .spacer{flex:1;}
+  .selector{border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;font-size:12px;color:#3f3f46;background:#fafafa;display:flex;gap:6px;align-items:center;}
+  .avatar{width:26px;height:26px;border-radius:50%;background:#d4d4d8;}
+  .bodyrow{flex:1;display:flex;min-height:0;}
+  .rail{width:320px;flex:0 0 320px;background:#fff;border-right:1px solid #d4d4d8;display:flex;flex-direction:column;}
+  .rail-hd{padding:12px 14px;border-bottom:1px solid #ececee;display:flex;align-items:center;gap:8px;font-weight:600;color:#3f3f46;}
+  .thread{flex:1;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:11px;}
+  .msg{max-width:90%;padding:9px 11px;border-radius:8px;font-size:12.5px;line-height:1.45;}
+  .msg.user{align-self:flex-end;background:#eef2f6;color:#334155;border:1px solid #e2e8f0;}
+  .msg.bot{align-self:flex-start;background:#fafafa;color:#3f3f46;border:1px solid #ececee;}
+  .toolcard{align-self:flex-start;width:92%;border:1px solid #d4d4d8;border-radius:8px;padding:10px;background:#fbfbfc;}
+  .toolcard .r{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#52525b;}
+  .composer{border-top:1px solid #ececee;padding:10px 12px;display:flex;gap:8px;align-items:center;}
+  .input{flex:1;border:1px solid #d4d4d8;border-radius:6px;padding:8px 10px;color:#a1a1aa;font-size:12.5px;background:#fff;}
+  .send{width:32px;height:32px;border-radius:6px;background:#334155;flex:0 0 32px;display:flex;align-items:center;justify-content:center;}
+  .canvas{flex:1;min-width:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:13px;background:#f6f6f7;}
+  .canvas-hd{display:flex;align-items:flex-end;gap:14px;}
+  .h-title{font-size:18px;font-weight:600;color:#27272a;}
+  .h-sub{font-size:12px;color:#a1a1aa;}
+  .legend{display:flex;gap:7px;margin-left:auto;}
+  .dim{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#52525b;border:1px solid #e4e4e7;border-radius:20px;padding:3px 9px;background:#fff;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .d-space{background:#6b7a8f;} .d-time{background:#5f8a84;} .d-cap{background:#8a7f5f;} .d-risk{background:#9c6b6b;}
+  .panel{background:#fff;border:1px solid #d4d4d8;border-radius:6px;padding:14px;}
+  .panel-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .panel-hd .t{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:#71717a;font-weight:700;}
+  .kpi-s{font-size:11.5px;color:#71717a;}
+  .chip{border:1px solid #d4d4d8;border-radius:4px;padding:3px 8px;font-size:11.5px;color:#52525b;background:#fafafa;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;font-weight:700;color:#71717a;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:7px 8px;border-bottom:1px solid #e4e4e7;}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f2;color:#3f3f46;}
+  .best{background:#eef4f2;font-weight:600;color:#2f5d54;}
+  .scard{border:1px solid #d4d4d8;border-radius:6px;padding:12px;background:#fff;}
+  .scard.sel{border-color:#334155;box-shadow:0 0 0 1px #334155;}
+  .sname{font-weight:600;color:#27272a;margin-bottom:2px;}
+  .mrow{display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;border-bottom:1px solid #f4f4f5;}
+</style>
+</helmet>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#27272a" stroke-width="1.4"><rect x="2" y="2" width="14" height="14" rx="1.5"/><line x1="2" y1="7" x2="16" y2="7"/><line x1="2" y1="11.5" x2="16" y2="11.5"/><line x1="7" y1="7" x2="7" y2="16"/></svg>
+      Capacity Planner <span style="font-weight:400;color:#a1a1aa;font-size:11px;">working title</span>
+    </div>
+    <div class="nav">
+      <span class="tab">Portfolio</span>
+      <span class="tab">Site Feasibility</span>
+      <span class="tab active">Scenarios</span>
+      <span class="tab">Demand Planning</span>
+      <span class="tab dis">Financing</span>
+      <span class="tab dis">Reports</span>
+      <span class="tab dis">Data Sources</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="selector">Abilene-1 · 3 scenarios
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#71717a" stroke-width="1.3"><path d="M2 3.5 L5 6.5 L8 3.5"/></svg>
+    </div>
+    <div class="avatar"></div>
+  </div>
+
+  <div class="bodyrow">
+    <div class="rail">
+      <div class="rail-hd">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#475569" stroke-width="1.4"><path d="M2 3.5h12v7H6l-3 2.5V10.5H2z"/></svg>
+        Copilot
+      </div>
+      <div class="thread">
+        <div class="msg user">Compare grid-only vs a gas bridge vs a phased build.</div>
+        <div class="msg bot">Built 3 scenarios. <b>B (Gas bridge)</b> wins on time-to-revenue (−22 mo) at +$0.14/GPU-hr LCOC. <b>C (Phased)</b> is best risk-adjusted — lower stranded-capacity exposure.</div>
+        <div class="toolcard">
+          <div class="r"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#52525b" stroke-width="1.3"><rect x="1.5" y="1.5" width="10" height="10" rx="1.5"/><path d="M4 6.5l2 2 3.5-4"/></svg> Ran <b>scenario engine</b> · 3 cases · sensitivity</div>
+          <div class="r" style="margin-top:6px;"><a href="#">inspect drivers →</a></div>
+        </div>
+        <div class="msg bot">The outcome is dominated by <b>GPU-hour price</b> and <b>energization delay</b> — see the tornado.</div>
+        <div class="msg user">What if utilization is only 65%?</div>
+      </div>
+      <div class="composer">
+        <div class="input">Add a scenario: nuclear PPA at 2029…</div>
+        <div class="send"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#fff" stroke-width="1.5"><path d="M2 7.5h9M7 3.5l4 4-4 4"/></svg></div>
+      </div>
+    </div>
+
+    <div class="canvas">
+      <div class="canvas-hd">
+        <div>
+          <div class="h-title">Scenario / What-if — Abilene-1</div>
+          <div class="h-sub">3 scenarios · mock data</div>
+        </div>
+        <span class="chip" style="align-self:center;">+ New scenario</span>
+        <div class="legend">
+          <span class="dim"><span class="dot d-space"></span>Space</span>
+          <span class="dim"><span class="dot d-time"></span>Time</span>
+          <span class="dim"><span class="dot d-cap"></span>Capital</span>
+          <span class="dim"><span class="dot d-risk"></span>Risk</span>
+        </div>
+      </div>
+
+      <!-- SCENARIO CARDS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;">
+        <div class="scard">
+          <div class="sname">A · Grid-only (wait)</div>
+          <div class="kpi-s" style="margin-bottom:8px;">Wait in ERCOT queue</div>
+          <div class="mrow"><span><span class="dot d-time"></span> Energize</span><span>~2029</span></div>
+          <div class="mrow"><span><span class="dot d-cap"></span> LCOC</span><span>$1.58</span></div>
+          <div class="mrow"><span><span class="dot d-space"></span> MW online '27</span><span>0</span></div>
+          <div class="mrow" style="border:none;"><span><span class="dot d-risk"></span> Risk</span><span style="color:#9c6b6b;">71</span></div>
+        </div>
+        <div class="scard sel">
+          <div class="sname">B · BTM gas bridge <span class="chip" style="font-size:10px;">selected</span></div>
+          <div class="kpi-s" style="margin-bottom:8px;">Gas now → grid cutover '29</div>
+          <div class="mrow"><span><span class="dot d-time"></span> Energize</span><span>Q3-2027</span></div>
+          <div class="mrow"><span><span class="dot d-cap"></span> LCOC</span><span>$1.72</span></div>
+          <div class="mrow"><span><span class="dot d-space"></span> MW online '27</span><span>200</span></div>
+          <div class="mrow" style="border:none;"><span><span class="dot d-risk"></span> Risk</span><span>58</span></div>
+        </div>
+        <div class="scard">
+          <div class="sname">C · Phased + gas</div>
+          <div class="kpi-s" style="margin-bottom:8px;">100 MW now, 100 MW on demand</div>
+          <div class="mrow"><span><span class="dot d-time"></span> Energize</span><span>Q3-2027</span></div>
+          <div class="mrow"><span><span class="dot d-cap"></span> LCOC</span><span>$1.79</span></div>
+          <div class="mrow"><span><span class="dot d-space"></span> MW online '27</span><span>100</span></div>
+          <div class="mrow" style="border:none;"><span><span class="dot d-risk"></span> Risk</span><span style="color:#5f8a84;">49</span></div>
+        </div>
+      </div>
+
+      <!-- MATRIX + TORNADO -->
+      <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:13px;flex:1;min-height:0;">
+        <div class="panel">
+          <div class="panel-hd"><span class="t">Comparison matrix</span><span class="chip" style="margin-left:auto;">best per row highlighted</span></div>
+          <table>
+            <thead><tr><th>Dimension · KPI</th><th>A Grid</th><th>B Gas</th><th>C Phased</th></tr></thead>
+            <tbody>
+              <tr><td><span class="dot d-time"></span> Time-to-revenue</td><td>+22 mo</td><td class="best">Q3-27</td><td class="best">Q3-27</td></tr>
+              <tr><td><span class="dot d-cap"></span> LCOC ($/GPU-hr)</td><td class="best">$1.58</td><td>$1.72</td><td>$1.79</td></tr>
+              <tr><td><span class="dot d-cap"></span> Total capex</td><td>$7.1B</td><td>$7.4B</td><td class="best">$3.9B now</td></tr>
+              <tr><td><span class="dot d-cap"></span> Yield-on-cost</td><td>12.6%</td><td class="best">12.1%</td><td>11.4%</td></tr>
+              <tr><td><span class="dot d-space"></span> MW captured by '28</td><td>0</td><td class="best">200</td><td>100→200</td></tr>
+              <tr><td><span class="dot d-risk"></span> Stranded-capacity risk</td><td>Low</td><td>High</td><td class="best">Med-Low</td></tr>
+              <tr><td><span class="dot d-risk"></span> Composite risk /100</td><td>71</td><td>58</td><td class="best">49</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd"><span class="dot d-space"></span><span class="dot d-time" style="margin-left:-4px;"></span><span class="dot d-cap" style="margin-left:-4px;"></span><span class="dot d-risk" style="margin-left:-4px;"></span><span class="t" style="margin-left:5px;">Sensitivity — drivers of NPV (Scenario B) · cross-dimension</span></div>
+          <svg viewBox="0 0 460 250" style="width:100%;height:230px;">
+            <line x1="230" y1="10" x2="230" y2="220" stroke="#c4c4c8" stroke-width="1"/>
+            <g font-size="11" fill="#3f3f46">
+              <text x="6" y="30">GPU-hour price ±20%</text><rect x="120" y="20" width="110" height="15" fill="#8a7f5f" opacity="0.8"/><rect x="230" y="20" width="120" height="15" fill="#8a7f5f" opacity="0.5"/>
+              <text x="6" y="62">Energization delay ±12mo</text><rect x="140" y="52" width="90" height="15" fill="#5f8a84" opacity="0.8"/><rect x="230" y="52" width="100" height="15" fill="#5f8a84" opacity="0.5"/>
+              <text x="6" y="94">Utilization ±15pp</text><rect x="158" y="84" width="72" height="15" fill="#6b7a8f" opacity="0.8"/><rect x="230" y="84" width="80" height="15" fill="#6b7a8f" opacity="0.5"/>
+              <text x="6" y="126">Depreciation life 3–7yr</text><rect x="165" y="116" width="65" height="15" fill="#9c6b6b" opacity="0.75"/><rect x="230" y="116" width="72" height="15" fill="#9c6b6b" opacity="0.5"/>
+              <text x="6" y="158">Power $/MWh ±30%</text><rect x="185" y="148" width="45" height="15" fill="#8a7f5f" opacity="0.6"/><rect x="230" y="148" width="52" height="15" fill="#8a7f5f" opacity="0.4"/>
+              <text x="6" y="190">Rack density step-up</text><rect x="198" y="180" width="32" height="15" fill="#6b7a8f" opacity="0.5"/><rect x="230" y="180" width="38" height="15" fill="#6b7a8f" opacity="0.35"/>
+            </g>
+            <g font-size="10" fill="#a1a1aa"><text x="120" y="215">− downside</text><text x="300" y="215">upside +</text></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- TIME RAMP -->
+      <div class="panel">
+        <div class="panel-hd"><span class="dot d-time"></span><span class="dot d-space" style="margin-left:-4px;"></span><span class="t">Capacity online over time (MW) · by scenario</span></div>
+        <svg viewBox="0 0 900 130" style="width:100%;height:120px;">
+          <g stroke="#ececee"><line x1="40" y1="8" x2="40" y2="100"/><line x1="40" y1="100" x2="880" y2="100"/></g>
+          <!-- A grid -->
+          <polyline fill="none" stroke="#c4c4c8" stroke-width="2" points="40,98 500,98 500,40 880,40"/>
+          <!-- B gas -->
+          <polyline fill="none" stroke="#8a7f5f" stroke-width="2" points="40,98 250,98 250,30 880,30"/>
+          <!-- C phased -->
+          <polyline fill="none" stroke="#5f8a84" stroke-width="2" stroke-dasharray="5 3" points="40,98 250,98 250,64 560,64 560,30 880,30"/>
+          <g font-size="10.5" fill="#a1a1aa"><text x="40" y="116">2026</text><text x="250" y="116">2027</text><text x="500" y="116">2028</text><text x="880" y="116" text-anchor="end">2030</text></g>
+          <g font-size="11"><text x="600" y="26" fill="#8a7f5f">B gas</text><text x="600" y="60" fill="#5f8a84">C phased</text><text x="600" y="36" fill="#a1a1aa">A grid</text></g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
