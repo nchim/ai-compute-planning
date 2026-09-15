@@ -10,8 +10,10 @@ Planner**, ready for a Fable-orchestrated implementation fan-out.
 3. `proto/engine.proto` — **the contract**: `SitePlan` (input) → `Result` (output).
 4. `engine-design.md` — Go/WASM engine internals: pipeline, conservation checks, Monte Carlo, optimizer, TDD.
 5. `ui-spec.md` — UI behavior + the Site Feasibility POC view.
-6. `validation-cases.md` — 3 simulated user sessions = acceptance criteria.
-7. `implementation-plan.md` — fan-out workstreams, dependencies, milestones.
+6. `agent-integration.md` — the embedded Copilot: model, API, tools, caching, BYO-key dev mode.
+   - `agent-system-prompt.md` — the Copilot's cached system prompt (strategic digest + research index).
+7. `validation-cases.md` — 3 simulated user sessions = acceptance criteria.
+8. `implementation-plan.md` — fan-out workstreams, dependencies, milestones.
 
 ## Also
 - `.claude/skills/development/SKILL.md` — the shared, living dev process every worker follows.

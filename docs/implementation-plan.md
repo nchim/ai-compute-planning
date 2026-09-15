@@ -66,10 +66,14 @@ WS0 scaffold ─▶ WS1 proto ─┬─▶ WS2 core ─┬─▶ WS3 risk ─┐
 - **DoD:** every canvas region renders from `Result`; controls live + bidirectional; explainers present;
   matches `ui-spec.md`.
 
-### WS8 — Embedded Copilot integration  *(UI track; after WS6)*
-- Agent tools over the command bus (edit SitePlan via protojson, run Analyze/Optimize, read
-  summary+diagnostics); accept/undo proposed-change cards; view-aware context; "numbers only from Result."
-- **DoD:** agent can operate the visible view and interpret results; self-corrects from diagnostics.
+### WS8 — Embedded Copilot integration  *(UI track; after WS6)* — see `agent-integration.md`
+- `@anthropic-ai/sdk` in-browser, **`claude-sonnet-5`**, client-side tool-use loop (beta tool runner);
+  tools over the command bus (`edit_site_plan`, `run_analyze`/`run_optimize`, `set_control`,
+  `propose_change`, `explain`); accept/undo cards; view-aware context; "numbers only from Result";
+  prompt caching (stable system prefix cached, volatile ViewContext after the breakpoint).
+- **Inference transport: BYO-key dev mode** (`dangerouslyAllowBrowser`) for the POC; relay deferred.
+- **DoD:** agent operates the visible view, interprets results, self-corrects from diagnostics; cache
+  reads confirmed (`cache_read_input_tokens > 0`).
 
 ### WS9 — Remote-control harness  *(UI track; after WS6)*
 - `window.__harness` over the command bus (dev build only); Playwright driver runnable from a session;
