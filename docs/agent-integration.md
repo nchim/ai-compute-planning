@@ -49,7 +49,10 @@ Order matters for cache reuse (prefix match: `tools` → `system` → `messages`
 - `stream: true` (responsive chat; use `.finalMessage()` when not handling events).
 - `thinking: {type: "adaptive"}` (Sonnet 5's on-mode) with `output_config.effort` tuned per turn
   (`low`/`medium` for simple edits, `high` for optimize/interpret).
-- **Strict tools** (`strict: true`, `additionalProperties:false`) for schema-valid tool args.
+- **Strict tools** (`strict: true`, `additionalProperties:false`) on the plan-writing tools only
+  (`edit_site_plan`, `set_control`, `propose_change`): strict schemas share one compiled grammar with a
+  size cap — nine strict tools returned 400 "compiled grammar is too large". The rest are validated by
+  the zod parse before they run, so bad input still becomes an `is_error` tool result.
 - `eager_input_streaming: true` on `edit_site_plan` (large patches) — then validate the parsed input.
 - Parallel tool use: return all `tool_result` blocks in one user message.
 
