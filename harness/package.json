@@ -2,11 +2,13 @@
   "name": "capplanner-harness",
   "private": true,
   "version": "0.0.0",
-  "description": "Playwright remote-control harness for the capacity planner SPA: a Session helper over window.__harness plus the smoke test (WS9) and, later, the acceptance session (WS10).",
+  "description": "Playwright remote-control harness for the capacity planner SPA: a Session helper over window.__harness, the smoke test (WS9) and the acceptance session (WS10).",
   "type": "module",
   "scripts": {
     "test": "playwright test",
     "smoke": "playwright test tests/smoke.spec.ts",
+    "acceptance": "COPILOT_MODE=scripted playwright test acceptance/",
+    "acceptance:live": "COPILOT_MODE=live playwright test acceptance/abilene-1.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

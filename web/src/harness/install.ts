@@ -7,16 +7,16 @@ import {
   SitePlanSchema,
   SummaryMetricsSchema,
 } from "../gen/capplanner/v1/engine_pb";
-import type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi } from "./api";
+import type { CommandLogEntry, Control, ControlValue, CopilotHandle, HarnessApi } from "./api";
 
-export type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi, Json } from "./api";
+export type { CommandLogEntry, Control, ControlValue, CopilotFn, CopilotHandle, HarnessApi, Json, PatchEntry } from "./api";
 
 /** Proto field names (snake_case) so plan JSON lines up with bus paths and diagnostics' proto_path. */
 const jsonOptions = { useProtoFieldName: true } as const;
 
 export interface HarnessOptions {
   /** Registered up front, or later through `__harness.setCopilot` (WS8). */
-  readonly sendCopilot?: CopilotFn;
+  readonly copilot?: CopilotHandle;
 }
 
 /**
@@ -33,7 +33,7 @@ export function installHarness(store: Store, options: HarnessOptions = {}): Harn
 
 /** The API itself, independent of `window` so it can be unit-tested against a store. */
 export function createHarnessApi(store: Store, options: HarnessOptions = {}, errors: readonly string[] = []): HarnessApi {
-  let copilot: CopilotFn | null = options.sendCopilot ?? null;
+  let copilot: CopilotHandle | null = options.copilot ?? null;
 
   /** Dispatches and rejects with the reducer's message when the command was refused. */
   const run = (command: Command): void => {
@@ -46,6 +46,11 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
     const plan = store.getState().plan;
     if (plan === null) throw new Error("no plan loaded");
     return plan;
+  };
+
+  const requireCopilot = (): CopilotHandle => {
+    if (copilot === null) throw new Error("Copilot not installed");
+    return copilot;
   };
 
   const pickProposal = (id: string | undefined): Proposal => {
@@ -91,15 +96,35 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
       return out;
     },
 
-    async sendCopilot(text) {
-      expectString("text", text);
-      if (copilot === null) throw new Error("Copilot not installed");
-      await copilot(text);
+    async optimize() {
+      requirePlan();
+      const result = await store.optimize();
+      return toJsonString(ResultSchema, result, jsonOptions);
     },
 
-    async setCopilot(fn) {
-      if (fn !== null && typeof fn !== "function") throw new Error("setCopilot: expected a function or null");
-      copilot = fn;
+    async proposeChange(summary, patch) {
+      expectString("summary", summary);
+      if (!Array.isArray(patch) || patch.length === 0) throw new Error("proposeChange: patch must be a non-empty array");
+      const id = store.proposeChange(summary, patch);
+      const entry = store.getLog().at(-1);
+      if (entry?.rejected) throw new Error(`proposeChange: ${entry.rejected.message}`);
+      return id;
+    },
+
+    async sendCopilot(text) {
+      expectString("text", text);
+      await requireCopilot().send(text);
+    },
+
+    async setCopilot(handle) {
+      if (handle !== null && (typeof handle?.send !== "function" || typeof handle.snapshot !== "function")) {
+        throw new Error("setCopilot: expected { send, snapshot } or null");
+      }
+      copilot = handle;
+    },
+
+    async getCopilotSnapshot() {
+      return requireCopilot().snapshot();
     },
 
     async acceptCard(id) {

@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, type Browser, type Page } from "@playwright/test";
 
-import type { CommandLogEntry, Control, ControlValue, HarnessApi, Json } from "../../web/src/harness/api";
+import type { CommandLogEntry, Control, ControlValue, HarnessApi, Json, PatchEntry } from "../../web/src/harness/api";
 
-export type { CommandLogEntry, Control, ControlValue, Json } from "../../web/src/harness/api";
+export type { CommandLogEntry, Control, ControlValue, Json, PatchEntry } from "../../web/src/harness/api";
 
 export interface LaunchOptions {
   /** Where the SPA is served (default http://localhost:5173). */
@@ -15,12 +15,21 @@ export interface LaunchOptions {
   readonly headless?: boolean;
   /** Where step artifacts land; default `harness/runs/<timestamp>/`. */
   readonly runDir?: string;
+  /** CSS selectors blacked out on every archived screenshot (e.g. the API-key panel). */
+  readonly maskSelectors?: readonly string[];
+  /** Runs before the page loads on every navigation (e.g. seeding sessionStorage). */
+  readonly initScript?: string;
 }
 
-/** The `__harness` methods a Session can proxy (setCopilot takes a function, which cannot cross the wire). */
+/** The `__harness` methods a Session can proxy (setCopilot takes functions, which cannot cross the wire). */
 type Proxied = Exclude<keyof HarnessApi, "setCopilot">;
 
 const runsRoot = fileURLToPath(new URL("../runs/", import.meta.url));
+
+/** Anthropic API keys never reach an artifact, whatever logged them. */
+export function redactSecrets(text: string): string {
+  return text.replace(/sk-ant-[A-Za-z0-9_-]+/g, "sk-ant-[REDACTED]");
+}
 
 /**
  * One browser + one page against the running SPA, driving it only through `window.__harness`.
@@ -34,13 +43,16 @@ export class Session {
   private readonly consoleErrors: string[] = [];
   private readonly pageErrors: Error[] = [];
   private reportedPageErrors = 0;
+  private readonly maskSelectors: readonly string[];
 
   private constructor(
     private readonly browser: Browser,
     readonly page: Page,
     runDir: string,
+    maskSelectors: readonly string[],
   ) {
     this.runDir = runDir;
+    this.maskSelectors = maskSelectors;
     page.on("pageerror", (err) => this.pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") this.consoleErrors.push(msg.text());
@@ -55,15 +67,26 @@ export class Session {
 
     const browser = await chromium.launch({ headless });
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    const session = new Session(browser, page, runDir);
+    const session = new Session(browser, page, runDir, options.maskSelectors ?? []);
     try {
+      if (options.initScript !== undefined) await page.addInitScript(options.initScript);
       await page.goto(baseURL, { waitUntil: "load" });
-      await page.waitForFunction(() => window.__harness !== undefined, null, { timeout: 15_000 });
+      await session.waitForHarness();
     } catch (err) {
       await browser.close();
       throw new Error(`Session.launch: ${baseURL} did not expose window.__harness (is the dev server running with VITE_HARNESS=1?): ${describe(err)}`);
     }
     return session;
+  }
+
+  /** Reloads the page (the init script re-runs) and waits for `window.__harness` again. */
+  async reload(): Promise<void> {
+    await this.page.reload({ waitUntil: "load" });
+    await this.waitForHarness();
+  }
+
+  private waitForHarness(): Promise<unknown> {
+    return this.page.waitForFunction(() => window.__harness !== undefined, null, { timeout: 15_000 });
   }
 
   // ---- typed wrappers over window.__harness -------------------------------------------------
@@ -83,8 +106,17 @@ export class Session {
   listControls(): Promise<Control[]> {
     return this.call("listControls");
   }
+  optimize(): Promise<string> {
+    return this.call("optimize");
+  }
+  proposeChange(summary: string, patch: readonly PatchEntry[]): Promise<string> {
+    return this.call("proposeChange", summary, patch);
+  }
   sendCopilot(text: string): Promise<void> {
     return this.call("sendCopilot", text);
+  }
+  getCopilotSnapshot(): Promise<Json> {
+    return this.call("getCopilotSnapshot");
   }
   acceptCard(id?: string): Promise<void> {
     return id === undefined ? this.call("acceptCard") : this.call("acceptCard", id);
@@ -117,7 +149,15 @@ export class Session {
   /** Saves `<runDir>/<name>.png` and returns its path. */
   async screenshot(name: string): Promise<string> {
     const file = path.join(this.runDir, `${slug(name)}.png`);
-    await this.page.screenshot({ path: file, fullPage: true });
+    await this.capture(file);
+    return file;
+  }
+
+  /** Writes an extra artifact (secrets redacted) under the run directory and returns its path. */
+  async writeArtifact(name: string, content: string): Promise<string> {
+    const file = path.join(this.runDir, name);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, redactSecrets(content));
     return file;
   }
 
@@ -157,8 +197,12 @@ export class Session {
     if (pageErrors.length > 0) throw new Error(`uncaught page error outside any step: ${pageErrors.join("; ")}`);
   }
 
+  private capture(file: string): Promise<Buffer> {
+    return this.page.screenshot({ path: file, fullPage: true, mask: this.maskSelectors.map((sel) => this.page.locator(sel)) });
+  }
+
   private async archive(dir: string): Promise<void> {
-    await this.page.screenshot({ path: path.join(dir, "screenshot.png"), fullPage: true });
+    await this.capture(path.join(dir, "screenshot.png"));
     const [plan, result, log, pageConsole] = await Promise.all([
       this.getPlanOrNull(),
       this.getResult(),
@@ -170,7 +214,7 @@ export class Session {
       writeFile(path.join(dir, "plan.json"), plan ?? "null"),
       writeFile(path.join(dir, "result.json"), result ?? "null"),
       writeFile(path.join(dir, "command-log.json"), JSON.stringify(log, null, 2)),
-      writeFile(path.join(dir, "console-errors.json"), JSON.stringify(errors, null, 2)),
+      writeFile(path.join(dir, "console-errors.json"), redactSecrets(JSON.stringify(errors, null, 2))),
     ]);
   }
 

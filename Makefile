@@ -8,7 +8,7 @@ STATICCHECK ?= $(shell go env GOPATH)/bin/staticcheck
 WASM_OUT   := web/public/engine.wasm
 WASM_EXEC  := $(shell go env GOROOT)/lib/wasm/wasm_exec.js
 
-.PHONY: deps gen lint test check wasm web harness
+.PHONY: deps gen lint test check wasm web harness acceptance
 
 ## deps: install JS dependencies (run once, and after lockfile changes)
 deps:
@@ -45,6 +45,10 @@ wasm:
 web:
 	cd web && npm run build
 
-## harness: Playwright smoke + acceptance against the dev server (uses engine.wasm when built, else the fake engine)
+## harness: harness typecheck + Playwright smoke against the dev server (uses engine.wasm when built, else the fake engine)
 harness:
-	cd harness && npm run typecheck && npm test
+	cd harness && npm run typecheck && npm run smoke
+
+## acceptance: the scripted acceptance session (docs/acceptance-session.md T1–T7; the CI gate). Live mode: cd harness && npm run acceptance:live
+acceptance:
+	cd harness && npm run acceptance

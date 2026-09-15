@@ -27,15 +27,27 @@ export interface CommandLogEntry {
   readonly rejected: { readonly kind: string; readonly message: string } | null;
 }
 
+/** One SitePlan field write inside a proposal (mirrors bus `PatchOp`). */
+export interface PatchEntry {
+  readonly path: string;
+  readonly value: ControlValue;
+}
+
 export interface HarnessApi {
   loadPlan(protojson: string): Promise<void>;
   getPlan(): Promise<string>;
   getResult(): Promise<string | null>;
   setControl(path: string, value: ControlValue): Promise<void>;
   listControls(): Promise<Control[]>;
+  /** Runs the optimizer on the current plan (the "Run optimize" button) and returns the Result protojson. */
+  optimize(): Promise<string>;
+  /** Opens an accept/undo card (the Copilot's `propose_change`); returns the proposal id. */
+  proposeChange(summary: string, patch: readonly PatchEntry[]): Promise<string>;
   /** Resolves when the Copilot turn ends; rejects until a Copilot is registered via `setCopilot`. */
   sendCopilot(text: string): Promise<void>;
-  setCopilot(fn: CopilotFn | null): Promise<void>;
+  setCopilot(copilot: CopilotHandle | null): Promise<void>;
+  /** The registered Copilot's transcript, tool events and last usage; rejects until one is registered. */
+  getCopilotSnapshot(): Promise<Json>;
   /** Accepts the given proposal, or the latest pending one when `id` is omitted. */
   acceptCard(id?: string): Promise<void>;
   rejectCard(id?: string): Promise<void>;
@@ -50,6 +62,12 @@ export interface HarnessApi {
 }
 
 export type CopilotFn = (text: string) => Promise<void>;
+
+/** What the Copilot registers: a way to send a turn and a JSON view of its state for assertions. */
+export interface CopilotHandle {
+  readonly send: CopilotFn;
+  readonly snapshot: () => Json;
+}
 
 declare global {
   interface Window {

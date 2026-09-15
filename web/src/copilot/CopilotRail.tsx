@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { useStore, viewContext, type Proposal } from "../bus";
-import { createCopilot, emptySnapshot, type Copilot } from "./client";
+import { createCopilot, emptySnapshot, type Copilot, type CopilotSnapshot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
+import type { CopilotHandle, Json } from "../harness/api";
 import { safeStorage, type Message } from "./history";
 import { renderMarkdownLite } from "./markdownLite";
 import type { ToolEvent } from "./tools";
@@ -29,9 +30,9 @@ export function CopilotRail() {
     [store, engine, apiKey],
   );
   useEffect(() => {
-    const register = (fn: ((text: string) => Promise<void>) | null) =>
-      window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
-    register(copilot === null ? null : copilot.send);
+    const register = (handle: CopilotHandle | null) =>
+      window.__harness?.setCopilot(handle).catch((err: unknown) => console.error("harness.setCopilot failed", err));
+    register(copilot === null ? null : { send: copilot.send, snapshot: () => snapshotJson(copilot.getSnapshot()) });
     return () => {
       register(null);
       copilot?.dispose();
@@ -127,6 +128,11 @@ export function CopilotRail() {
       )}
     </aside>
   );
+}
+
+/** The harness's view of the Copilot: transcript, tool events and usage (all plain JSON already). */
+function snapshotJson(s: CopilotSnapshot): Json {
+  return JSON.parse(JSON.stringify({ messages: s.transcript.messages, toolEvents: s.toolEvents, lastUsage: s.lastUsage, running: s.running, error: s.error })) as Json;
 }
 
 function KeyPanel(props: { apiKey: string; onChange: (key: string) => void }) {
