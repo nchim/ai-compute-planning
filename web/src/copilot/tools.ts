@@ -72,10 +72,12 @@ const optimizeInput = z.object({
     .nullable(),
   policy: z
     .object({
-      max_phases: z.number().int().nullable(),
+      // Plain numbers on purpose: zod's `.int()` adds minimum/maximum bounds the API rejects on strict
+      // integer schemas; the bus rejects a non-integer write with a precise message instead.
+      max_phases: z.number().nullable().describe("Integer"),
       min_phase_mw: z.number().nullable(),
       max_phase_mw: z.number().nullable(),
-      min_months_between_phases: z.number().int().nullable(),
+      min_months_between_phases: z.number().nullable().describe("Integer"),
       max_shortfall_mw: z.number().nullable().describe("Never be short more than this many MW"),
     })
     .nullable(),
@@ -96,6 +98,7 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
         "use propose_change for material ones.",
       inputSchema: z.object({ patch: z.array(patchOp).min(1) }),
       eager: true,
+      strict: true,
       run: async ({ patch }) => {
         mutate(store, patch, { type: "applyPatch", patch });
         return { applied: patch.map((p) => p.path), analysis: analysisJson(await tracker.settle()) };
@@ -105,6 +108,7 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
       name: "set_control",
       description: "Operate one UI control: write a single SitePlan field, then re-analyze (same return as edit_site_plan).",
       inputSchema: z.object({ path: patchOp.shape.path, value: fieldValue }),
+      strict: true,
       run: async ({ path, value }) => {
         mutate(store, [{ path, value }], { type: "setField", path, value });
         return { applied: [path], analysis: analysisJson(await tracker.settle()) };
@@ -136,6 +140,7 @@ export function createTools(deps: ToolDeps): BetaRunnableTool[] {
         "Propose a patch as an accept/undo card instead of applying it; the human decides. Returns the " +
         "proposal id. Do not assume it was accepted.",
       inputSchema: z.object({ summary: z.string().min(1).describe("One line the human reads on the card"), patch: z.array(patchOp).min(1) }),
+      strict: true,
       run: async ({ summary, patch }) => {
         applyPatch(planOrThrow(store), patch); // validate at the boundary; a bad path never reaches a card
         const id = store.proposeChange(summary, patch);
@@ -196,6 +201,12 @@ interface ToolSpec<S extends z.ZodObject> {
   readonly run: (input: z.infer<S>) => Promise<unknown>;
   /** Stream the input as it is generated (large patches). The zod parse still validates it before `run`. */
   readonly eager?: boolean;
+  /**
+   * Ask the API to constrain generation to the schema. Every strict schema is compiled into one
+   * grammar with a size cap ("compiled grammar is too large" → 400), so it is reserved for the small
+   * plan-writing tools; the others rely on the zod parse, which rejects bad input before `run` anyway.
+   */
+  readonly strict?: boolean;
 }
 
 /**
@@ -221,7 +232,7 @@ function define<S extends z.ZodObject>(deps: ToolDeps, spec: ToolSpec<S>): BetaR
       }
     },
   });
-  return { ...tool, strict: true, ...(spec.eager ? { eager_input_streaming: true } : {}) };
+  return { ...tool, ...(spec.strict ? { strict: true } : {}), ...(spec.eager ? { eager_input_streaming: true } : {}) };
 }
 
 function planOrThrow(store: Store): SitePlan {
