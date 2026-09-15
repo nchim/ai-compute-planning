@@ -24,6 +24,7 @@ const (
 	codeStorageNotFirm        = "STORAGE_NOT_FIRM"
 	codeExitCapRateUnset      = "EXIT_CAP_RATE_UNSET"
 	codeConservationFailed    = "CONSERVATION_FAILED"
+	codeSchematicOverflow     = "SCHEMATIC_OVERFLOW"
 )
 
 // diags collects diagnostics in emission order; the pipeline appends, never reorders.

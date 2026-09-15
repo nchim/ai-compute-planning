@@ -83,7 +83,7 @@ describe("regions render from the golden Result", () => {
 
   test("schematic renders all blocks at the final month with the footprint badge and phase legend", () => {
     const { container } = mount(harness(), <SiteSchematic />);
-    expect(container.querySelectorAll("[data-block]")).toHaveLength(8);
+    expect(container.querySelectorAll("[data-block]")).toHaveLength(9);
     expect(screen.getByText(/footprint \d+% used/)).toBeTruthy();
     expect(container.querySelectorAll(".legend li")).toHaveLength(1);
   });
@@ -163,7 +163,7 @@ describe("controls dispatch through the bus", () => {
     fireEvent.change(screen.getByLabelText("time scrubber (month)"), { target: { value: "20" } });
     expect(h.dispatched[0]).toMatchObject({ type: "select", selection: { month: 20 } });
     const visible = [...container.querySelectorAll("[data-block]")].map((el) => el.getAttribute("data-block"));
-    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion"]);
+    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion", "expansion_e"]);
     expect(h.store.getState().selection.month).toBe(20);
   });
 
