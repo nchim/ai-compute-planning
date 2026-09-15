@@ -14,8 +14,8 @@
 //	PV(GPU-hours)       = Σ_t gpus_online_t × utilization × 730 / (1+r)^t
 //
 // where r is the monthly equivalent of finance.discount_rate, H the hold in months, and terminal is the
-// exit value of the assets (GPUs at costs.gpu.residual_curve[years online], facility capex straight-line
-// over a 25-year shell life, land at cost). Discounting both numerator and denominator is the LCOE
+// exit value (§Terminal value: the asset basis for COMPUTE_SALES, NOI ÷ exit cap rate for COLO_LEASE —
+// which is why a colo LCOC is small: the exit repays most of the shell). Discounting both is the LCOE
 // convention: it charges early capex more than late GPU-hours, so a plan that energizes sooner earns a
 // lower LCOC for the same total spend. GPU capex is only incurred (and only depreciated) under
 // COMPUTE_SALES; a colo tenant buys its own GPUs, and colo GPU-hours are the leased capacity's hours.
@@ -67,6 +67,22 @@
 // This is the A.CRE convention (escalation per tenant from lease start, growth on every opex line
 // from the operations start), which is what makes nova-colo's trended NOI reconcile.
 //
+// # Terminal value
+//
+// Booked in the final month (metrics.go exitValue); both bases are in summary.extra so they can be
+// compared (terminal_value is the one used, exit_value_asset_basis and exit_value_cap_rate the two).
+//
+//	COLO_LEASE     max(0, NOI at exit ÷ finance.exit_cap_rate)   — a developer sells a leased building
+//	               on its income (A.CRE K204); the GPUs are the tenant's. NOI at exit is the final 12
+//	               months of the hold (A.CRE capitalizes the 12 months after the sale, one year of
+//	               trending later). exit_cap_rate 0 falls back to the asset basis with an
+//	               EXIT_CAP_RATE_UNSET INFO. No selling costs (STUB; A.CRE deducts 2%).
+//	COMPUTE_SALES  asset basis: GPUs at costs.gpu.residual_curve[years online], facility capex
+//	               straight-line over a 25-year shell life, land at cost (STUB: no appreciation).
+//	               A compute operator's exit is the hardware and shell it owns; capitalizing GPU-hour
+//	               income at a real-estate cap rate would treat a 5-year asset as a perpetuity
+//	               (abilene-1: $17.7B vs $3.1B), so exit_value_cap_rate is reported, not used.
+//
 // # Other metrics
 //
 //   - capex_per_mw: total capex / sized IT MW.
@@ -86,5 +102,6 @@
 //   - constructionLeadMonths = 18 for every build; power-source capex attributed to the first phase
 //     that can use it; capex paid as lumps (no S-curve); 100% equity (capital_uses_eq_sources);
 //     storage (BESS) is not firm supply (STORAGE_NOT_FIRM INFO); PPAs count at nameplate;
-//     land at cost at exit; schematic is a single-row block layout, not a site plan.
+//     land at cost at exit; no selling costs; no idle energy draw; schematic is a single-row block
+//     layout, not a site plan.
 package core

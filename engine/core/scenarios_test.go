@@ -84,6 +84,7 @@ const (
 	acreNoiTrended          = 18_005_843.62  // J195 stabilized NOI over months 46–57 with 2% rent / 2.5% opex growth
 	acreYieldOnCost         = 0.08734        // I233 = I195 / K76
 	acreExitCap             = 0.0675         // K176 market cap rate at sale
+	acreSaleValue           = 270_979_557.37 // K207 gross sale proceeds: NOI over months 72–83 ÷ K176 (before 2% selling costs)
 )
 
 // acreMirror is the A.CRE sample deal in our proto: the nova-colo operating assumptions (which are
@@ -145,6 +146,9 @@ func TestAcreReconciliation(t *testing.T) {
 		s := res.GetSummary()
 		noi := s.GetYieldOnCostPct() / 100 * s.GetTotalCapex()
 		requireWithin(t, "trended NOI vs J195 (2% rent escalation per lease, 2.5% opex growth)", noi, acreNoiTrended, 0.05)
+		// Exit: A.CRE capitalizes the 12 months after the sale month; ours is the 12 months before it,
+		// so the gap is one year of trending.
+		requireWithin(t, "exit value vs K207 (NOI at exit ÷ cap rate)", s.GetExtra()["terminal_value"], acreSaleValue, 0.05)
 	})
 }
 

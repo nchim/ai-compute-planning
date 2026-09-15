@@ -61,8 +61,9 @@ sample's: it is a NoVA site with a 60-month grid interconnection, a 15 MW BTM ga
 phase 1 from m24, an explicit second 10 MW phase on the grid at m60, liquid-cooled 125 kW racks on a
 300 psf slab (so the 12% agility premium applies) and expensive land. Exercises: colo revenue with
 escalation and vacancy, `mgmt_fee_pct_of_egr`, EXPLICIT phasing with per-phase power sources, a gas
-pad in the schematic, energy dispatch across two sources with different prices, yield-on-cost and
-development spread against an exit cap.
+pad in the schematic, energy dispatch across two sources with different prices, opex growth, yield-on-cost
+and development spread against an exit cap, and an income-based exit (NOI ÷ `exit_cap_rate`, which is
+what turns its NPV positive: breakeven occupancy 83% vs 95% assumed).
 
 | A.CRE cell (Underwriting) | Value | Our field | Value | Note |
 |---|---|---|---|---|
@@ -102,11 +103,11 @@ development spread over the sale cap rate 198 bps vs 198 bps. Tolerance 1%. Tren
 escalation per lease, 2.5% growth on every opex rate from operations start): stabilized NOI $18.31M vs
 J195 $18.01M (**+1.7%**, tolerance 5%); the residual is the window (ours m37–48 from the last
 energization, A.CRE's months 46–57 after absorption) and A.CRE's 3-month ramp before each tenant's
-escalation clock starts. Other structural
+escalation clock starts. Exit: NOI at exit ÷ K176 gives $275.2M vs K207 $271.0M (**+1.6%**, tolerance
+5%; A.CRE capitalizes the 12 months after the sale, ours the 12 before it). Other structural
 differences that do not touch stabilized NOI: no S-curve (capex lumped at construction start, which
 also starts maintenance/insurance early), no debt, no tenant absorption ramp (417 kW/mo in A.CRE),
-asset-based terminal value instead of NOI ÷ exit cap (#30 — the reason nova-colo's breakeven occupancy
-is above 100% on a 72-month hold).
+no 2% selling costs at exit.
 
 ### epoch-100mw — Epoch AI 100 MW GB200 campus, MISO / Illinois (compute sales)
 `revenue.mode=COMPUTE_SALES`, SINGLE_SHOT, PUE 1.14, 125 kW NVL72 racks (72 GPUs), 71% utilization,

@@ -21,6 +21,7 @@ const (
 	codeEnergizeAfterHold     = "ENERGIZE_AFTER_HOLD"
 	codeIrrUndefined          = "IRR_UNDEFINED"
 	codeStorageNotFirm        = "STORAGE_NOT_FIRM"
+	codeExitCapRateUnset      = "EXIT_CAP_RATE_UNSET"
 	codeConservationFailed    = "CONSERVATION_FAILED"
 )
 

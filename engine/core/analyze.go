@@ -14,7 +14,7 @@ type model struct {
 	capex     capexBuild
 	opex      opexSeries
 	rev       revenueSeries
-	terminal  float64
+	exit      exit
 	cf        cashflow
 	capture   captureStats
 	pv        presentValues
@@ -56,10 +56,10 @@ func build(plan *pb.SitePlan, d *diags) *model {
 	m.capex = buildCapex(plan, m.phases, m.srcs, m.months)
 	m.rev = buildRevenue(plan, m.phases, m.months)
 	m.opex = buildOpex(plan, m.phases, m.srcs, m.capex, m.rev.revenue, m.months)
-	m.terminal = terminalValue(plan, m.capex, m.phases, m.months)
-	m.cf = buildCashflow(m.capex, m.opex, m.rev, m.terminal, m.months)
+	m.exit = exitValue(m, d)
+	m.cf = buildCashflow(m.capex, m.opex, m.rev, m.exit.value, m.months)
 	m.capture = computeCapture(plan.GetDemand().GetPoints(), m.phases, m.months)
-	m.pv = discount(plan, m.cf, m.opex, m.rev)
+	m.pv = discount(m)
 	buildSummary(m, d)
 	m.schematic = layoutSchematic(m)
 	return m

@@ -16,6 +16,8 @@
     "compositeRiskScore":  60.539217332000156,
     "utilizationBreakevenPct":  77.16418385255652,
     "extra":  {
+      "exit_value_asset_basis":  3074880000,
+      "exit_value_cap_rate":  17720472033.933666,
       "facility_mw":  240,
       "gpus":  110000,
       "opex_total":  872946400.3514426,

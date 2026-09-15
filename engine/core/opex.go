@@ -6,15 +6,12 @@ import (
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
 
-// opexSeries holds each operating-cost line per month. power is the energy bill; the rest are opex.
-// variable is the part of the total that scales with utilization (occupancy for colo): the management
-// fee always, and energy under COMPUTE_SALES — it is what makes the breakeven utilization exact.
+// opexSeries holds each operating-cost line per month. power is the energy bill; opex is the total
+// of the other lines. variable is the part of opex + power that scales with utilization (occupancy
+// for colo): the management fee always, and energy under COMPUTE_SALES — it is what makes the
+// breakeven utilization exact.
 type opexSeries struct {
-	staffing, maintenance, insurance, mgmtFee, tax, power, variable []float64
-}
-
-func (o opexSeries) opexAt(t int) float64 {
-	return o.staffing[t] + o.maintenance[t] + o.insurance[t] + o.mgmtFee[t] + o.tax[t]
+	staffing, maintenance, insurance, mgmtFee, tax, opex, power, variable []float64
 }
 
 // buildOpex prices operations month by month. Staffing scales with energized IT MW; maintenance and
@@ -27,7 +24,8 @@ func buildOpex(plan *pb.SitePlan, phases []phase, srcs []source, capex capexBuil
 	o := plan.GetCosts().GetOpex()
 	s := opexSeries{
 		staffing: make([]float64, months), maintenance: make([]float64, months), insurance: make([]float64, months),
-		mgmtFee: make([]float64, months), tax: make([]float64, months), power: make([]float64, months), variable: make([]float64, months),
+		mgmtFee: make([]float64, months), tax: make([]float64, months), opex: make([]float64, months),
+		power: make([]float64, months), variable: make([]float64, months),
 	}
 	facilitySpend := capex.monthly(months, facilityLine)
 	var facilityToDate float64
@@ -43,6 +41,7 @@ func buildOpex(plan *pb.SitePlan, phases []phase, srcs []source, capex capexBuil
 		s.mgmtFee[t] = revenue[t] * o.GetMgmtFeePctOfEgr() / 100
 		s.tax[t] = o.GetPropertyTaxPerYr() / 12 * growth
 		s.power[t] = energyCost(srcs, energyLoadMw(plan, it), t) * growth
+		s.opex[t] = s.staffing[t] + s.maintenance[t] + s.insurance[t] + s.mgmtFee[t] + s.tax[t]
 		s.variable[t] = s.mgmtFee[t]
 		if computeSales {
 			s.variable[t] += s.power[t]
