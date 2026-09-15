@@ -155,3 +155,16 @@
 .site-view .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: site-spin 0.9s linear infinite; flex: none; }
 @keyframes site-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .site-view .spinner { animation: none; } }
+
+/* Schematic block card (hover preview / click to pin) with the Explain link to the Copilot. */
+.site-view .schematic .block { cursor: pointer; outline: none; }
+.site-view .schematic .block.focused rect { stroke: var(--ink); stroke-width: 2px; }
+.site-view .block-hint { font-size: 11px; color: #a1a1aa; margin: 6px 0 0; }
+.site-view .block-card { margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11.5px; background: #fff; }
+.site-view .block-card.pinned { border-color: var(--accent); }
+.site-view .block-card-hd { display: flex; align-items: center; gap: 8px; }
+.site-view .block-card-hd .x { margin-left: auto; border: none; background: none; cursor: pointer; color: #71717a; font-size: 14px; line-height: 1; }
+.site-view .block-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0; }
+.site-view .block-card dt { color: #71717a; }
+.site-view .block-card dd { margin: 0; color: var(--ink); }
+.site-view .block-card .explain { margin-top: 2px; }

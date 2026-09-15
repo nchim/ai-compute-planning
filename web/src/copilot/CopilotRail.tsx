@@ -4,6 +4,7 @@ import { useStore, viewContext, type Proposal } from "../bus";
 import { createCopilot, emptySnapshot, type Activity, type Copilot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
+import { useRegisterCopilotSend } from "./handle";
 import { safeStorage, type Message } from "./history";
 import { renderMarkdownLite } from "./markdownLite";
 import type { ToolEvent } from "./tools";
@@ -31,15 +32,18 @@ export function CopilotRail() {
     () => (apiKey === "" ? null : createCopilot({ store, engine, apiKey })),
     [store, engine, apiKey],
   );
+  const registerSend = useRegisterCopilotSend();
   useEffect(() => {
-    const register = (fn: ((text: string) => Promise<void>) | null) =>
+    const register = (fn: ((text: string) => Promise<void>) | null) => {
+      registerSend(fn); // in-app readers ("Explain" links)
       window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
+    };
     register(copilot === null ? null : copilot.send);
     return () => {
       register(null);
       copilot?.dispose();
     };
-  }, [copilot]);
+  }, [copilot, registerSend]);
 
   const snapshot = useSyncExternalStore(copilot?.subscribe ?? noSubscribe, copilot?.getSnapshot ?? emptyGetter);
 

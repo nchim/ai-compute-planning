@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { useStore } from "../../bus";
+import { useCopilotSend } from "../../copilot/handle";
 import { BlockKind, type Block, type Schematic } from "../../gen/capplanner/v1/engine_pb";
-import { quarterLabel } from "./fmt";
+import { num, quarterLabel } from "./fmt";
 import { NotComputed, Region, useCompareBaseline } from "./chrome";
 
 const kindClass: Record<BlockKind, string> = {
@@ -17,6 +18,18 @@ const kindClass: Record<BlockKind, string> = {
 };
 
 /** Screen-pixel typography: the SVG's user unit is the metre, so these are converted per render. */
+const kindLabel: Record<BlockKind, string> = {
+  [BlockKind.BLOCK_UNSPECIFIED]: "block",
+  [BlockKind.DATA_HALL]: "data hall",
+  [BlockKind.SUBSTATION]: "substation / switchyard",
+  [BlockKind.COOLING_YARD]: "cooling yard",
+  [BlockKind.GAS_PAD]: "gas generation pad",
+  [BlockKind.EXPANSION_PAD]: "expansion pad (reserved)",
+  [BlockKind.WATER]: "water",
+  [BlockKind.SETBACK]: "setback",
+};
+const sqmPerAcre = 4046.86;
+
 const labelFontPx = 11;
 const labelPadPx = 6;
 const labelCharWidth = 0.62; // em per character, a safe estimate for the 600-weight UI font
@@ -71,6 +84,9 @@ export function SiteSchematic() {
   const svgRef = useRef<SVGSVGElement>(null);
   const widthPx = useRenderedWidth(svgRef);
   const hatchId = useId();
+  // Hovering previews a block's card; clicking pins it so the Explain link can be reached.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
   if (schematic === undefined) {
     return (
       <Region id="site_schematic" title="Site schematic · phase reveal" dimensions={["space", "time"]}>
@@ -86,6 +102,8 @@ export function SiteSchematic() {
   const visible = schematic.blocks.filter((b) => b.energizeMonth <= month);
   const setMonth = (m: number) => store.dispatch({ type: "select", selection: { ...state.selection, month: m } });
   const hatchPitch = hatchPitchPx * mPerPx;
+  const focusId = pinned ?? hovered;
+  const focused = focusId === null ? undefined : schematic.blocks.find((b) => b.id === focusId);
 
   return (
     <Region
@@ -115,7 +133,20 @@ export function SiteSchematic() {
         </defs>
         <rect className="parcel" x={0} y={0} width={schematic.parcelWM} height={schematic.parcelHM} vectorEffect="non-scaling-stroke" />
         {visible.map((b) => (
-          <g key={b.id} className={`block ${kindClass[b.kind]} phase-${phases.get(b.phaseId) ?? "none"}`} data-block={b.id} data-phase={b.phaseId}>
+          <g
+            key={b.id}
+            className={`block ${kindClass[b.kind]} phase-${phases.get(b.phaseId) ?? "none"}${focusId === b.id ? " focused" : ""}`}
+            data-block={b.id}
+            data-phase={b.phaseId}
+            onMouseEnter={() => setHovered(b.id)}
+            onMouseLeave={() => setHovered(null)}
+            onClick={() => setPinned((p) => (p === b.id ? null : b.id))}
+            tabIndex={0}
+            onFocus={() => setHovered(b.id)}
+            onBlur={() => setHovered(null)}
+            role="button"
+            aria-label={`${kindLabel[b.kind]} ${b.id}`}
+          >
             <rect
               x={b.xM}
               y={b.yM}
@@ -137,6 +168,11 @@ export function SiteSchematic() {
           </g>
         )}
       </svg>
+      {focused !== undefined ? (
+        <BlockCard block={focused} schematic={schematic} pinned={pinned === focused.id} onUnpin={() => setPinned(null)} />
+      ) : (
+        <p className="block-hint">Hover a block for details; click to pin it.</p>
+      )}
       <div className="scrubber">
         <input
           type="range"
@@ -156,5 +192,65 @@ export function SiteSchematic() {
         {baseline !== undefined && <li><span className="swatch baseline" /> baseline footprint</li>}
       </ul>
     </Region>
+  );
+}
+
+/** Details for one block, and an "Explain" link that hands the selection to the Copilot. */
+function BlockCard(props: { block: Block; schematic: Schematic; pinned: boolean; onUnpin: () => void }) {
+  const { state } = useStore();
+  const send = useCopilotSend();
+  const b = props.block;
+  const acres = (b.wM * b.hM) / sqmPerAcre;
+  const parcelAcres = (props.schematic.parcelWM * props.schematic.parcelHM) / sqmPerAcre;
+  const phase = state.plan?.phasing?.phases.find((p) => p.id === b.phaseId);
+  // A single-shot build has no explicit phases: the engine's one phase carries the whole target.
+  const phaseMw = phase?.itLoadMw ?? (b.phaseId !== "" ? state.plan?.compute?.targetItLoadMw : undefined);
+  const totalMw = state.result?.summary?.mwOnlineFinal ?? 0;
+  const racks = state.result?.summary?.extra["racks"];
+  const hallRacks = b.kind === BlockKind.DATA_HALL && racks !== undefined && totalMw > 0 && phaseMw !== undefined ? Math.round((racks * phaseMw) / totalMw) : undefined;
+  const explain = () =>
+    send?.(
+      `Explain the "${b.id}" block on the site schematic (${kindLabel[b.kind]}${b.phaseId ? `, phase ${b.phaseId}` : ""}, energizes month ${b.energizeMonth}, ` +
+        `${b.wM.toFixed(0)}×${b.hM.toFixed(0)} m ≈ ${acres.toFixed(1)} acres): what it is, how it was sized, and what drives it.`,
+    ).catch(() => undefined); // failures surface in the rail
+  return (
+    <div className={`block-card${props.pinned ? " pinned" : ""}`} data-block-card={b.id} role="group" aria-label={`details for ${b.id}`}>
+      <div className="block-card-hd">
+        <b>{b.id}</b>
+        <span className="chip">{kindLabel[b.kind]}</span>
+        {props.pinned && (
+          <button type="button" className="x" aria-label="unpin" onClick={props.onUnpin}>
+            ×
+          </button>
+        )}
+      </div>
+      <dl>
+        {b.phaseId !== "" && (
+          <>
+            <dt>phase</dt>
+            <dd>{b.phaseId}{phaseMw !== undefined && ` · ${num(phaseMw)} MW IT`}</dd>
+          </>
+        )}
+        {b.kind !== BlockKind.SETBACK && b.kind !== BlockKind.EXPANSION_PAD && (
+          <>
+            <dt>energizes</dt>
+            <dd>m{b.energizeMonth} · {quarterLabel(b.energizeMonth)}</dd>
+          </>
+        )}
+        <dt>footprint</dt>
+        <dd>
+          {b.wM.toFixed(0)} × {b.hM.toFixed(0)} m · {acres.toFixed(1)} acres ({parcelAcres > 0 ? ((100 * acres) / parcelAcres).toFixed(1) : "—"}% of parcel)
+        </dd>
+        {hallRacks !== undefined && (
+          <>
+            <dt>racks</dt>
+            <dd>≈ {num(hallRacks)}</dd>
+          </>
+        )}
+      </dl>
+      <button type="button" className="mini explain" disabled={send === null} title={send === null ? "Copilot not available" : "Ask the Copilot about this block"} onClick={explain}>
+        Explain →
+      </button>
+    </div>
   );
 }

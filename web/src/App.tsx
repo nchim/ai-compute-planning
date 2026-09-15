@@ -1,6 +1,6 @@
 import { useStore, type Tab } from "./bus";
 import { Canvas } from "./components/Canvas";
-import { CopilotRail } from "./copilot";
+import { CopilotHandleProvider, CopilotRail } from "./copilot";
 
 const tabs: readonly { id: Tab; label: string; enabled: boolean }[] = [
   { id: "portfolio", label: "Portfolio", enabled: false },
@@ -35,10 +35,12 @@ export function App() {
         <div className="spacer" />
         <div className="selector">Site: {state.plan?.meta?.siteName ?? "—"}</div>
       </header>
-      <div className="bodyrow">
-        <CopilotRail />
-        <Canvas />
-      </div>
+      <CopilotHandleProvider>
+        <div className="bodyrow">
+          <CopilotRail />
+          <Canvas />
+        </div>
+      </CopilotHandleProvider>
     </div>
   );
 }

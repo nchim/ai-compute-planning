@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { fromJsonString } from "@bufbuild/protobuf";
 import { afterEach, describe, expect, test } from "vitest";
+import { useEffect } from "react";
+import { CopilotHandleProvider, useRegisterCopilotSend } from "../../copilot/handle";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
@@ -117,6 +119,39 @@ describe("regions render from the golden Result", () => {
     expect(container.querySelector("[data-running='optimize']")).not.toBeNull();
     expect((screen.getByRole("button", { name: /optimizing/i }) as HTMLButtonElement).disabled).toBe(true);
     expect(container.querySelector(".shade.shortfall")).toBeNull(); // the chart yields to the running panel
+  });
+
+  test("hovering a schematic block shows its card; Explain hands the selection to the Copilot", () => {
+    const h = harness();
+    const sent: string[] = [];
+    function Registrar() {
+      const register = useRegisterCopilotSend();
+      useEffect(() => register(async (t) => void sent.push(t)), [register]);
+      return null;
+    }
+    const { container } = render(
+      <StoreProvider store={h.store}>
+        <CopilotHandleProvider>
+          <Registrar />
+          <SiteSchematic />
+        </CopilotHandleProvider>
+      </StoreProvider>,
+    );
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+    const hall = container.querySelector("[data-block^='hall']") as SVGGElement;
+    fireEvent.mouseEnter(hall);
+    const card = container.querySelector("[data-block-card]") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toMatch(/data hall/);
+    expect(card.textContent).toMatch(/energizes/);
+    expect(card.textContent).toMatch(/acres/);
+    fireEvent.mouseLeave(hall);
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+
+    fireEvent.click(hall); // pin
+    fireEvent.click(within(container.querySelector("[data-block-card]") as HTMLElement).getByRole("button", { name: /explain/i }));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(/Explain the ".*" block on the site schematic/);
   });
 
   test("critical path renders each task and the energize + grid markers", () => {
@@ -235,7 +270,7 @@ describe("controls dispatch through the bus", () => {
     expect(h.dispatched).toHaveLength(1);
     expect(h.dispatched[0]).toMatchObject({ type: "applyPatch" });
     const policy = h.store.getState().plan?.phasing?.policy;
-    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 20]);
+    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 200]); // shortfall cap defaults to the target MW (uncapped)
     fireEvent.change(container.querySelector('[data-path="phasing.policy.max_shortfall_mw"] input')!, { target: { value: "15" } });
     expect(h.dispatched[1]).toEqual({ type: "setField", path: "phasing.policy.max_shortfall_mw", value: 15 });
   });
