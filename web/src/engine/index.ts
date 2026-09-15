@@ -5,8 +5,9 @@ export { EngineError, isEngineError, type Engine, type EngineErrorKind } from ".
 
 /**
  * The single place that decides which engine the app runs. `VITE_ENGINE=wasm` selects the WS5
- * module (`./wasm`), loaded lazily; anything else — or a wasm module that cannot be imported —
- * falls back to the fake engine. The fallback is reported through `onFallback` so it is visible.
+ * worker-backed engine (`./client`), which needs `make wasm` to have produced `/engine.wasm`;
+ * anything else — or a missing wasm build — falls back to the fake engine. The fallback is
+ * reported through `onFallback` so it is visible, never silent.
  */
 export function createEngine(onFallback: (reason: string) => void): Engine {
   if (import.meta.env.VITE_ENGINE !== "wasm") {
@@ -19,18 +20,18 @@ export function createEngine(onFallback: (reason: string) => void): Engine {
   }));
 }
 
-interface WasmEngineModule {
-  createEngine(): Engine;
-}
+const wasmUrl = "/engine.wasm";
 
 async function loadWasmEngine(): Promise<Engine> {
-  // A non-literal specifier keeps tsc/Vite from resolving a module that only exists once WS5 merges.
-  const specifier = "./wasm";
-  const mod = (await import(/* @vite-ignore */ specifier)) as Partial<WasmEngineModule>;
-  if (typeof mod.createEngine !== "function") {
-    throw new EngineError("load", "./wasm does not export createEngine()");
+  // Probe before spawning the worker: a missing build should fall back visibly here, not surface
+  // as a load error on every analyze.
+  const probe = await fetch(wasmUrl, { method: "HEAD" });
+  const type = probe.headers.get("content-type") ?? "";
+  if (!probe.ok || !type.includes("wasm")) {
+    throw new EngineError("load", `${wasmUrl} is not served (${probe.status} ${type || "no content-type"}); run make wasm`);
   }
-  return mod.createEngine();
+  const { createEngine: createWasmEngine } = await import("./client");
+  return createWasmEngine();
 }
 
 function lazyEngine(ready: Promise<Engine>): Engine {
