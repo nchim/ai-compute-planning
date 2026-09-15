@@ -61,7 +61,7 @@ func build(plan *pb.SitePlan, d *diags) *model {
 	m.capture = computeCapture(plan.GetDemand().GetPoints(), m.phases, m.months)
 	m.pv = discount(m)
 	buildSummary(m, d)
-	m.schematic = layoutSchematic(m)
+	m.schematic = layoutSchematic(m, d)
 	return m
 }
 

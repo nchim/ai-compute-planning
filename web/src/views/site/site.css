@@ -116,12 +116,14 @@
 .site-view .map .ov-water circle { fill: #4f83a8; } .map .ov-water text { fill: #4f83a8; }
 .site-view .map .ov-latency circle { fill: none; stroke: var(--time); stroke-dasharray: 5 4; stroke-width: 1.5; } .map .ov-latency text { fill: var(--time); }
 
-.site-view .schematic { width: 100%; height: auto; font-size: 26px; }
-.site-view .schematic .parcel { fill: #f3f4f1; stroke: var(--line); stroke-dasharray: 8 6; stroke-width: 3; }
-.site-view .schematic .block rect { stroke: #fff; stroke-width: 3; }
-.site-view .schematic .block text { fill: #fff; font-weight: 600; }
-.site-view .schematic .setback rect { fill: #e4e4e7; } .schematic .setback text { fill: var(--muted); }
-.site-view .schematic .expansion-pad rect { fill: none; stroke: var(--line); stroke-dasharray: 10 8; } .schematic .expansion-pad text { fill: var(--muted); }
+/* The schematic's user unit is the metre; every stroke is non-scaling, so widths and dashes here are screen px. */
+.site-view .schematic { width: 100%; height: auto; display: block; }
+.site-view .schematic .parcel { fill: #f3f4f1; stroke: var(--line); stroke-dasharray: 6 4; stroke-width: 1; }
+.site-view .schematic .hatch { stroke: #c4c4c8; stroke-width: 1; }
+.site-view .schematic .block rect { stroke: #fff; stroke-width: 1.5; }
+.site-view .schematic .block text { fill: #fff; font-weight: 600; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.site-view .schematic .setback rect { stroke: #d4d4d8; stroke-width: 1; } .site-view .schematic .setback text { fill: var(--muted); }
+.site-view .schematic .expansion-pad rect { fill: none; stroke: var(--line); stroke-dasharray: 5 4; } .site-view .schematic .expansion-pad text { fill: var(--muted); }
 .site-view .schematic .substation rect { fill: var(--space); } .schematic .water rect { fill: #4f83a8; } .schematic .gas-pad rect { fill: var(--capital); }
 .site-view .schematic .phase-0 rect { fill: var(--p0); } .schematic .phase-1 rect { fill: var(--p1); } .schematic .phase-2 rect { fill: var(--p2); }
 .site-view .schematic .phase-3 rect { fill: var(--p3); } .schematic .phase-4 rect { fill: var(--p4); }
@@ -141,6 +143,7 @@
 .site-view .stackbar.with-baseline svg { height: 48px; }
 .site-view .stackbar .baseline rect { opacity: .45; }
 .site-view .bands .baseline { opacity: .5; } .site-view .bands .baseline line { stroke: var(--ink); stroke-dasharray: 3 2; }
+.site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .5; }
 .site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 8; opacity: .5; }
 
 /* Blank and running states for regions that need an action before they have data. */
