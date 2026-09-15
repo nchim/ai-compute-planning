@@ -108,11 +108,12 @@ func TestCallNilResult(t *testing.T) {
 	}
 }
 
-func TestDefaultBridgeWiresStubs(t *testing.T) {
-	for _, op := range []string{"analyze", "optimize"} {
-		res := decodeResult(t, Default().Call(op, fixtureBytes(t)))
-		if len(res.Diagnostics) == 0 {
-			t.Fatalf("%s: expected at least one diagnostic from the core/optimize stub", op)
-		}
+func TestDefaultBridgeWiresModels(t *testing.T) {
+	// The real engine analyzes the fixture OK; the optimizer is still a stub and says so.
+	if res := decodeResult(t, Default().Call("analyze", fixtureBytes(t))); res.Status != pb.Status_OK || res.Summary == nil {
+		t.Fatalf("analyze: want OK with a summary, got %v %v", res.Status, res.Diagnostics)
+	}
+	if res := decodeResult(t, Default().Call("optimize", fixtureBytes(t))); len(res.Diagnostics) == 0 {
+		t.Fatal("optimize: expected at least one diagnostic from the optimize stub")
 	}
 }

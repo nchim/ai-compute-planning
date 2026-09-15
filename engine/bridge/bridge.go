@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/nchim/ai-compute-planning/engine/core"
+	"github.com/nchim/ai-compute-planning/engine"
 	"github.com/nchim/ai-compute-planning/engine/optimize"
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
@@ -19,7 +19,7 @@ const (
 	OpOptimize = "optimize"
 )
 
-// Model is a pure SitePlan → Result function (core.Analyze, optimize.Optimize).
+// Model is a pure SitePlan → Result function (engine.Analyze, optimize.Optimize).
 type Model func(*pb.SitePlan) *pb.Result
 
 // Bridge dispatches ops to injectable models. Tests substitute failing models to exercise recovery.
@@ -30,7 +30,7 @@ type Bridge struct {
 
 // Default wires the production models.
 func Default() Bridge {
-	return Bridge{Analyze: core.Analyze, Optimize: optimize.Optimize}
+	return Bridge{Analyze: engine.Analyze, Optimize: optimize.Optimize}
 }
 
 // Call decodes in as a SitePlan, runs op and returns the encoded Result. It never panics: every
