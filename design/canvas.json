@@ -10,5 +10,5 @@
     { "id": "roadmap", "x": 1560, "y": -168, "w": 640, "text": "Reading the sketch\nGreyed nav items (Financing, Reports, Data Sources) and veiled panels (e.g. correlation engine) = roadmap, shown to provoke scope discussion. The chat 'tool cards' with 'inspect →' stand in for the separate calc engine (pro forma, system sizing, floor planning) — spec'd after we settle the UI." },
     { "id": "feedback", "x": 0, "y": 1090, "w": 640, "text": "Where I want your feedback\n1) Is chat-rail + canvas the right split?  2) Do the four dimensions read clearly?  3) Site Feasibility (screen 2) is now the built-out POC — right depth, or too much on one screen?  4) Does the phasing lever + optimization panel read as the primary workflow?" }
   ],
-  "launch": { "view": "focused", "file": "Main.dc.html" }
+  "launch": { "view": "focused", "file": "SiteFeasibility.dc.html" }
 }
