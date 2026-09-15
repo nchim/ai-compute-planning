@@ -118,6 +118,18 @@ BYO-key panel stores it. It is never printed or written to an artifact: the key 
 screenshot, `sk-ant-…` strings are redacted from archived console logs and `transcript.md`, and the
 command log / plan / Result never contain it. Runs are gitignored; the one reviewed live run is force-added.
 
-Live mode takes 5–15 minutes (a real tool loop per turn) and fails the test on a narration miss with the
+Live mode takes 30–60 minutes (a real tool loop per turn) and fails the test on a narration miss with the
 offending numbers listed, so an unexpected failure usually means a prompt/tool wording gap — read
 `transcript.md` first.
+
+**Iterating on a live failure.** Restarting from T1 for every defect is the expensive part, so:
+
+| Knob | Effect |
+|---|---|
+| `npm run acceptance:live:iterate` | Live mode without video/slowMo and with `ACCEPTANCE_MC_ITERATIONS=300` (T4 asserts against whatever count the run used). The archived run uses `acceptance:live` (video on, 1,000 draws). |
+| `ACCEPTANCE_RESUME_FROM=T6` | Rebuilds the state of the newest previous run (`ACCEPTANCE_RESUME_RUN=<dir>` to pick one) from its archive — every earlier turn's `plan.json` is loaded in order so undo history matches, the baseline is pinned before T3's plan and compare switched on after T3b, checkpoints come from the archived `result.json`s (each is re-analyzed and must reproduce byte-for-byte), the Copilot transcript is restored into localStorage from `transcript.json` — and starts at that turn, so a failure at T6 re-verifies T6–T8 only. Live mode only. |
+| `ACCEPTANCE_MC_ITERATIONS` | Monte Carlo draws written into the fixture (default 1,000). |
+| `HARNESS_VIDEO=0/1` | Video + trace + slowMo off/on (on by default for `acceptance:live` only). |
+
+Per-turn reasoning effort is fixed in the spec (`output_config.effort`: high for T3/T7/T8, low for the
+T5/T6 what-ifs, the API default elsewhere) and reaches the Copilot through `sendCopilot(text, { effort })`.

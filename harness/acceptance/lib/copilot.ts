@@ -32,6 +32,17 @@ export function keyInitScript(key: string): string {
   return `sessionStorage.setItem(${JSON.stringify(KEY_STORAGE)}, ${JSON.stringify(key)});`;
 }
 
+/** Where the Copilot persists the abilene-1 transcript (mirrors `historyKey` in web/src/copilot/history.ts). */
+export const TRANSCRIPT_STORAGE = "copilot.history.1.abilene-1";
+
+/** Seeds localStorage with an archived transcript (its `transcript.json`) so a resumed run continues it. */
+export function transcriptInitScript(transcriptJson: string): string {
+  return `localStorage.setItem(${JSON.stringify(TRANSCRIPT_STORAGE)}, ${JSON.stringify(transcriptJson)});`;
+}
+
+/** Reasoning effort for a turn (`output_config.effort`); omitted = the API default. */
+export type Effort = "low" | "medium" | "high";
+
 // ---- the transcript as the page exposes it (Anthropic message params) --------------------------
 
 interface TextBlock {
@@ -66,6 +77,7 @@ export interface Usage {
 
 interface Snapshot {
   readonly messages: readonly Message[];
+  readonly droppedTurns?: number;
   readonly lastUsage: Usage | null;
   readonly running: boolean;
   readonly error: string | null;
@@ -102,14 +114,14 @@ const maxCardsPerTurn = 3;
  * One human turn: send the prompt, then play the human on any accept/undo card the Copilot opened —
  * accept it, let the engine re-analyze and tell the Copilot so it sees the new Result and continues.
  */
-export async function copilotTurn(s: Session, prompt: string): Promise<Turn> {
+export async function copilotTurn(s: Session, prompt: string, effort?: Effort): Promise<Turn> {
   const before = (await copilotSnapshot(s)).messages.length;
-  await send(s, prompt);
+  await send(s, prompt, effort);
   const resultsAfterCards: Result[] = [];
   for (let i = 0; i < maxCardsPerTurn && (await acceptPendingCard(s)); i++) {
     await s.waitIdle();
     resultsAfterCards.push(parseResult(await s.getResult()));
-    await send(s, acceptedFollowUp);
+    await send(s, acceptedFollowUp, effort);
   }
   const snap = await copilotSnapshot(s);
   if (snap.error !== null) throw new Error(`Copilot error: ${snap.error}`);
@@ -125,10 +137,10 @@ export async function copilotTurn(s: Session, prompt: string): Promise<Turn> {
 }
 
 /** Sends one message and keeps the Copilot thread scrolled to its newest content while it streams. */
-async function send(s: Session, text: string): Promise<void> {
+async function send(s: Session, text: string, effort?: Effort): Promise<void> {
   const thread = s.page.locator(".rail .thread");
   await thread.scrollIntoViewIfNeeded();
-  const turn = s.sendCopilot(text);
+  const turn = effort === undefined ? s.sendCopilot(text) : s.sendCopilot(text, { effort });
   const follow = setInterval(() => {
     thread.evaluate((el) => el.scrollTo({ top: el.scrollHeight })).catch(() => undefined); // best effort: the turn may already be over
   }, 500);

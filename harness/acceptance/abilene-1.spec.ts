@@ -4,13 +4,14 @@
  * sends the human's words to the real Copilot and additionally checks its narration. Both modes
  * assert the same engine/UI facts per turn and archive every turn under harness/runs/<ts>/.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test, type TestInfo } from "@playwright/test";
 
 import { Session, type Json, type PatchEntry } from "../src/session";
-import { KEY_PANEL_SELECTOR, copilotSnapshot, copilotTurn, keyInitScript, loadApiKey, turnMarkdown, type Turn } from "./lib/copilot";
+import { KEY_PANEL_SELECTOR, copilotSnapshot, copilotTurn, keyInitScript, loadApiKey, transcriptInitScript, turnMarkdown, type Effort, type Turn } from "./lib/copilot";
 import { appliedOptimization, lastSeq, mutationsSince } from "./lib/log";
 import { deltaFacts, missingDimensions, numbersIn, traceable, untraceable } from "./lib/narration";
 import { conservationGreen, findDiagnostic, metric, numbersOf, parsePlan, parseResult, type Result } from "./lib/result";
@@ -19,7 +20,7 @@ type Mode = "scripted" | "live";
 const mode = modeFromEnv();
 const live = mode === "live";
 
-const fixture = readFileSync(fileURLToPath(new URL("../../fixtures/abilene-1.json", import.meta.url)), "utf8");
+const rawFixture = readFileSync(fileURLToPath(new URL("../../fixtures/abilene-1.json", import.meta.url)), "utf8");
 
 /** The human's words, verbatim from docs/acceptance-session.md. */
 const H = {
@@ -96,14 +97,45 @@ interface Checkpoint {
   readonly seq: number;
 }
 
+/** The turns in session order; T8 has no scripted path. Resume points are turn ids. */
+type TurnId = "T1" | "T2" | "T3" | "T3b" | "T4" | "T5" | "T6" | "T7" | "T8";
+const order: readonly TurnId[] = ["T1", "T2", "T3", "T3b", "T4", "T5", "T6", "T7", "T8"];
+const stepName: Record<TurnId, string> = {
+  T1: "T1 orientation",
+  T2: "T2 density diagnostics",
+  T3: "T3 optimize phasing",
+  T3b: "T3b baseline compare",
+  T4: "T4 monte carlo",
+  T5: "T5 utilization what-if",
+  T6: "T6 undo and depreciation slider",
+  T7: "T7 summary and replay",
+  T8: "T8 build vs buy",
+};
+/** Reasoning effort per live turn: the what-ifs are cheap, the optimize/summary/advice turns are not. */
+const effort: Partial<Record<TurnId, Effort>> = { T3: "high", T5: "low", T6: "low", T7: "high", T8: "high" };
+
+/** `ACCEPTANCE_RESUME_FROM=<turn>` replays a previous run's archive up to that turn and starts there. */
+const resumeFrom = resumeTurnFromEnv();
+/** `ACCEPTANCE_MC_ITERATIONS` (default 1,000) lets iteration runs draw fewer Monte Carlo samples. */
+const mcIterations = Number(process.env.ACCEPTANCE_MC_ITERATIONS ?? 1000);
+const fixture = withIterations(rawFixture, mcIterations);
+
 test.describe.configure({ timeout: live ? 30 * 60_000 : 5 * 60_000 });
 
-test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
-  const session = await launch(info);
+test(`acceptance session: Abilene-1 T1–T8 (${mode}${resumeFrom === null ? "" : `, resumed at ${resumeFrom}`})`, async ({}, info) => {
+  const previous = resumeFrom === null ? null : previousRun();
+  const session = await launch(info, previous);
   const grounding = new Grounding(session);
-  try {
+  const checkpoints: Partial<Record<TurnId, Checkpoint>> = {};
+  const cp = (id: TurnId): Checkpoint => {
+    const c = checkpoints[id];
+    if (c === undefined) throw new Error(`${id} has not run (or was not archived) yet`);
+    return c;
+  };
+
+  const turns: Record<TurnId, (s: Session) => Promise<Checkpoint | void>> = {
     // ---- T1 — Orientation ---------------------------------------------------------------------
-    const t1 = await session.step("T1 orientation", async (s) => {
+    async T1(s) {
       await s.loadPlan(fixture);
       await s.waitIdle();
       await grounding.learn(s);
@@ -114,10 +146,11 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       expect(metric(result, "time_to_energize_months")).toBe(gridMonth);
       expect(metric(result, "demand_capture_pct"), "grid arrives late vs. the ramp").toBeLessThan(90);
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T2 — A bad idea, caught early ---------------------------------------------------------
-    const t2 = await session.step("T2 density diagnostics", async (s) => {
+    async T2(s) {
+      const t1 = cp("T1");
       let firstResult: Result;
       let fixMs: number;
       if (live) {
@@ -154,10 +187,11 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       expect(metric(result, "capex_per_mw"), "agility premium is a visible capex line").toBeGreaterThan(metric(t1.result, "capex_per_mw"));
       if (!live) expect(fixMs, "Analyze after the fix").toBeLessThanOrEqual(budgetMs.analyze);
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T3 — Phase to the demand ramp ---------------------------------------------------------
-    const t3 = await session.step("T3 optimize phasing", async (s) => {
+    async T3(s) {
+      const t2 = cp("T2");
       // T3b: the human pins the single-shot plan before anything is optimized.
       await s.setBaseline("single-shot");
       let optimization: Result;
@@ -202,10 +236,12 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       await scrubber.fill(String(phases.at(-1)?.energize_month));
       await expect(s.page.locator('.block[data-block^="hall_"]')).toHaveCount(phases.length);
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T3b — Pin and compare -----------------------------------------------------------------
-    await session.step("T3b baseline compare", async (s) => {
+    async T3b(s) {
+      const t2 = cp("T2");
+      const t3 = cp("T3");
       const baseline = await s.getBaseline();
       expect(baseline?.label).toBe("single-shot");
       const baselineSummary = baseline?.summary as Record<string, unknown>;
@@ -233,10 +269,11 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         grounding.addFacts(deltaFacts(flattenNumbers(baselineSummary as Json), flattenNumbers((t3.result.summary ?? {}) as Json)));
         await grounding.turn(s, "T3b", H.t3b);
       }
-    });
+      return checkpoint(s, t3.result);
+    },
 
     // ---- T4 — Monte Carlo + sensitivity --------------------------------------------------------
-    const t4 = await session.step("T4 monte carlo", async (s) => {
+    async T4(s) {
       let mcMs = 0;
       if (live) {
         await grounding.turn(s, "T4", H.t4);
@@ -247,13 +284,13 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       const before = await s.getResult();
       const result = parseResult(before);
       expect(result.status).toBe("OK");
-      expect(result.monte_carlo?.iterations).toBe(1000);
+      expect(result.monte_carlo?.iterations).toBe(mcIterations);
       for (const key of ["lcoc_per_gpu_hour", "npv"]) {
         const dist = result.monte_carlo?.metrics?.[key];
         expect(dist, `Monte Carlo distribution for ${key}`).toBeDefined();
         expect(dist!.p10!).toBeLessThan(dist!.p50!);
         expect(dist!.p50!).toBeLessThan(dist!.p90!);
-        expect(sum((dist!.histogram ?? []).map((b) => b.count ?? 0)), `${key} histogram counts`).toBe(1000);
+        expect(sum((dist!.histogram ?? []).map((b) => b.count ?? 0)), `${key} histogram counts`).toBe(mcIterations);
       }
       const vars = result.sensitivity?.vars ?? [];
       expect(new Set(vars.map((v) => v.target_metric))).toEqual(new Set(["lcoc_per_gpu_hour", "npv"]));
@@ -266,12 +303,13 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       await s.setControl("run.monte_carlo.seed", 42);
       const rerunMs = (timings["T4 monte carlo rerun"] = await timedIdle(s));
       expect(await s.getResult(), "Monte Carlo is deterministic for a fixed seed").toBe(before);
-      expect(Math.max(mcMs, rerunMs), "1,000-iteration Monte Carlo").toBeLessThanOrEqual(budgetMs.monteCarlo);
+      expect(Math.max(mcMs, rerunMs), `${mcIterations}-iteration Monte Carlo`).toBeLessThanOrEqual(budgetMs.monteCarlo);
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T5 — What-if on the linchpin ----------------------------------------------------------
-    const t5 = await session.step("T5 utilization what-if", async (s) => {
+    async T5(s) {
+      const t4 = cp("T4");
       if (live) {
         const turn = await grounding.turn(s, "T5", H.t5);
         const breakeven = metric(parseResult(await s.getResult()), "utilization_breakeven_pct");
@@ -285,10 +323,12 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       const result = parseResult(await s.getResult());
       expect(metric(result, "lcoc_per_gpu_hour")).toBeGreaterThan(metric(t4.result, "lcoc_per_gpu_hour"));
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T6 — Undo, then a human-driven lever --------------------------------------------------
-    await session.step("T6 undo and depreciation slider", async (s) => {
+    async T6(s) {
+      const t4 = cp("T4");
+      const t5 = cp("T5");
       await s.undo();
       await s.waitIdle();
       expect(await s.getPlan(), "undo restores the T4 plan byte-for-byte").toBe(t4.plan);
@@ -307,17 +347,17 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         expect(mutationsSince(await s.getCommandLog(), t5.seq).length, "answering 'what changed' mutates nothing").toBe(1);
       }
       return checkpoint(s, result);
-    });
+    },
 
     // ---- T7 — Steering-committee summary + cross-cutting checks -------------------------------
-    await session.step("T7 summary and replay", async (s) => {
+    async T7(s) {
       const plan = await s.getPlan();
       const before = await s.getResult();
       let messageCount = 0;
       if (live) {
         const turn = await grounding.turn(s, "T7", H.t7);
         expect(missingDimensions(turn.text), "all four dimensions named").toEqual([]);
-      expect(grounding.transcript, "the transcript is archived").not.toBeNull();
+        expect(grounding.transcript, "the transcript is archived").not.toBeNull();
         expect(turn.toolCalls.map((c) => c.name), "grounded in the research corpus").toContain("query_research");
         messageCount = turn.messageCount;
       }
@@ -335,22 +375,38 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         expect(restored.messages.length, "transcript restored after reload").toBe(messageCount);
       }
       expect(await s.getConsoleErrors(), "no page errors during the session").toEqual([]);
-    });
+      return checkpoint(s, parseResult(before));
+    },
 
     // ---- T8 — Open-ended advice (live only: no deterministic tool path to script) -------------
-    if (live) {
-      await session.step("T8 build vs buy", async (s) => {
-        const turn = await grounding.turn(s, "T8", H.t8);
-        expect(turn.toolCalls.map((c) => c.name), "pulled the build-vs-buy framing from the corpus").toContain("query_research");
-        expect(turn.text, "an explicit recommendation").toMatch(/\brecommend/i);
-        expect(turn.text, "an explicit list of unknowns").toMatch(/need to know|unknown|would need|open question|to be sure/i);
-        expect(turn.text, "the timing / optionality argument").toMatch(/option(al)?(ity)?|buys? (us )?time|time to market|speed/i);
-        // No fabricated colo economics: the human gave no $/kW figure, so none may appear as a fact.
-        for (const m of turn.text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)\s*(?:\/|per)\s*kW/gi)) {
-          const context = turn.text.slice(Math.max(0, (m.index ?? 0) - 160), (m.index ?? 0) + 40);
-          expect(/assum|placeholder|illustrat|hypothet|if |say |e\.g\.|example|for instance|would need/i.test(context), `unsourced colo rate "${m[0]}" (context: …${context.trim()}…)`).toBe(true);
-        }
+    async T8(s) {
+      const turn = await grounding.turn(s, "T8", H.t8);
+      expect(turn.toolCalls.map((c) => c.name), "pulled the build-vs-buy framing from the corpus").toContain("query_research");
+      expect(turn.text, "an explicit recommendation").toMatch(/\brecommend/i);
+      expect(turn.text, "an explicit list of unknowns").toMatch(/need to know|unknown|would need|open question|to be sure/i);
+      expect(turn.text, "the timing / optionality argument").toMatch(/option(al)?(ity)?|buys? (us )?time|time to market|speed/i);
+      // No fabricated colo economics: the human gave no $/kW figure, so none may appear as a fact.
+      for (const m of turn.text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)\s*(?:\/|per)\s*kW/gi)) {
+        const context = turn.text.slice(Math.max(0, (m.index ?? 0) - 160), (m.index ?? 0) + 40);
+        expect(/assum|placeholder|illustrat|hypothet|if |say |e\.g\.|example|for instance|would need/i.test(context), `unsourced colo rate "${m[0]}" (context: …${context.trim()}…)`).toBe(true);
+      }
+    },
+  };
+
+  try {
+    if (previous !== null) {
+      await session.step(`resume from ${previous.dir}`, async (s) => {
+        Object.assign(checkpoints, await replayArchive(s, previous, resumeFrom!, grounding));
       });
+    }
+    for (const id of order) {
+      if (resumeFrom !== null && order.indexOf(id) < order.indexOf(resumeFrom)) continue;
+      if (id === "T8" && !live) {
+        info.annotations.push({ type: "skipped turn", description: "T8 is an open-ended advice turn with no deterministic tool path; live mode only" });
+        continue;
+      }
+      const result = await session.step(stepName[id], turns[id]);
+      if (result !== undefined) checkpoints[id] = result;
     }
     await session.screenshot("final");
   } finally {
@@ -368,13 +424,84 @@ function modeFromEnv(): Mode {
   return raw;
 }
 
-async function launch(info: TestInfo): Promise<Session> {
+async function launch(info: TestInfo, previous: PreviousRun | null): Promise<Session> {
   const { baseURL, headless } = info.project.use;
+  // Live: the key, plus the previous run's transcript when resuming, seeded before the app loads.
+  const initScript = live ? [keyInitScript(loadApiKey()), previous?.transcript === null || previous === null ? "" : transcriptInitScript(previous.transcript)].join("\n") : undefined;
   return Session.launch({
     ...(baseURL === undefined ? {} : { baseURL }),
     ...(headless === undefined ? {} : { headless }),
-    ...(live ? { initScript: keyInitScript(loadApiKey()), maskSelectors: [KEY_PANEL_SELECTOR] } : {}),
+    ...(initScript === undefined ? {} : { initScript, maskSelectors: [KEY_PANEL_SELECTOR] }),
   });
+}
+
+/** The fixture with `run.monte_carlo.iterations` set to the run's draw count. */
+function withIterations(protojson: string, iterations: number): string {
+  if (!Number.isInteger(iterations) || iterations < 1) throw new Error(`ACCEPTANCE_MC_ITERATIONS must be a positive integer, got ${iterations}`);
+  const plan = JSON.parse(protojson) as { run: { monte_carlo: { iterations: number } } };
+  plan.run.monte_carlo.iterations = iterations;
+  return JSON.stringify(plan, null, 2);
+}
+
+function resumeTurnFromEnv(): TurnId | null {
+  const raw = process.env.ACCEPTANCE_RESUME_FROM;
+  if (raw === undefined || raw === "") return null;
+  if (!(order as readonly string[]).includes(raw) || raw === "T1") throw new Error(`ACCEPTANCE_RESUME_FROM must be one of ${order.slice(1).join(", ")}, got "${raw}"`);
+  if (!live) throw new Error("ACCEPTANCE_RESUME_FROM only applies to live mode (scripted runs take seconds)");
+  return raw as TurnId;
+}
+
+interface PreviousRun {
+  readonly dir: string;
+  /** Per turn: the archived plan/result of that step, when the step ran and was archived. */
+  readonly steps: Partial<Record<TurnId, { plan: string; result: string }>>;
+  /** The raw Copilot transcript (localStorage form) archived by that run, if any. */
+  readonly transcript: string | null;
+}
+
+/** `ACCEPTANCE_RESUME_RUN=<dir>` or the newest run under harness/runs, with its archived steps. */
+function previousRun(): PreviousRun {
+  const root = fileURLToPath(new URL("../runs/", import.meta.url));
+  const dir = process.env.ACCEPTANCE_RESUME_RUN ?? readdirSync(root).filter((d) => /^\d{4}-/.test(d)).sort().map((d) => path.join(root, d)).at(-1);
+  if (dir === undefined) throw new Error("ACCEPTANCE_RESUME_FROM: no previous run under harness/runs");
+  const steps: Partial<Record<TurnId, { plan: string; result: string }>> = {};
+  for (const entry of readdirSync(dir)) {
+    const id = order.find((t) => entry.startsWith(`${entry.slice(0, 3)}${t.toLowerCase()}-`) && /^\d\d-/.test(entry));
+    if (id === undefined) continue;
+    const plan = path.join(dir, entry, "plan.json");
+    const result = path.join(dir, entry, "result.json");
+    if (!existsSync(plan) || !existsSync(result)) continue;
+    const planText = readFileSync(plan, "utf8");
+    if (planText === "null") continue;
+    steps[id] = { plan: planText, result: readFileSync(result, "utf8") };
+  }
+  const transcriptFile = path.join(dir, "transcript.json");
+  return { dir, steps, transcript: existsSync(transcriptFile) ? readFileSync(transcriptFile, "utf8") : null };
+}
+
+/**
+ * Rebuilds the state the resume turn expects from the archive: every earlier turn's plan is loaded in
+ * order (so undo history matches a fresh run), the baseline is pinned before T3's plan and compare
+ * is switched on after T3b, the checkpoints come from the archived Results, and the grounding facts
+ * cover everything the engine said before. Returns the reconstructed checkpoints.
+ */
+async function replayArchive(s: Session, previous: PreviousRun, from: TurnId, grounding: Grounding): Promise<Partial<Record<TurnId, Checkpoint>>> {
+  const earlier = order.slice(0, order.indexOf(from));
+  const checkpoints: Partial<Record<TurnId, Checkpoint>> = {};
+  for (const id of earlier) {
+    const step = previous.steps[id];
+    if (step === undefined) throw new Error(`resume from ${from}: ${previous.dir} has no archived ${id} step`);
+    if (id === "T3") await s.setBaseline("single-shot");
+    await s.loadPlan(step.plan);
+    await s.waitIdle();
+    expect(await s.getResult(), `${id}'s archived Result reproduces on this engine`).toBe(step.result);
+    grounding.learnFrom(step.plan, step.result);
+    checkpoints[id] = { plan: step.plan, result: parseResult(step.result), seq: 0 };
+  }
+  if (earlier.includes("T3b")) await s.toggleCompare();
+  const seq = lastSeq(await s.getCommandLog());
+  for (const id of earlier) checkpoints[id] = { ...checkpoints[id]!, seq };
+  return checkpoints;
 }
 
 async function checkpoint(s: Session, result: Result): Promise<Checkpoint> {
@@ -495,8 +622,11 @@ class Grounding {
   }
 
   async learn(s: Session): Promise<void> {
-    const result = await s.getResult();
-    const plan = await s.getPlan();
+    this.learnFrom(await s.getPlan(), await s.getResult());
+  }
+
+  /** Facts from an archived (or current) plan + Result pair. */
+  learnFrom(plan: string, result: string | null): void {
     this.facts.push(...numbersOf(JSON.parse(plan) as Json));
     if (result === null) return;
     const parsed = JSON.parse(result) as { summary?: Record<string, unknown> };
@@ -507,8 +637,8 @@ class Grounding {
   }
 
   /** Sends one human turn, learns what the engine said during it, and checks the narration. */
-  async turn(s: Session, label: string, prompt: string): Promise<Turn> {
-    const turn = await copilotTurn(s, prompt);
+  async turn(s: Session, label: TurnId, prompt: string): Promise<Turn> {
+    const turn = await copilotTurn(s, prompt, effort[label]);
     for (const r of turn.resultsAfterCards) this.facts.push(...numbersOf(r as unknown as Json));
     for (const c of turn.toolCalls) if (c.output !== null) this.facts.push(...numbersOf(c.output), ...numbersInStrings(c.output));
     await this.learn(s);
@@ -523,8 +653,11 @@ class Grounding {
   async flush(): Promise<void> {
     if (this.markdown === "") return;
     this.transcriptPath = await this.session.writeArtifact("transcript.md", `# Abilene-1 acceptance session (live)\n\n${this.markdown}`);
-    // The raw turns (tool inputs/outputs included) for debugging a narration or tool-loop miss.
+    // The raw turns (tool inputs/outputs included) for debugging a narration or tool-loop miss, and the
+    // transcript in the form the page persists it, so a later run can resume from here.
     await this.session.writeArtifact("copilot-turns.json", JSON.stringify(this.turns, null, 2));
+    const snapshot = await copilotSnapshot(this.session);
+    await this.session.writeArtifact("transcript.json", JSON.stringify({ version: 1, messages: snapshot.messages, droppedTurns: snapshot.droppedTurns ?? 0 }));
   }
 
   get transcript(): string | null {

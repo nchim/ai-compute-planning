@@ -6,9 +6,9 @@ import { promisify } from "node:util";
 
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-import type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, HarnessApi, Json, PatchEntry } from "../../web/src/harness/api";
+import type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, HarnessApi, Json, PatchEntry, SendOptions } from "../../web/src/harness/api";
 
-export type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, Json, PatchEntry } from "../../web/src/harness/api";
+export type { BaselineSnapshot, CommandLogEntry, Control, ControlValue, Json, PatchEntry, SendOptions } from "../../web/src/harness/api";
 
 export interface LaunchOptions {
   /** Where the SPA is served (default http://localhost:5173). */
@@ -132,8 +132,8 @@ export class Session {
   proposeChange(summary: string, patch: readonly PatchEntry[]): Promise<string> {
     return this.call("proposeChange", summary, patch);
   }
-  sendCopilot(text: string): Promise<void> {
-    return this.call("sendCopilot", text);
+  sendCopilot(text: string, options?: SendOptions): Promise<void> {
+    return options === undefined ? this.call("sendCopilot", text) : this.call("sendCopilot", text, options);
   }
   getCopilotSnapshot(): Promise<Json> {
     return this.call("getCopilotSnapshot");
