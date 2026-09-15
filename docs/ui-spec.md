@@ -1,48 +1,106 @@
 # UI / Interaction Spec
 
-**Status:** v0.1 — 2026-09-15. The wireframe (Claude Design canvas) is the visual reference; this doc is
-the behavioral spec. POC surface = **Site Feasibility**.
+**Status:** v0.2 — 2026-09-15. Updated to the SPA as built (WS6, WS7, WS8, WS11, WS13). The wireframe
+(Claude Design canvas) was the visual reference; this doc is the behavioral spec. POC surface =
+**Site Feasibility**.
 
 ## Global principles
-- **Persistent, view-aware Copilot.** One conversation across all tabs. A `ViewContext` (active tab,
-  selected site id, current `SitePlan`, last `Result`, current selection/hover) is always available to
-  the agent, so it can explain what's on screen and operate any control on it.
+- **Persistent, view-aware Copilot.** One conversation across tabs. A `ViewContext` (active tab,
+  selected site id, current `SitePlan`, last `Result` summary + diagnostics, selection, baseline label
+  + summary, compare flag) is derived from the store and sent with every turn, so the Copilot can explain
+  what is on screen and operate any control on it.
 - **One command bus, three drivers.** Human, embedded Copilot, and the remote-control harness all emit
   the same typed commands (see `architecture.md`). No control path bypasses it.
 - **Real-time & bidirectional.** Every control reads/writes the in-memory `SitePlan`; any change re-runs
-  `Analyze` (WASM) and re-renders (target < 100 ms). Agent-initiated changes appear as **accept/undo
-  "proposed change" cards**, so the human stays in control.
-- **Assistive.** Hover explainers on every metric and control: concept + formula + benchmark + source
-  (keyed to a shared glossary sourced from `research/`). Inline validation surfaces `Result.diagnostics`
-  at the offending control.
-- **Delightful.** Instant recompute, smooth transitions, the schematic + map animate as inputs change;
-  Monte Carlo bands fade in; the phasing timeline scrubs.
+  `Analyze` (WASM in a worker, debounced 16 ms; sub-100 ms budget) and re-renders. Agent-initiated
+  material changes appear as **accept/undo "proposed change" cards**, so the human stays in control.
+- **Assistive.** Hover explainers (`Explainer`) on every metric, control, chart and toolbar action from
+  the glossary in `views/site/glossary.ts` (concept + formula + benchmark + source). Inline validation
+  renders `Result.diagnostics` at the offending control (matched on `proto_path`); diagnostics with no
+  control on the canvas render at the top of the view.
+- **Honest engine badge.** The toolbar shows `engine: wasm` or `engine: fake`; the fake engine also
+  stamps a `FAKE_ENGINE` diagnostic into every Result so no screenshot can pass for a real one.
 
-## Site Feasibility view (POC)
-Layout = persistent Copilot rail (left) + canvas. Canvas regions, each tagged by dimension
-(Space/Time/Capital/Risk):
+## Layout
+Two regions: the **Copilot rail** (left, `aside[aria-label="Copilot"]`) and the **canvas**. The canvas
+is a slim toolbar, an error banner when a command is rejected or the engine fails, the pending proposal
+cards, the active tab's view (only `site` is built; the other tabs show "not part of the POC"), and a
+collapsible **Result inspector** (diagnostics list + JSON trees for `summary`, `diagnostics`,
+`conservation` with proto field names).
 
-1. **Context map (Space).** The site in geographic context with overlays for **power** (grid/BTM/PPA
-   availability), **water** (stress index), **latency** (zone to the demand it serves). Schematic in the
-   artifact mock; real tile provider in production. Hover a layer → explainer.
-2. **Site schematic (Space + Time).** Parametric 2D model from `Result.schematic` — data halls,
-   substation, cooling yard, gas pad, expansion pads, parcel bounds, `footprint_used_pct`. **Phase-aware:
-   a time scrubber reveals blocks by `energize_month`**, so the user comprehends scale + staging.
-3. **Phasing lever (Time — first-class).** The primary control: add/size/schedule phases, or hit
-   **"Optimize phasing"** to run the flagship optimizer against a demand ramp. Shows the demand ramp vs.
-   the phased capacity step, with the shortfall/stranded areas shaded.
-4. **Critical-path timeline (Time).** Gantt with the interconnection/transformer critical path and the
-   energize marker; revenue starts at energization.
-5. **Pro forma / LCOC (Capital).** Capex stack, LCOC, yield-on-cost; the three master levers
-   (GPU-hour price, energization date, depreciation life) are prominent sliders.
-6. **Risk (Risk).** Radar + **Monte Carlo bands (P10/P50/P90)** on LCOC/NPV; sensitivity tornado.
-7. **Optimization panel.** Set objective + constraints + decision vars → run `Optimize` → frontier plot;
-   "Apply best plan" writes the winning `SitePlan` (as an accept/undo card).
+### Toolbar
+| Control | Behavior |
+|---|---|
+| **Load fixture** | Loads a protojson `SitePlan` from `fixtures/`. On `main` this is the single "Load Abilene-1 fixture" button; PR #31 (WS12) turns it into a dropdown over every `fixtures/*.json` (`data-action="load-fixture"`). |
+| **Undo / Redo** | Replay over the plan history; disabled when empty. Undo/redo never touch the baseline. |
+| **Set as baseline** | Snapshots the current plan + Result as the baseline (label = the plan's `scenario_name`, else "Baseline n"); disabled without a Result. A chip shows the pinned label with a clear ×. |
+| **Compare** | Toggle (`aria-pressed`), enabled only with a baseline; see Compare mode. |
+| `engine:` badge | Build-time engine choice (`VITE_ENGINE`). |
+
+## Site Feasibility view (as built, `web/src/views/site/`)
+Header: site name, market · target MW · scenario, "vs. baseline: <label>" when comparing, a status
+score (`OK` / `OK with warnings` / `invalid input` / `infeasible` · conservation green/FAILED), and the
+four dimension chips. Regions, each a `Region` tagged by dimension (Space/Time/Capital/Risk):
+
+1. **Context map (Space)** — the site rendered by a `MapProvider` with toggleable **power / water /
+   latency** overlays (segmented control with explainers). The POC provider is schematic
+   (`schematicMapProvider`); a real tile provider plugs into the same seam later.
+2. **Site schematic · phase reveal (Space + Time)** — parcel + blocks from `Result.schematic` (data
+   halls, substation, cooling yard, gas pad, expansion pads), `footprint_used_pct`, and a **time
+   scrubber** (`input[type=range]`, "time scrubber (month)") that writes `selection.month` so blocks
+   reveal by `energize_month`. In compare mode the baseline's blocks are ghosted.
+3. **Phasing — demand ramp vs. staged capacity (Time; first-class)** — mode select (`phasing.mode`),
+   per-phase editors (`id`, IT MW, start month, energize month, power source) for EXPLICIT plans, and the
+   `demand_vs_capacity` step chart with shortfall/stranded shading; tiles for demand capture,
+   stranded and shortfall MW-months. The baseline's demand and capacity series are ghosted underneath
+   in compare mode.
+4. **Critical path — revenue starts at energization (Time)** — Gantt of the interconnection /
+   transformer / construction / gas-bridge bars with the energize marker per phase.
+5. **Pro forma · LCOC · master levers (Capital)** — capex stack bar, cashflow line, LCOC /
+   capex / capex-per-MW / yield / NPV / IRR tiles, and the slider deck: GPU-hour price, grid energize
+   month, depreciation life (the three master levers), utilization, rack density, cooling mode, PUE,
+   target IT load. Each slider is a bus `setField` on its dotted path (`data-path`).
+6. **Risk · Monte Carlo (P10/P50/P90) (Risk)** — risk radar from the composite score components, an
+   "Enable Monte Carlo" toggle (`run.monte_carlo.enabled`), P10/P50/P90 bands on LCOC and NPV (baseline
+   bands ghosted when comparing), and the sensitivity tornados for **both LCOC and NPV**.
+7. **Optimization · frontier** — "Run optimize" (calls `store.optimize()`; the live plan's
+   `phasing.mode` is untouched), a default-policy shortcut, objective/constraint editors, the frontier
+   scatter of every evaluated candidate, `converged` / `evaluations`, and **"Apply best plan"**, which
+   files an accept/undo card carrying the winner's phasing rather than applying it silently.
 
 ### Controls (all on the command bus)
-Sliders/inputs for: target IT MW, rack density, cooling mode, PUE, power sources + availability,
-phase plan, GPU-hour price, depreciation years, utilization, discount rate. Each has a hover explainer
-and emits a command → re-analyze.
+Every control is a `Field` with a `data-path`, an explainer and inline diagnostics; it dispatches
+`setField` (scalars/enums) so a human edit, `set_control` from the Copilot and `setControl` from the
+harness are indistinguishable in the command log.
+
+## Compare mode (WS11)
+With a baseline pinned and Compare on:
+- every `MetricTile` shows a signed Δ = **current − baseline** (absolute and %), coloured by the
+  glossary's `betterWhen` (better / worse / same);
+- charts take a `baseline` prop from one `useCompareBaseline()` hook (null when compare is off) and
+  draw the baseline series **ghosted**: demand/capacity step chart, capex stack, cashflow line, Monte
+  Carlo bands, schematic blocks;
+- the header shows "vs. baseline: <label>"; ViewContext carries `baselineLabel`, `baselineSummary`,
+  `compare`, so the Copilot cites deltas from the two summaries;
+- undo/redo never change the baseline; clearing the baseline switches compare off.
+
+## Copilot rail (WS8, WS13)
+- **Header:** "Copilot", a dev-only usage line for the last turn (`cache read n · in n · out n`), and
+  "viewing: <tab> · <site id>" from ViewContext.
+- **Key panel / relay mode:** in BYO-key builds a masked key input ("Dev only — the key lives in this
+  tab's sessionStorage… Never ship this."), with Use key / Clear. In relay builds
+  (`VITE_COPILOT_RELAY`) the panel is replaced by the notice "Relay mode — key held server-side" and
+  the Copilot is always enabled.
+- **Thread:** user messages (the injected `<view_context>` block is hidden), assistant text rendered
+  with a light markdown subset, tool calls as status chips (`name · running|done|error`, error detail
+  on hover), streaming text while a turn runs, notices (transcript truncated, reply cut off, stopped)
+  and a `role="alert"` banner for API errors (401/429 messages are transport-aware).
+- **Proposal cards:** every pending `proposeChange` renders in the rail (and on the canvas) with the
+  summary, the patch preview, and **Accept** / **Undo** (reject). Accepting applies the patch through
+  the bus and re-analyzes.
+- **Composer:** disabled until a key (BYO mode) and a plan exist; Send / Stop (abort).
+- Transcripts persist per plan id in localStorage (size-capped; oldest turns dropped with a notice) and
+  are restored on load.
 
 ## Copilot behaviors
 - Interprets `Result.summary` in plain language, always relating back to the big picture (the strategic
@@ -50,16 +108,22 @@ and emits a command → re-analyze.
 - Guides the workflow: proposes next steps, flags the binding constraint, explains diagnostics, and
   offers to optimize.
 - Operates controls on request ("bridge with gas so we energize by Q3-27") → emits commands → shows an
-  accept/undo card.
-- Never fabricates numbers — everything numeric comes from a `Result`.
+  accept/undo card for material changes, edits small things directly.
+- Never fabricates numbers — everything numeric comes from a `Result`; in compare mode deltas are
+  computed from `resultSummary` and `baselineSummary`.
 
 ## Remote-control harness (dev/test)
-Guarded `window.__harness` over the command bus (stripped in prod):
-`loadPlan(protojson)`, `getPlan()`, `getResult()`, `setControl(path,value)`, `listControls()`,
-`sendCopilot(text)`, `getViewContext()`, `getCommandLog()`, `screenshot()`. This session drives it via
-Playwright to run the validation cases and debug.
+Guarded `window.__harness` over the command bus (dev builds or `VITE_HARNESS=1`; absent in production):
+`loadPlan`, `getPlan`, `getResult`, `setControl(path, value)`, `listControls`, `sendCopilot` /
+`setCopilot`, `acceptCard` / `rejectCard`, `undo` / `redo`, `setBaseline` / `clearBaseline` /
+`toggleCompare` / `getBaseline`, `getViewContext`, `getCommandLog`, `waitIdle`, `getConsoleErrors`
+(`web/src/harness/api.ts`); the WS10/WS12 branches add `optimize`, `proposeChange`,
+`getCopilotSnapshot` and `loadFixture`. Playwright drives it through `harness/src/session.ts`; see
+`harness/README.md` and `acceptance-session.md`.
 
-## Tech (to finalize in implementation)
-- SPA framework choice deferred to the UI workstream (must: run WASM, command-bus architecture, protojson
-  bridge to the agent, theme-aware, responsive to ~1280px min for a desktop tool).
-- Charts render from `Result.charts` specs; schematic from `Result.schematic`; tables from `Result.tables`.
+## Tech (as built)
+- Vite + React 18 + TypeScript strict; `@bufbuild/protobuf` v2; charts are plain SVG components under
+  `views/site/charts/` (`StepChart`, `Gantt`, `StackBar`, `LineChart`, `Bands`, `Radar`, `Tornado`,
+  `Scatter`) rendering `Result.charts` specs; the schematic from `Result.schematic`; tables from
+  `Result.tables`. Component tests run under Vitest + jsdom against a golden `Result` fixture.
+- Desktop tool, ~1280 px minimum; theme follows the system.

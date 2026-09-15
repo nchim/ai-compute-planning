@@ -1,6 +1,6 @@
 ---
 name: development
-description: Shared feature-development process for the AI-Lab Capacity Planner (Go/WASM engine, protobuf contract, SPA, remote-control harness). Read before doing ANY implementation work on this project — it defines the code-quality bar, the TDD + conservation + proto-contract discipline, and the worktree→PR workflow every worker follows. LIVING doc: append to the Playbook as you learn.
+description: Shared feature-development process for the AI-Lab Capacity Planner (Go/WASM engine, protobuf contract, SPA, remote-control harness, Cloud Run deploy). Read before doing ANY implementation work on this project — it defines the code-quality bar, the TDD + conservation + proto-contract discipline, and the worktree→PR→merge-queue workflow every worker follows. LIVING doc: append to the Playbook as you learn.
 ---
 
 # Development Skill — AI-Lab Capacity Planner
@@ -9,11 +9,12 @@ Shared process for everyone building this project (orchestrator + subagent worke
 task. **This file is living: improve it as you learn (see "Improve this skill").**
 
 ## Read first (source of truth)
-- `docs/implementation-plan.md` — locked tech decisions, your workstream, dependencies.
+- `docs/implementation-plan.md` — locked tech decisions, workstream status, merge process, deferred list.
 - `docs/acceptance-session.md` — the overall acceptance criterion; know which turns your work serves.
 - `proto/capplanner/v1/engine.proto` — THE contract (`SitePlan → Result`). Do not diverge from it.
 - `docs/architecture.md`, `docs/engine-design.md`, `docs/ui-spec.md`, `docs/agent-integration.md`,
-  `docs/agent-system-prompt.md` — component specs.
+  `docs/agent-system-prompt.md` — component specs, kept current with the code.
+- `harness/README.md` (driving the app) and `deploy/cloudrun.md` (the deployment) when you touch those.
 - `research/02-kpi-architecture.md` — the analytical/strategic spine (LCOC, four dimensions,
   shortage-vs-underutilization).
 
@@ -44,7 +45,11 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 3. **Conservation is mandatory.** A feature is NOT done if any `ConservationCheck` fails on the golden
    fixtures. Time, land, capital, power, MW must balance (see `engine-design.md`).
 4. **Determinism.** No wall-clock, no ambient RNG, no map-iteration-order dependence. All randomness is
-   seeded from `run.monte_carlo.seed`. Same input+seed → byte-identical `Result`.
+   seeded from `run.monte_carlo.seed`. Same input+seed → byte-identical `Result` **on one platform**.
+   **Cross-arch golden rule:** Go fuses multiply-adds on arm64 but not amd64, so a golden `Result` is
+   never compared with `proto.Equal`; use `requireProtoClose` (`engine/core/helpers_test.go`, 1e-9
+   relative on floats, exact otherwise) for every golden in every engine package, and regenerate
+   goldens with the package's `-update` flag, reviewing the diff.
 5. **Purity.** The engine core has no I/O, no globals. `Analyze`/`Optimize` are pure functions of the
    input proto.
 6. **Verbose diagnostics.** Every error/warning carries `code`, `proto_path`, `expected`, `actual`,
@@ -54,39 +59,59 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 8. **Idiomatic Go / strict TS.** `gofmt`, `go vet`, `staticcheck` clean; `tsc --strict`, ESLint clean.
    Match the layouts in `engine-design.md` and `implementation-plan.md`.
 9. **Stub honestly.** It is fine to stub low-level detail for the POC, but a stub must be visible: a
-   `// STUB:` comment, a diagnostic `INFO` where it affects results, and a line in your PR description.
-   Never hide a simplification inside a plausible-looking number.
+   `// STUB:` comment, a diagnostic `INFO` where it affects results, a line in `engine/core/doc.go`'s
+   Stubs list, and a line in your PR description. Never hide a simplification inside a plausible-looking
+   number.
+10. **Docs stay current.** Every PR that changes a contract, a process, or the scope updates the
+    affected doc in the same PR (component spec, `implementation-plan.md` status, README commands,
+    `deploy/cloudrun.md`, this skill). Replace stale statements; do not append changelogs.
 
-## Per-task workflow (worktree → PR)
-1. You are in your own git worktree on a fresh branch `ws<N>-<slug>` from `main`. Read your GitHub issue
-   (`gh issue view <N>`) and the docs above.
-2. Write the failing test(s) first.
-3. Implement the smallest change that passes; stay inside your workstream's directories.
-4. Run the full check: `make check` (lint + tests, engine and web) — and `make wasm` if you touched the engine.
-5. If you touched a shared interface, update the relevant doc in the same PR.
-6. Commit in small, well-described commits. Push and open a PR: `gh pr create --fill --base main`, body
+## Per-task workflow (worktree → PR → merge queue)
+1. **Worktree.** You work in your own git worktree, a sibling of the main checkout named
+   `<repo>-wt/<slug>` (e.g. `…/dctools-wt/ws7`), on a fresh branch from `main`: `ws<N>-<slug>` for a
+   workstream, `fu<issue>-<slug>` for a follow-up. Use absolute paths; never touch the main checkout.
+   A fresh worktree has no `node_modules` — run `make deps` first. Gitignored inputs
+   (`research/sources/*`) exist only in the main checkout; copy what you need to your scratchpad.
+2. Read your GitHub issue (`gh issue view <N>`) and the docs above.
+3. Write the failing test(s) first.
+4. Implement the smallest change that passes; stay inside your workstream's directories.
+5. Run the full check: `make check` (lint + tests, engine, deploy and web) — plus `make wasm` if you
+   touched the engine, and `make harness` if you touched the SPA, the bus or the harness.
+6. If you touched a shared interface, a process, or the scope, update the relevant doc in the same PR.
+7. Commit in small, well-described commits. Push and open a PR: `gh pr create --base main`, body
    = what changed · tests added · checks passing · stubs · anything the orchestrator or another
    workstream must know · `Closes #<issue>`. Append the attribution line the session provides.
-7. Report back to the orchestrator with the PR number and that same summary. Do not merge.
-8. If the orchestrator requests changes, push follow-up commits to the same branch and reply.
+8. Report back to the orchestrator with the PR number and that same summary. **Do not merge.**
+9. **Merge queue (orchestrator).** Auto-merge is disabled, so PRs are merged one at a time as
+   **merge commits** (not squashed), oldest-ready first. Before each merge: CI green on the PR's
+   **head SHA** (`gh pr checks <N>`); if GitHub skipped the check suite (a `main` merge with no diff
+   against it, or a run never scheduled), verify locally on the branch instead (`make check`,
+   `make wasm`, `make harness`) and say so in the merge. When asked, merge `origin/main` into your
+   branch to move up the queue; expect conflicts only in the Playbook below — keep both sides in
+   date order.
+10. If the orchestrator requests changes, push follow-up commits to the same branch and reply.
 
 ## Definition of Done
 - [ ] Tests written first and passing; `go test -race` clean; coverage not reduced.
 - [ ] `gofmt`/`go vet`/`staticcheck` (Go) and `tsc`/ESLint (TS) clean; `make check` green.
-- [ ] Conservation + determinism tests pass (engine work).
+- [ ] Conservation + determinism tests pass (engine work); goldens compared with tolerance, not equality.
 - [ ] Every error path handled and surfaced (diagnostic, wrapped error, or tool_result error).
 - [ ] New failure modes have coded, `proto_path`'d diagnostics with tests.
-- [ ] Stubs are visible and listed in the PR.
-- [ ] Docs updated if any contract/interface changed; no proto change without orchestrator sign-off.
+- [ ] Stubs are visible and listed in the PR (and in `core/doc.go` for engine stubs).
+- [ ] **Docs current:** every contract / process / scope change in this PR is reflected in the affected
+      doc (spec, plan status, README commands, runbook, this skill); no proto change without
+      orchestrator sign-off.
 - [ ] Scoped to the assigned workstream; no drive-by edits elsewhere. Playbook entry added if you learned something.
 
-## Commands (keep this list current)
-- Once: `make deps` (npm ci in `web/` and `harness/`). Everything: `make check` (= `make lint` + `make test`, exactly what CI runs).
-- Engine: `go test -race ./engine/...` · lint: `go vet ./engine/... && staticcheck ./engine/...` (always `./engine/...`, never `./...` — `web/node_modules` contains stray Go code).
-- Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
+## Commands (keep this list current; every one exists in the Makefile or a package.json)
+- Once: `make deps` (npm ci in `web/` and `harness/`). Everything: `make check` (= `make lint` + `make test`, exactly what CI's `check` job runs).
+- Go: `go test -race ./engine/... ./deploy/...` · lint: `go vet ./engine/... ./deploy/... && staticcheck ./engine/... ./deploy/...` (always the explicit package list, never `./...` — `web/node_modules` contains stray Go code; `GO_PKGS` in the Makefile is the source of truth).
+- Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). If `buf` complains about an invalid API token, a stale `~/.netrc` is being sent: `NETRC=/dev/null make gen`. `make lint` runs `buf lint`.
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
-- Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
-- Harness: `make harness` (or `cd harness && npm run smoke`; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `npm run acceptance -- --copilot=scripted` (WS10)
+- Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev` (`VITE_ENGINE=wasm` after `make wasm`, else the fake engine; `VITE_HARNESS=1` installs `window.__harness`).
+- Harness: `make harness` (typecheck + every Playwright spec; `make wasm` first for the real engine; see `harness/README.md`) · smoke only: `cd harness && npm run smoke`.
+- Acceptance (WS10 branch, until merged): `cd harness && npm run acceptance` (scripted, the CI gate) · `npm run acceptance:live` (real Copilot, needs `ANTHROPIC_API_KEY`); the branch adds `make acceptance`.
+- Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`).
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -161,6 +186,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   nodes (Canvas banner + site view), so query with `getAllByRole`. `client.test.ts` pins the full Copilot
   tool-name list — extend it when adding a tool. Cross-Result overlays: keep one `useCompareBaseline()`
   hook (null when compare is off) so every chart's baseline prop is simply omitted, never branched on.
+- 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
+  per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
+  optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
+  diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
 - 2026-09-15 (WS12) — Grounding against an external model: mirror its *inputs* field by field in a table
   (source cell → our field → value → note) and compare outputs on the basis the source itself
   computes (A.CRE's untrended column, Epoch's per-gross-MW), restating each structural difference
@@ -171,6 +200,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `fixtures/*.json` are enumerated by `web/src/fixtures.ts` (Vite glob) — a new fixture needs no code,
   but `meta.plan_id` must equal the file name and it must be added to `engine/scenarios_test.go`'s
   MC/optimize table and `engine/core/fixture_test.go`'s `fixtureNames`.
+- 2026-09-15 (docs sync) — The docs drifted from the build in three ways worth avoiding: specs kept
+  describing the *plan* after the code diverged (tool count, harness API, package layout), process
+  changes lived only in Playbook bullets (merge queue, worktree convention, cross-arch goldens), and the
+  README's commands lagged the Makefile (`./deploy/...`, `make serve`/`deploy`). Hence rule 10 and the
+  "Docs current" DoD box: fix the doc in the PR that changes the fact, and check every documented
+  command against the Makefile / package.json before committing. `git show origin/<branch>:<path>` is
+  enough to describe an in-flight PR's design without claiming it is merged.
 - 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
   per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
   optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
