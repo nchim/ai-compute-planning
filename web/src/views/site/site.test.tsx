@@ -83,14 +83,13 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("Schematic not computed yet")).toBeTruthy();
   });
 
-  test("context map mounts the Leaflet provider and toggles overlays with their legend", () => {
+  test("context map mounts the Leaflet provider with every overlay on and a legend, no toggles", () => {
     const { container } = mount(harness(), <ContextMap />);
     expect(container.querySelector(".leaflet-map")).not.toBeNull();
-    expect(screen.getByText(/Overlay: power · provider: leaflet/)).toBeTruthy();
-    expect(screen.queryByText(/water stress/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /water/ }));
-    expect(screen.getByText(/Overlay: power · water/)).toBeTruthy();
-    expect(screen.getByText(/water stress 0.60/)).toBeTruthy();
+    expect(screen.queryByRole("group", { name: /overlays/ })).toBeNull();
+    expect(screen.getByText(/stress index 0.60/)).toBeTruthy();
+    expect(screen.getByText(/serves training/)).toBeTruthy();
+    expect(screen.getByText(/placement illustrative/)).toBeTruthy();
   });
 
   test("schematic renders all blocks at the final month with the footprint badge and phase legend", () => {

@@ -1,8 +1,5 @@
-import { useState } from "react";
-
 import { useStore } from "../../bus";
 import { LatencyClass, type Site } from "../../gen/capplanner/v1/engine_pb";
-import { Explainer } from "./Explainer";
 import { leafletMapProvider } from "./LeafletMap";
 import { NotComputed, Region } from "./chrome";
 import { latencyLabel, type MapProvider, type Overlay } from "./mapProvider";
@@ -51,34 +48,16 @@ export const schematicMapProvider: MapProvider = {
   },
 };
 
+/** Every overlay is always on: the map is a picture of the site's context, not a layer editor. */
+const allOverlays: ReadonlySet<Overlay> = new Set<Overlay>(overlays);
+
 export function ContextMap(props: { provider?: MapProvider }) {
   const { state } = useStore();
   const provider = props.provider ?? leafletMapProvider;
-  const [active, setActive] = useState<ReadonlySet<Overlay>>(() => new Set<Overlay>(["power"]));
-  const toggle = (o: Overlay) =>
-    setActive((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(o)) next.add(o);
-      return next;
-    });
   const site: Site | undefined = state.plan?.site;
   return (
-    <Region
-      id="context_map"
-      title="Context map"
-      dimensions={["space"]}
-      actions={
-        <span className="seg" role="group" aria-label="overlays">
-          {overlays.map((o) => (
-            <button key={o} type="button" className={active.has(o) ? "on" : ""} aria-pressed={active.has(o)} onClick={() => toggle(o)}>
-              <Explainer term={`overlay.${o}`}>{o}</Explainer>
-            </button>
-          ))}
-        </span>
-      }
-    >
-      {site === undefined ? <NotComputed what="Site" /> : provider.render(site, active)}
-      <p className="kpi-s">Overlay: {[...active].join(" · ") || "none"} · provider: {provider.name}</p>
+    <Region id="context_map" title="Context map" dimensions={["space"]}>
+      {site === undefined ? <NotComputed what="Site" /> : provider.render(site, allOverlays)}
     </Region>
   );
 }

@@ -103,6 +103,11 @@ export class FakeMap extends FakeEvented {
     this.fitBoundsCalls.push(bounds);
     return this;
   }
+  invalidateSizeCalls = 0;
+  invalidateSize() {
+    this.invalidateSizeCalls++;
+    return this;
+  }
   remove() {
     this.removed = true;
     return this;

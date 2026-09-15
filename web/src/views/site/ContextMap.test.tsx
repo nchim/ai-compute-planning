@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { fromJsonString } from "@bufbuild/protobuf";
+
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
+import { fixtureJson } from "../../fixtures";
+import { SitePlanSchema } from "../../gen/capplanner/v1/engine_pb";
 import type { Engine } from "../../engine/client";
 import { ContextMap, schematicMapProvider } from "./ContextMap";
 import { loadGoldenPlan } from "./testdata";
@@ -55,7 +59,6 @@ afterEach(() => {
 describe("ContextMap on the Leaflet provider", () => {
   test("uses Leaflet by default: Esri Light Gray Canvas tiles with attribution, a scale bar and the site marker with a popup", () => {
     mount();
-    expect(screen.getByText(/provider: leaflet/)).toBeTruthy();
     const map = theMap();
     expect(map.options.zoomControl).toBe(true);
     expect(tileLayer().url).toBe("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}");
@@ -76,24 +79,32 @@ describe("ContextMap on the Leaflet provider", () => {
     expect(tileLayer().url).toContain("/World_Dark_Gray_Base/");
   });
 
-  test("overlay toggles add and remove layer groups on the map", () => {
+  test("every overlay is on by default, there are no layer toggles, and the legend explains each", () => {
     mount();
     expect(layersOf("ov-power").length).toBeGreaterThan(0);
-    expect(layersOf("ov-water")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: /water/ }));
     expect(layersOf("ov-water")).toHaveLength(1);
-    expect(screen.getByText(/water stress 0.60/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /power/ }));
-    expect(layersOf("ov-power")).toHaveLength(0);
-    expect(layersOf("ov-water")).toHaveLength(1);
+    expect(layersOf("ov-latency").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("group", { name: /overlays/ })).toBeNull();
+    expect(screen.getByText(/stress index 0.60/)).toBeTruthy();
+    expect(screen.getByText(/serves training \(remote\)/)).toBeTruthy();
+  });
+
+  test("switching to another fixture recenters the map on the new site after invalidating its size", () => {
+    const { store } = mount();
+    const before = theMap().fitBoundsCalls.length;
+    expect(theMap().invalidateSizeCalls).toBeGreaterThan(0);
+    act(() => store.dispatch({ type: "loadPlan", plan: fromJsonString(SitePlanSchema, fixtureJson("nova-colo")) }));
+    expect(theMap().fitBoundsCalls.length).toBe(before + 1);
+    const [[south, west]] = theMap().fitBoundsCalls.at(-1) as [[number, number], [number, number]];
+    expect(south).toBeGreaterThan(35); // Northern Virginia, not West Texas
+    expect(west).toBeGreaterThan(-80);
   });
 
   test("latency draws nested rings at true kilometre radii and the view fits the outer ring", () => {
     mount();
-    fireEvent.click(screen.getByRole("button", { name: /latency/ }));
     const rings = layersOf("ov-latency").filter((l) => l.kind === "circle");
     expect(rings.map((r) => r.options.radius)).toEqual([80_000, 400_000, 1_500_000]);
-    expect(screen.getByText(/serves: training \(remote\) · ≈1,500 km/)).toBeTruthy();
+    expect(screen.getByText(/serves training \(remote\) · ≈1,500 km/)).toBeTruthy();
     const [[south], [north]] = theMap().fitBoundsCalls.at(-1) as [[number, number], [number, number]];
     expect(north - south).toBeCloseTo(3000 / 111.32, 3);
   });
@@ -105,7 +116,7 @@ describe("ContextMap on the Leaflet provider", () => {
     expect(power.filter((l) => l.kind === "polyline")).toHaveLength(1);
     expect(power.find((l) => l.kind === "polyline")!.options.dashArray).toBeTruthy();
     expect(power.find((l) => l.kind === "circleMarker")!.tooltip).toMatch(/grid · GRID 260 MW · location illustrative/);
-    expect(screen.getByText(/power source locations are not surveyed/)).toBeTruthy();
+    expect(screen.getByText(/placement illustrative/)).toBeTruthy();
   });
 
   test("clicking the site marker dispatches select with the site path", () => {

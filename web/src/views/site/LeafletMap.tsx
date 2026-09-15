@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../bus";
 import { LatencyClass, PowerType, type PowerSource, type Site } from "../../gen/capplanner/v1/engine_pb";
 import { WATER_REGION_KM, latencyRadiusKm, latencyRings, powerSourcePlacement, ringBounds, type LatLng } from "./geo";
+import { Explainer } from "./Explainer";
 import { latencyLabel, type MapProvider, type Overlay } from "./mapProvider";
 
 /**
@@ -112,7 +113,15 @@ function LeafletMap(props: { site: Site; active: ReadonlySet<Overlay> }) {
   const map = useRef<L.Map | null>(null);
   const marker = useRef<L.CircleMarker | null>(null);
   const groups = useRef(new Map<Overlay, L.LayerGroup>());
+  const fitted = useRef<L.LatLngBoundsExpression | null>(null);
   const [tilesFailed, setTilesFailed] = useState(false);
+
+  /** Leaflet caches the container size; after any layout change it must be told before a fit is right. */
+  const fit = (m: L.Map, bounds: L.LatLngBoundsExpression) => {
+    fitted.current = bounds;
+    m.invalidateSize();
+    m.fitBounds(bounds, { padding: [12, 12] });
+  };
 
   // Map, basemap, scale bar: once per mount. A tile failure switches on the notice; the vector overlays stay.
   useEffect(() => {
@@ -151,8 +160,20 @@ function LeafletMap(props: { site: Site; active: ReadonlySet<Overlay> }) {
       .on("click", () => store.dispatch({ type: "select", selection: { ...store.getState().selection, tab: "site", path: "site", phaseId: null } }))
       .addTo(m);
     const fitKm = latencyRadiusKm[site.latencyTier] || latencyRadiusKm[LatencyClass.INFERENCE_METRO];
-    m.fitBounds(ringBounds({ lat, lng }, fitKm), { padding: [12, 12] });
+    fit(m, ringBounds({ lat, lng }, fitKm));
   }, [lat, lng, site.latencyTier, site.market, site.iso, siteName, store]);
+
+  // The canvas reflows when the rail is resized or a fixture changes the layout: refit to the same bounds.
+  useEffect(() => {
+    const el = container.current;
+    if (el === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const m = map.current;
+      if (m !== null && fitted.current !== null) fit(m, fitted.current);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Overlays: one layer group each, added or removed as the toggles change.
   useEffect(() => {
@@ -192,18 +213,18 @@ function MapLegend(props: { site: Site; active: ReadonlySet<Overlay>; sourceCoun
     <ul className="legend map-legend">
       {active.has("latency") && (
         <li>
-          <span className="swatch latency" /> serves: {latencyLabel[site.latencyTier]} · {fmtKm(latencyRadiusKm[site.latencyTier])}
+          <span className="swatch latency" /> <Explainer term="overlay.latency">latency</Explainer>: serves {latencyLabel[site.latencyTier]} · {fmtKm(latencyRadiusKm[site.latencyTier])}
         </li>
       )}
       {active.has("water") && (
         <li>
-          <span className="swatch water" style={{ opacity: 0.2 + stress * 0.7 }} /> water stress {stress.toFixed(2)}
+          <span className="swatch water" style={{ opacity: 0.2 + stress * 0.7 }} /> <Explainer term="overlay.water">water</Explainer>: stress index {stress.toFixed(2)}
         </li>
       )}
       {active.has("power") && (
         <li>
-          <span className="swatch power" /> {sourceCount} power source{sourceCount === 1 ? "" : "s"} — power source locations are not surveyed;
-          placement is illustrative
+          <span className="swatch power" /> <Explainer term="overlay.power">power</Explainer>: {sourceCount} source{sourceCount === 1 ? "" : "s"} (locations not
+          surveyed; placement illustrative)
         </li>
       )}
     </ul>
