@@ -4,7 +4,10 @@ import { ResultSchema, SitePlanSchema, type Result, type SitePlan } from "../../
 import resultJson from "./abilene-1.result.json?raw";
 import planJson from "../../../../../fixtures/abilene-1.json?raw";
 
-// STUB: hand-built golden Result until WS10 swaps in the engine's `engine/core/testdata` golden.
+// The UI golden is the engine golden (engine/core/testdata/abilene-1.result.json, single-shot baseline)
+// merged with abilene-1.extra.json (diagnostics, monte_carlo, sensitivity, optimization — blocks the
+// engine does not produce yet). Rebuild: jq -s '.[0] * .[1]' <engine golden> abilene-1.extra.json.
+// STUB: the appended blocks are illustrative until the engine emits them (WS10 swaps the golden).
 /** Freshly parsed on every call so no test or dev page shares a mutable Result. */
 export function loadGoldenResult(): Result {
   return fromJsonString(ResultSchema, resultJson);

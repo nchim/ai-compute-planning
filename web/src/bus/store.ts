@@ -1,6 +1,8 @@
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import type { Result, SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { clone, create } from "@bufbuild/protobuf";
+
+import { PhasingMode, PhasingSchema, SitePlanSchema, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -18,8 +20,13 @@ export interface Store {
   dispatch(command: Command): void;
   /** Convenience over `proposeChange`: mints the proposal id and returns it. */
   proposeChange(summary: string, patch: readonly PatchOp[]): string;
-  /** Runs the optimizer on the current plan; the reply lands as `resultReceived` like an analyze. */
-  optimize(): void;
+  /**
+   * Runs the optimizer on a copy of the current plan with `phasing.mode = OPTIMIZE` (the plan in state
+   * is untouched — optimize is an action, not a plan state). The reply lands as `resultReceived`
+   * through the same stale-reply guard as analyze; the promise resolves with that Result once applied,
+   * and rejects with the engine error (or a "superseded" error if a newer request overtook it).
+   */
+  optimize(): Promise<Result>;
   getLog(): readonly LogEntry[];
   dispose(): void;
 }
@@ -59,23 +66,30 @@ export function createStore(options: StoreOptions): Store {
 
   const runAnalyze = () => {
     debounce = null;
-    runEngine((plan) => engine.analyze(plan));
-  };
-
-  /** Analyze and optimize share one request counter, so whichever reply is newest wins. */
-  const runEngine = (call: (plan: SitePlan) => Promise<Result>) => {
     const plan = state.plan;
     if (plan === null) return;
+    runEngine(plan, (p) => engine.analyze(p)).catch(() => undefined); // failures are already in state.error
+  };
+
+  /**
+   * Analyze and optimize share one request counter, so whichever reply is newest wins. Resolves with
+   * the Result only if it was applied; rejects with the (Engine)Error otherwise so callers can await it.
+   */
+  const runEngine = (plan: SitePlan, call: (plan: SitePlan) => Promise<Result>): Promise<Result> => {
     const request = ++latestRequest;
-    call(plan).then(
+    return call(plan).then(
       (result) => {
-        if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
+        if (request !== latestRequest || disposed) throw new Error("engine reply superseded by a newer request");
+        dispatch({ type: "resultReceived", result });
+        return result;
       },
       (err: unknown) => {
-        if (request !== latestRequest || disposed) return;
-        const kind = err instanceof EngineError ? err.kind : "worker";
-        const message = err instanceof Error ? err.message : String(err);
-        dispatch({ type: "errorRaised", error: { kind, message } });
+        if (request === latestRequest && !disposed) {
+          const kind = err instanceof EngineError ? err.kind : "worker";
+          const message = err instanceof Error ? err.message : String(err);
+          dispatch({ type: "errorRaised", error: { kind, message } });
+        }
+        throw err;
       },
     );
   };
@@ -93,8 +107,12 @@ export function createStore(options: StoreOptions): Store {
       return id;
     },
     optimize() {
-      if (disposed) throw new Error("store is disposed");
-      runEngine((plan) => engine.optimize(plan));
+      if (disposed) return Promise.reject(new Error("store is disposed"));
+      if (state.plan === null) return Promise.reject(new Error("no plan loaded"));
+      const candidate = clone(SitePlanSchema, state.plan);
+      candidate.phasing ??= create(PhasingSchema);
+      candidate.phasing.mode = PhasingMode.OPTIMIZE;
+      return runEngine(candidate, (p) => engine.optimize(p));
     },
     getLog: () => log,
     dispose() {

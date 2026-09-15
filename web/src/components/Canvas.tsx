@@ -1,7 +1,7 @@
 import { fromJsonString, toJson as protoToJson, type DescMessage, type MessageShape } from "@bufbuild/protobuf";
 
 import abileneJson from "../../../fixtures/abilene-1.json?raw";
-import { useStore, viewContext, type FieldValue, type Proposal } from "../bus";
+import { useStore, viewContext, type Proposal } from "../bus";
 import type { Store } from "../bus";
 import {
   ConservationReportSchema,
@@ -11,6 +11,7 @@ import {
   SummaryMetricsSchema,
   type Diagnostic,
 } from "../gen/capplanner/v1/engine_pb";
+import { SiteFeasibilityView } from "../views/site";
 import { JsonTree } from "./JsonTree";
 
 // Proto field names (snake_case) everywhere on the canvas so keys match diagnostics' proto_path and bus paths.
@@ -18,17 +19,14 @@ function json<D extends DescMessage>(schema: D, msg: MessageShape<D>) {
   return protoToJson(schema, msg, { useProtoFieldName: true });
 }
 
-const dimensions = [
-  ["Space", "var(--d-space)"],
-  ["Time", "var(--d-time)"],
-  ["Capital", "var(--d-cap)"],
-  ["Risk", "var(--d-risk)"],
-] as const;
+// The badge reflects the build-time engine choice (see engine/index.ts selectEngine); the fake engine
+// additionally announces itself with a FAKE_ENGINE diagnostic in every Result.
+const engineName = import.meta.env.VITE_ENGINE === "wasm" ? "wasm" : "fake";
 
+/** The canvas: slim toolbar, proposal cards, the active tab's view, and a collapsible raw-Result inspector. */
 export function Canvas() {
   const { state, store } = useStore();
   const ctx = viewContext(state);
-  const plan = state.plan;
 
   const loadFixture = () => {
     try {
@@ -41,18 +39,6 @@ export function Canvas() {
 
   return (
     <main className="canvas">
-      <div className="canvas-hd">
-        <span className="h-title">{plan?.meta?.siteName ?? "No site loaded"}</span>
-        <span className="h-sub">{plan?.meta?.scenarioName ?? "load a plan to begin"}</span>
-        <div className="legend">
-          {dimensions.map(([name, color]) => (
-            <span key={name} className="dim">
-              <span className="dot" style={{ background: color }} /> {name}
-            </span>
-          ))}
-        </div>
-      </div>
-
       <div className="toolbar">
         <button className="btn primary" onClick={loadFixture}>
           Load Abilene-1 fixture
@@ -63,6 +49,9 @@ export function Canvas() {
         <button className="btn" disabled={state.history.future.length === 0} onClick={() => store.dispatch({ type: "redo" })}>
           Redo
         </button>
+        <span className="dim" data-engine={engineName}>
+          engine: {engineName}
+        </span>
       </div>
 
       {state.error !== null && (
@@ -72,13 +61,6 @@ export function Canvas() {
           <button className="btn" onClick={() => store.dispatch({ type: "clearError" })}>
             Dismiss
           </button>
-        </div>
-      )}
-
-      {plan !== null && (
-        <div className="grid">
-          <Controls store={store} plan={plan} />
-          <Summary summary={ctx.resultSummary === null ? null : json(SummaryMetricsSchema, ctx.resultSummary)} />
         </div>
       )}
 
@@ -93,17 +75,13 @@ export function Canvas() {
         </section>
       )}
 
-      <section className="panel">
-        <div className="panel-hd">
-          <span className="t">Diagnostics</span>
-        </div>
-        <Diagnostics diagnostics={ctx.diagnostics} />
-      </section>
+      {ctx.activeTab === "site" ? <SiteFeasibilityView /> : <div className="empty">This tab is not part of the POC.</div>}
 
-      <section className="panel">
-        <div className="panel-hd">
-          <span className="t">Raw result</span>
-        </div>
+      <details className="panel inspector">
+        <summary className="panel-hd">
+          <span className="t">Result inspector</span>
+        </summary>
+        <Diagnostics diagnostics={ctx.diagnostics} />
         {state.result === null ? (
           <div className="empty">No result yet.</div>
         ) : (
@@ -117,86 +95,13 @@ export function Canvas() {
             />
           </>
         )}
-      </section>
+      </details>
     </main>
   );
 }
 
-// A handful of live controls so a mutation → analyze → render cycle is visible before WS7 lands the
-// full view. Each writes a protojson path through the bus like any other driver.
-const controls: readonly { path: string; label: string; min: number; max: number; step: number }[] = [
-  { path: "compute.target_it_load_mw", label: "Target IT load (MW)", min: 10, max: 1000, step: 10 },
-  { path: "compute.kw_per_rack", label: "Rack density (kW/rack)", min: 10, max: 200, step: 5 },
-  { path: "compute.pue", label: "PUE", min: 1.05, max: 1.8, step: 0.01 },
-  { path: "power.interconnection.grid_energize_month", label: "Grid energize (month)", min: 0, max: 72, step: 1 },
-  { path: "revenue.compute.gpu_hour_price", label: "GPU-hour price ($)", min: 0.5, max: 6, step: 0.05 },
-];
-
-function Controls(props: { store: Store; plan: NonNullable<ReturnType<typeof useStore>["state"]["plan"]> }) {
-  const { store, plan } = props;
-  const planJson = json(SitePlanSchema, plan) as Record<string, unknown>;
-  const read = (path: string): number => {
-    const v = path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], planJson);
-    return typeof v === "number" ? v : 0;
-  };
-  const set = (path: string, value: FieldValue) => store.dispatch({ type: "setField", path, value });
-  return (
-    <section className="panel">
-      <div className="panel-hd">
-        <span className="t">Controls</span>
-      </div>
-      {controls.map((c) => (
-        <label key={c.path} className="field">
-          <span>
-            {c.label}
-            <br />
-            <code>{c.path}</code>
-          </span>
-          <input
-            type="range"
-            min={c.min}
-            max={c.max}
-            step={c.step}
-            value={read(c.path)}
-            onChange={(e) => set(c.path, Number(e.target.value))}
-            onFocus={() => store.dispatch({ type: "select", selection: { ...store.getState().selection, path: c.path } })}
-          />
-          <span>{read(c.path)}</span>
-        </label>
-      ))}
-    </section>
-  );
-}
-
-function Summary(props: { summary: ReturnType<typeof protoToJson> | null }) {
-  const entries = props.summary !== null && typeof props.summary === "object" ? Object.entries(props.summary) : [];
-  return (
-    <section className="panel">
-      <div className="panel-hd">
-        <span className="t">Summary metrics</span>
-      </div>
-      {entries.length === 0 ? (
-        <div className="empty">Awaiting analysis.</div>
-      ) : (
-        <div className="kpis">
-          {entries.map(([k, v]) => (
-            <div key={k}>
-              <div className="kpi">{typeof v === "number" ? formatNumber(v) : String(v)}</div>
-              <div className="kpi-s">{k}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function formatNumber(n: number): string {
-  return Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
 function Diagnostics(props: { diagnostics: readonly Diagnostic[] }) {
-  if (props.diagnostics.length === 0) return <div className="empty">None.</div>;
+  if (props.diagnostics.length === 0) return <div className="empty">No diagnostics.</div>;
   return (
     <div>
       {props.diagnostics.map((d, i) => {

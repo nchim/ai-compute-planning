@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
-import type { Result } from "../../gen/capplanner/v1/engine_pb";
+import { PhasingMode, type Result } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
 import { OptimizationPanel, patchFromBestPlan } from "./OptimizationPanel";
@@ -58,7 +58,7 @@ describe("regions render from the golden Result", () => {
     for (const id of ["context_map", "site_schematic", "phasing", "critical_path", "pro_forma", "risk", "optimization"]) {
       expect(container.querySelector(`[data-region="${id}"]`), id).not.toBeNull();
     }
-    expect(screen.getByText(/OK with warnings/)).toBeTruthy();
+    expect(screen.getByText(/^OK/)).toBeTruthy();
     expect(screen.getByText(/conservation green/)).toBeTruthy();
     // GOLDEN_FIXTURE has no proto_path → top list; DENSITY_NEAR_AIR_CEILING is inline at its control.
     expect(within(container.querySelector(".diags.top")!).getByText("GOLDEN_FIXTURE")).toBeTruthy();
@@ -83,40 +83,42 @@ describe("regions render from the golden Result", () => {
 
   test("schematic renders all blocks at the final month with the footprint badge and phase legend", () => {
     const { container } = mount(harness(), <SiteSchematic />);
-    expect(container.querySelectorAll("[data-block]")).toHaveLength(11);
-    expect(screen.getByText("footprint 41% used")).toBeTruthy();
-    expect(container.querySelectorAll(".legend li")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-block]")).toHaveLength(8);
+    expect(screen.getByText(/footprint \d+% used/)).toBeTruthy();
+    expect(container.querySelectorAll(".legend li")).toHaveLength(1);
   });
 
   test("phasing shows the step chart with shortfall and stranded shading plus the capture metrics", () => {
     const { container } = mount(harness(), <PhasingLever />);
     expect(container.querySelector(".shade.shortfall")).not.toBeNull();
     expect(container.querySelector(".shade.stranded")).not.toBeNull();
-    expect(screen.getByText("91.4%")).toBeTruthy();
+    expect(screen.getByText("82.1%")).toBeTruthy();
   });
 
   test("critical path renders each task and the energize + grid markers", () => {
     const { container } = mount(harness(), <CriticalPath />);
-    expect(container.querySelectorAll(".task")).toHaveLength(6);
-    expect(screen.getByText("energize Q3-27")).toBeTruthy();
+    expect(container.querySelectorAll(".task")).toHaveLength(4);
+    expect(container.querySelectorAll('.task[data-kind="grid"]')).toHaveLength(2);
+    expect(screen.getByText("energize Q3-28")).toBeTruthy();
     expect(screen.getByText("grid Q3-28")).toBeTruthy();
   });
 
   test("pro forma renders the KPI tiles, the capex stack and the table", () => {
     const { container } = mount(harness(), <ProForma />);
-    expect(screen.getByText("$1.72")).toBeTruthy();
-    expect(screen.getByText("$7.4B")).toBeTruthy();
-    expect(screen.getByText("12.1%")).toBeTruthy();
+    const tiles = within(container.querySelector(".tiles") as HTMLElement);
+    expect(tiles.getByText("$2.19")).toBeTruthy();
+    expect(tiles.getByText("$6.5B")).toBeTruthy();
+    expect(tiles.getByText("26.1%")).toBeTruthy();
     expect(container.querySelectorAll(".stackbar rect")).toHaveLength(7);
-    expect(container.querySelectorAll(".capex-table tbody tr")).toHaveLength(7);
+    expect(container.querySelectorAll(".capex-table tbody tr")).toHaveLength(8);
   });
 
   test("risk renders the radar, Monte Carlo bands and the tornado", () => {
     const { container } = mount(harness(), <Risk />);
-    expect(container.querySelectorAll(".radar text")).toHaveLength(6);
+    expect(container.querySelectorAll(".radar text")).toHaveLength(5);
     expect(container.querySelectorAll(".bands")).toHaveLength(2);
-    expect(screen.getByText("P10 $1.58")).toBeTruthy();
-    expect(screen.getByText("P90 $1.94")).toBeTruthy();
+    expect(screen.getByText("P10 $1.98")).toBeTruthy();
+    expect(screen.getByText("P90 $2.46")).toBeTruthy();
     expect(container.querySelectorAll(".tornado [data-input]")).toHaveLength(5);
   });
 
@@ -161,7 +163,7 @@ describe("controls dispatch through the bus", () => {
     fireEvent.change(screen.getByLabelText("time scrubber (month)"), { target: { value: "20" } });
     expect(h.dispatched[0]).toMatchObject({ type: "select", selection: { month: 20 } });
     const visible = [...container.querySelectorAll("[data-block]")].map((el) => el.getAttribute("data-block"));
-    expect(visible).toEqual(["setback", "gas-pad", "hall-1", "cool-1", "water", "expansion"]);
+    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion"]);
     expect(h.store.getState().selection.month).toBe(20);
   });
 
@@ -179,6 +181,7 @@ describe("controls dispatch through the bus", () => {
     ]);
     fireEvent.click(screen.getByText("Optimize phasing"));
     expect(h.optimizeCalls).toHaveLength(1);
+    expect(h.store.getState().plan?.phasing?.mode).toBe(PhasingMode.EXPLICIT); // optimize did not flip the mode
   });
 
   test("the Monte Carlo toggle writes run.monte_carlo.enabled", () => {
@@ -199,6 +202,18 @@ describe("controls dispatch through the bus", () => {
     expect(h.dispatched[2]).toEqual({ type: "setField", path: "optimization.constraints[0].value", value: 9e9 });
     expect(h.store.getState().plan?.optimization?.constraints[0]?.metric).toBe("total_capex");
     expect(h.optimizeCalls).toHaveLength(1);
+  });
+
+  test("the phasing policy editor applies defaults in one patch, then binds each field", () => {
+    const h = harness();
+    const { container } = mount(h, <OptimizationPanel />);
+    fireEvent.click(screen.getByText(/Set default policy/));
+    expect(h.dispatched).toHaveLength(1);
+    expect(h.dispatched[0]).toMatchObject({ type: "applyPatch" });
+    const policy = h.store.getState().plan?.phasing?.policy;
+    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 20]);
+    fireEvent.change(container.querySelector('[data-path="phasing.policy.max_shortfall_mw"] input')!, { target: { value: "15" } });
+    expect(h.dispatched[1]).toEqual({ type: "setField", path: "phasing.policy.max_shortfall_mw", value: 15 });
   });
 
   test("Apply best plan creates a pending proposal whose patch reproduces best_plan phasing + power", () => {

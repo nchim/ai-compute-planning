@@ -49,9 +49,19 @@ export function patchFromBestPlan(best: SitePlan): PatchOp[] {
   return ops;
 }
 
+/** Sensible starting policy for the optimizer, applied atomically when the plan has none. */
+export const defaultPolicyPatch: readonly PatchOp[] = [
+  { path: "phasing.policy.max_phases", value: 4 },
+  { path: "phasing.policy.min_phase_mw", value: 25 },
+  { path: "phasing.policy.max_phase_mw", value: 100 },
+  { path: "phasing.policy.min_months_between_phases", value: 6 },
+  { path: "phasing.policy.max_shortfall_mw", value: 20 },
+];
+
 export function OptimizationPanel() {
   const { state, store } = useStore();
   const opt = state.plan?.optimization;
+  const policy = state.plan?.phasing?.policy;
   const constraints = opt?.constraints ?? [];
   const vars = opt?.decisionVars ?? [];
   const result = state.result?.optimization;
@@ -73,7 +83,7 @@ export function OptimizationPanel() {
       title="Optimization · frontier"
       dimensions={["time", "capital"]}
       actions={
-        <button type="button" className="btnp" onClick={() => store.optimize()}>
+        <button type="button" className="btnp" onClick={() => void store.optimize().catch(() => undefined) /* surfaced via state.error */}>
           Run optimize
         </button>
       }
@@ -81,6 +91,22 @@ export function OptimizationPanel() {
       <div className="two-col">
         <div>
           <SelectField path="optimization.objective.type" label="Objective" enum={ObjectiveTypeSchema} />
+          <div className="phase-list" data-policy={policy === undefined ? "unset" : "set"}>
+            <Explainer term="phasing.policy">Phasing policy</Explainer>
+            {policy === undefined ? (
+              <button type="button" className="mini" disabled={state.plan === null} onClick={() => store.dispatch({ type: "applyPatch", patch: defaultPolicyPatch })}>
+                Set default policy (4 phases · 25–100 MW · ≥6 mo apart · ≤20 MW short)
+              </button>
+            ) : (
+              <fieldset className="row3">
+                <NumberField path="phasing.policy.max_phases" label="max phases" integer />
+                <NumberField path="phasing.policy.min_phase_mw" label="min MW" />
+                <NumberField path="phasing.policy.max_phase_mw" label="max MW" />
+                <NumberField path="phasing.policy.min_months_between_phases" label="min months apart" integer />
+                <NumberField path="phasing.policy.max_shortfall_mw" label="max shortfall MW" />
+              </fieldset>
+            )}
+          </div>
           <div className="phase-list">
             <Explainer term="optimization.constraints">Constraints</Explainer>
             {constraints.map((_, i) => (

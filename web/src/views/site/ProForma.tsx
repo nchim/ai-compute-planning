@@ -11,7 +11,8 @@ export function ProForma() {
   const summary = state.result?.summary;
   const stack = chartById(state.result, "capex_stack");
   const table = tableById(state.result, "capex_stack");
-  const segments = (stack?.series ?? []).flatMap((s) => (s.points[0] === undefined ? [] : [{ name: s.name, value: s.points[0].y }]));
+  // Engine encoding: one series per capex component, one point per phase → sum the phases per component.
+  const segments = (stack?.series ?? []).map((s) => ({ name: s.name, value: s.points.reduce((sum, p) => sum + p.y, 0) }));
 
   return (
     <Region id="pro_forma" title="Pro forma · LCOC · master levers" dimensions={["capital"]}>

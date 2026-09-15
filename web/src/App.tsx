@@ -1,7 +1,6 @@
 import { useStore, type Tab } from "./bus";
 import { Canvas } from "./components/Canvas";
 import { CopilotRail } from "./components/CopilotRail";
-import { SiteFeasibilityView } from "./views/site";
 
 const tabs: readonly { id: Tab; label: string; enabled: boolean }[] = [
   { id: "portfolio", label: "Portfolio", enabled: false },
@@ -39,7 +38,6 @@ export function App() {
       <div className="bodyrow">
         <CopilotRail />
         <Canvas />
-        {active === "site" && <SiteFeasibilityView />}
       </div>
     </div>
   );

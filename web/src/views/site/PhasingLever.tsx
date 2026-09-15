@@ -23,8 +23,8 @@ export function PhasingLever() {
   const { state, store } = useStore();
   const phases = state.plan?.phasing?.phases ?? [];
   const chart = chartById(state.result, "demand_vs_capacity");
-  const demand = chart?.series.find((s) => s.name === "demand")?.points ?? [];
-  const capacity = chart?.series.find((s) => s.name === "capacity")?.points ?? [];
+  // Engine encoding (render.go demandChart): per-month series demand / capacity / shortfall / stranded.
+  const series = (name: string) => chart?.series.find((s) => s.name === name)?.points ?? [];
   const summary = state.result?.summary;
   const lastEnergize = Math.max(0, ...phases.map((p) => p.energizeMonth));
 
@@ -34,7 +34,7 @@ export function PhasingLever() {
       title="Phasing — demand ramp vs. staged capacity"
       dimensions={["time"]}
       actions={
-        <button type="button" className="btnp" onClick={() => store.optimize()}>
+        <button type="button" className="btnp" onClick={() => void store.optimize().catch(() => undefined) /* surfaced via state.error */}>
           Optimize phasing
         </button>
       }
@@ -68,7 +68,7 @@ export function PhasingLever() {
           {chart === undefined ? (
             <NotComputed what="Demand vs capacity chart" />
           ) : (
-            <StepChart demand={demand} capacity={capacity} xLabel={chart.meta["x"] ?? "month"} yLabel={chart.meta["y"] ?? "MW"} />
+            <StepChart demand={series("demand")} capacity={series("capacity")} shortfall={series("shortfall")} stranded={series("stranded")} xLabel={chart.meta["x"] ?? "month"} yLabel={chart.meta["y"] ?? "MW"} />
           )}
           <ul className="legend">
             <li><span className="swatch demand" /> demand</li>
