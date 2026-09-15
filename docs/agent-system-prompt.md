@@ -1,6 +1,6 @@
 # Agent System Prompt (source of truth)
 
-**Status:** v0.2 — 2026-09-15. The Copilot's system prompt. It is the **stable, cached prefix**
+**Status:** v0.3 — 2026-09-15. The Copilot's system prompt. It is the **stable, cached prefix**
 (one `system` block with the `cache_control` breakpoint). Volatile context — the current
 **ViewContext** (active tab, selected site, plan summary, last `Result` summary + diagnostics,
 baseline label + summary, compare flag, pending proposals) and the user's message — is injected
@@ -10,7 +10,10 @@ baseline label + summary, compare flag, pending proposals) and the user's messag
 **Build-time import:** `web/src/copilot/prompt.ts` imports this file with `?raw` and uses everything
 after the `## PROMPT TEXT` heading verbatim (trimmed). Edit the prompt here and only here; keep the
 heading text exactly as it is, and keep the tool names in sync with `web/src/copilot/tools.ts`
-(`client.test.ts` pins the list).
+(`client.test.ts` pins the list of ten: `edit_site_plan`, `set_control`, `remove_list_item`,
+`run_analyze`, `run_optimize`, `propose_change`, `set_baseline`, `toggle_compare`, `explain`,
+`query_research` — all named in "How you operate" below). The "Running risk analyses" section (#51)
+exists because the model otherwise flips `iterations`/`seed` and concludes Monte Carlo is not wired.
 
 **Knowledge-access strategy (hybrid):** the strategic digest + research index below live in this cached
 prompt, so the agent can orient and "continue the conversation" with zero file reads. The

@@ -1,13 +1,14 @@
 # Implementation Plan — Fan-out Work Breakdown
 
-**Status:** v0.3 — 2026-09-15. Orchestrated by Fable; subagent workers build in git worktrees and open
+**Status:** v0.4 — 2026-09-15. Orchestrated by Fable; subagent workers build in git worktrees and open
 PRs; the orchestrator reviews and merges. **Overall acceptance criterion: `docs/acceptance-session.md`.**
 Every worker follows the **`development` skill** (`.claude/skills/development/SKILL.md`). Source of
 truth: `architecture.md`, `proto/capplanner/v1/engine.proto`, `engine-design.md`, `ui-spec.md`,
 `agent-integration.md`. Scope: single-site Site-Feasibility POC.
 
-WS1–WS9, WS11 and WS13 are merged; WS10 (acceptance) and WS12 (grounding scenarios) are open PRs;
-the fidelity follow-ups #28–#30 are in flight. Status per workstream is in the table below.
+Every workstream except WS10 is merged, as are the fidelity follow-ups (#35), the schematic fix (#40)
+and the UX feedback loop PRs #41–#52 that followed the first tester sessions; WS10 (acceptance) is
+the one PR still in flight. Status per workstream and per follow-up is in the tables below.
 
 ## Tracking
 - One GitHub issue per workstream (`WS*` labels) in `nchim/ai-compute-planning`; each PR references its
@@ -31,7 +32,18 @@ the fidelity follow-ups #28–#30 are in flight. Status per workstream is in the
   bullet); the resolution rule is "keep both sides, in date order". No code conflicts needed manual
   resolution.
 - Follow-ups discovered during review are filed as issues with the `follow-up` label and picked up as
-  `fu<issue>-<slug>` branches (#15 → PR #25, #23 → PR #26).
+  `fu<issue>-<slug>` branches (#15 → PR #25, #23 → PR #26, #28–#30 → PR #35, #39 → PR #40).
+
+### UX feedback loop (as used from PR #41 on)
+Once the tester deployment existed, feedback from using it turned into a tighter loop than the
+workstream process: each item (or a small batch of related ones) is a **small `ux-<slug>` branch** from
+`main` → a PR whose body states the user feedback, the change and the checks → a **local fail-fast
+verify** on the branch before merging (`cd web && npm run typecheck && npm run lint && npm test &&
+npm run build`, chained with `&&` — PR #50 merged with typecheck errors because the chain used `;`;
+`make check` when Go or the deploy server is touched) → merge as a merge commit → **`make deploy`** so
+the next tester session runs the fix. `make sessions` reads what the testers did (opt-in sharing, #43)
+and feeds the next batch. Docs are synced at stopping points (PR #34, this PR) rather than per UX PR;
+the code is the source of truth in between.
 
 ## Locked technical decisions (v0.3 — so workers never have to guess)
 | Area | Decision |
@@ -41,9 +53,9 @@ the fidelity follow-ups #28–#30 are in flight. Status per workstream is in the
 | Go | Go 1.25, `google.golang.org/protobuf`. **No goroutines inside the engine** (`core`, `risk`, `optimize`) — the core is a fast, single-threaded pure function. Go package lists are always explicit (`./engine/... ./deploy/...`), never `./...` (`web/node_modules` contains stray Go code). |
 | WASM boundary | `engine/wasm` publishes `globalThis.capplanner.{analyze, optimize}` (`Uint8Array → Uint8Array`, binary proto both ways); the logic is `engine/bridge` (plain Go, tested under `-race`), panics recovered into `INTERNAL_ERROR`. The SPA runs the module in a **Web Worker**. |
 | SPA | Vite + React 18 + TypeScript (strict). State = one immutable `SitePlan` + last `Result` + baseline behind the **command bus** (reducer + serializable log; undo/redo over the plan history). `@bufbuild/protobuf` v2. Charts are plain SVG. Tests: Vitest (+ jsdom for components). |
-| Copilot | `@anthropic-ai/sdk` beta tool runner, `claude-sonnet-5`, nine tools over the bus. Transport chosen at build time: **relay** (`VITE_COPILOT_RELAY`, deployed) or **BYO key** (dev). System prompt text is `docs/agent-system-prompt.md`, imported verbatim at build time. |
+| Copilot | `@anthropic-ai/sdk` beta tool runner, `claude-sonnet-5`, ten tools over the bus (strict only on the four plan-writing ones; no integer bounds in any schema). Transport chosen at build time: **relay** (`VITE_COPILOT_RELAY`, deployed) or **BYO key** (dev). System prompt text is `docs/agent-system-prompt.md`, imported verbatim at build time. |
 | Harness | Playwright (`@playwright/test`) driving `http://localhost:5173` + `window.__harness`. `COPILOT_MODE=scripted|live` for the acceptance session. |
-| Deploy | One Cloud Run service (`deploy/`): Go static host + Basic Auth + Anthropic relay + daily cap; built from source by Cloud Build (`make deploy`). |
+| Deploy | One Cloud Run service (`deploy/`): Go static host + Basic Auth + Anthropic relay + daily cap + `POST /api/session` event sink (opt-in session sharing → Cloud Logging, read with `make sessions`); built from source by Cloud Build (`make deploy`). |
 | CI | GitHub Actions `ci.yml`, two jobs: **check** (`make deps` · `make wasm` · `make check` = buf lint, gofmt, `go vet`, staticcheck, `go test -race`, tsc, eslint, vitest · generated code up to date) and **harness** (`make wasm` · Playwright chromium · `make harness`, run artifacts uploaded). |
 | Determinism | Results are byte-identical per platform; goldens are compared with a 1e-9 relative tolerance because arm64 fuses multiply-adds and amd64 does not (see `engine-design.md`). |
 
@@ -59,7 +71,8 @@ WS1 scaffold+proto ─┬─▶ WS2 engine core ─┬─▶ WS3 risk ───�
                                                                      WS13 deploy + relay
 ```
 Waves as run: **W0** WS1 → **W1** WS2 ‖ WS5 ‖ WS6 → **W2** WS3 ‖ WS4 ‖ WS7 ‖ WS8 ‖ WS9 → **W2b** WS11 +
-follow-ups #15/#23 → **W3** WS10 ‖ WS12 ‖ WS13 → fidelity follow-ups (#28–#30).
+follow-ups #15/#23 → **W3** WS10 ‖ WS12 ‖ WS13 → fidelity follow-ups (#28–#30, #39) → **UX feedback
+loop** (#41–#52, serial, each deployed).
 
 ## Workstreams
 
@@ -74,13 +87,26 @@ follow-ups #15/#23 → **W3** WS10 ‖ WS12 ‖ WS13 → fidelity follow-ups (#2
 | WS7 Site Feasibility view | #7 | #18 | merged |
 | WS8 embedded Copilot | #8 | #19 | merged |
 | WS9 remote-control harness | #9 | #17 | merged |
-| WS10 acceptance session T1–T7 | #10 | branch `ws10-acceptance` | in progress (PR open) |
+| WS10 acceptance session T1–T8 | #10 | branch `ws10-acceptance` | in progress (PR open) |
 | WS11 baseline pin + compare mode | #21 | #24 | merged |
-| WS12 grounding scenarios + reconciliation | #27 | #31 | in progress (PR open) |
+| WS12 grounding scenarios + reconciliation | #27 | #31 | merged |
 | WS13 Cloud Run deploy + relay | #11 | #32 | merged |
 | follow-up: invalidate in-flight analyze | #15 | #25 | merged |
 | follow-up: optimizer core hooks | #23 | #26 | merged (issue open for the instantaneous-shortfall half) |
-| follow-ups: model fidelity | #28, #29, #30 | fidelity PR | in flight |
+| follow-ups: model fidelity (energy at utilization, per-lease escalation + opex growth, income-based colo exit) | #28, #29, #30 | #35 | merged |
+| docs sync (specs as built, process folded into the skill) | — | #34 | merged |
+| follow-up: schematic row-wrapping + px-scaled labels | #39 | #40 | merged |
+| UX batch 1: composer, activity indicator, phasing states, engine indicator, optimize robustness, real map, block cards | — | #41 | merged |
+| opt-in session sharing → Cloud Logging + `make sessions` | — | #43 | merged |
+| Clear conversation | — | #44 | merged (superseded by Reset, #49) |
+| markdown chat + resizable rail | — | #45 | merged |
+| Gantt marker layout, table formatting, phase editor labels | — | #46 | merged |
+| map recenters per fixture; overlays always on with a legend | — | #47 | merged |
+| `removeAt` / phase delete / `remove_list_item`, parcel acres chip, cashflow stroke | — | #48 | merged |
+| Reset session (`reset` command + `resetSession`) | — | #49 | merged |
+| `store.optimize(overrides)`: Copilot settings on the candidate only; single error banner | — | #50 | merged |
+| proposal cards in the thread; Monte Carlo/sensitivity in tool results + prompt section | — | #51 | merged |
+| canvas shows only the latest proposal headline | — | #52 | merged |
 
 ### WS1 — Scaffold + proto codegen  *(#1 → PR #12)*
 Repo layout above; `buf.yaml`/`buf.gen.yaml`; Go + TS types generated and committed; `Makefile`
@@ -122,17 +148,20 @@ commands); debounced re-analyze with a stale-reply guard that also invalidates a
 when a newer mutation is scheduled (#15); `ViewContext`; a raw `Result` inspector.
 **Done:** control change → command → re-analyze → re-render; undo restores the prior plan byte-for-byte.
 
-### WS7 — Site Feasibility view  *(#7 → PR #18)*
+### WS7 — Site Feasibility view  *(#7 → PR #18; refined by #40, #41, #46–#48)*
 All seven canvas regions from `ui-spec.md` as SVG charts from `Result` fields; hover explainers from a
 glossary; inline diagnostics at the offending control; `optimize()` on the store runs the optimizer on
-an OPTIMIZE-mode clone; "Apply best plan" is an accept/undo card.
+an OPTIMIZE-mode clone; "Apply best plan" is an accept/undo card. Later: real Leaflet basemap,
+schematic block cards, phase delete, blank/running states, engine activity indicator.
 **Done:** every region renders from `Result` only; controls live and bidirectional; a golden `Result`
 fixture drives component tests.
 
-### WS8 — Embedded Copilot  *(#8 → PR #19)* — see `agent-integration.md`
+### WS8 — Embedded Copilot  *(#8 → PR #19; refined by #41, #44, #45, #48–#52)* — see `agent-integration.md`
 Tool runner + tools over the bus; cached system prompt from `docs/agent-system-prompt.md`; ViewContext
 after the breakpoint; streaming; BYO-key panel; localStorage transcript; every tool error returned as
-an `is_error` tool result.
+an `is_error` tool result. Later: growing composer, activity indicator, markdown rendering,
+`remove_list_item`, candidate-only `run_optimize`, risk outputs in tool results, proposal cards in
+the thread, Reset.
 **Done:** unit tests drive the loop through the real SDK with a scripted `fetch`; `cache_read_input_tokens`
 asserted on the second turn.
 
@@ -156,7 +185,7 @@ that undo/redo never touch; in compare mode every metric tile shows Δ (current 
 Copilot tools `set_baseline` / `toggle_compare`; harness hooks; acceptance T3b.
 **Done:** merged; T3b is asserted by the WS10 spec.
 
-### WS12 — Grounding scenarios + reconciliation  *(#27 → PR #31, open)*
+### WS12 — Grounding scenarios + reconciliation  *(#27 → PR #31, merged)*
 Two more fixtures reconciled against external models: `fixtures/nova-colo.json` (A.CRE colo
 development, L0 lens) and `fixtures/epoch-100mw.json` (Epoch AI 100 MW GB200 campus), each with a
 source→field table in the README, goldens, determinism, Monte Carlo + optimize smoke, and
@@ -170,6 +199,7 @@ reconciliation tests that pin every known gap's direction and band. The gaps bec
 allow-list and the server-held `ANTHROPIC_API_KEY`, per-UTC-day request cap, SSE streamed through;
 `deploy/Dockerfile`, `deploy/cloudrun.md` runbook, `make deploy` / `make serve`. The SPA's
 `transport.ts` selects relay mode via `VITE_COPILOT_RELAY`. Go lint/test cover `./deploy/...`.
+PR #43 added `POST /api/session` (opt-in session sharing → Cloud Logging) and `make sessions`.
 **Done:** merged; per-user auth remains deferred (#11 tracks it).
 
 ### Follow-ups
@@ -178,17 +208,31 @@ allow-list and the server-held `ANTHROPIC_API_KEY`, per-UTC-day request cap, SSE
 - **#23** (open; core half landed in PR #26) — `core.DemandAt` and `core.ConstructionLeadMonths`
   exported; `SOURCE_OVERLOADED` validated in EXPLICIT mode; `max_shortfall_mw` documented as a
   hold-average bound. Still open: an instantaneous shortfall mode for the policy.
-- **#28 / #29 / #30** (open; fidelity PR in flight) — energy billed at nameplate rather than utilization
-  (Epoch +21% opex); colo escalation anchored at t0 and no opex growth (A.CRE trended +25%); terminal
-  value ignores `finance.exit_cap_rate` (asset-based). Each has a reconciliation test in PR #31 that
-  pins the gap and flips when the engine changes.
+- **#28 / #29 / #30** (closed, PR #35) — COMPUTE_SALES energy billed at IT × utilization × PUE with an
+  exact utilization breakeven; colo escalation per lease from each phase's energize month plus the new
+  `costs.opex.opex_growth_pct_yr` on every cost rate (A.CRE convention; trended NOI +1.7%); COLO_LEASE
+  exits on NOI ÷ `exit_cap_rate` (both exit bases in `summary.extra`). See `engine-design.md`.
+- **#33** (open) — Copilot prompt refinement pass from the archived live run: score each turn against
+  the narration rubric in `acceptance-session.md`, tighten the system prompt in one batch (an edit is
+  a cache miss), re-run live and compare.
+- **#38** (open) — deploy: `strings.TrimSpace` the secret env values (a `--data-file` secret with a
+  trailing newline made every login fail on the first revision) and investigate `GET /healthz`
+  answering Google's 404 on Cloud Run.
+- **#39** (closed, PR #40) — schematic blocks wrapped into rows inside the usable rectangle
+  (`SCHEMATIC_OVERFLOW` warning, `blocks_within_parcel` check) and labels/strokes rendered in screen
+  pixels.
+- **#42** (open) — map cosmetics: permanent power-source labels overlap the site marker on abilene-1;
+  the water tint is too faint at 0.6 stress; confirm Esri Gray Canvas terms for a gated POC.
 
 ## Deferred / next (tracked, not in the POC)
 - **Conversation compaction / context management** for long Copilot sessions (beta compaction or
   context editing; the history store is already swappable).
 - **Portfolio views** (the greyed tabs) and multi-site roll-up.
-- **Real map tiles** behind the `MapProvider` seam (the POC ships the schematic provider).
+- **Surveyed power-source coordinates** on the map (today a documented schematic offset, labelled
+  illustrative).
 - **Instantaneous shortfall mode** for `phasing.policy.max_shortfall_mw` (#23's remaining half).
+- **Idle energy draw**, **selling costs at exit**, **forward-12 exit NOI** (candidates named in #35;
+  no research figure to anchor an idle fraction yet).
 - **`decision_vars`** honoured by the optimizer (today the phasing policy alone bounds the search and
   `DECISION_VARS_IGNORED` says so).
 - Per-user auth on the relay and a cap shared across instances (#11 remainder); model escalation
@@ -200,4 +244,5 @@ allow-list and the server-held `ANTHROPIC_API_KEY`, per-UTC-day request cap, SSE
 - **M3** WS5+WS6+WS7 — SPA renders Site Feasibility live from WASM. ✅
 - **M4** WS8+WS9+WS11 — Copilot operates the view; harness drives it; baseline/compare. ✅
 - **M5** WS10 — acceptance session passes (scripted in CI, live run archived). In progress.
-- **M6** WS12+WS13 — grounded fixtures reconciled; tester deployment on Cloud Run. WS13 done, WS12 in PR.
+- **M6** WS12+WS13 — grounded fixtures reconciled; tester deployment on Cloud Run. ✅
+- **M7** UX feedback loop — testers on the deployment, findings fixed and redeployed (#41–#52). Ongoing.
