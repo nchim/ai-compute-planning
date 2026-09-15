@@ -7,7 +7,8 @@ import {
   type Result,
   type SitePlan,
 } from "../gen/capplanner/v1/engine_pb";
-import { EngineError, type Engine } from "./types";
+import type { Engine } from "./client";
+import { EngineError } from "./protocol";
 
 // STUB: stands in for the WASM engine (WS5) so the shell, bus and tests work before it merges.
 // Returns a plausible fixed Result (empty tables/charts) that echoes a few plan inputs, and always
@@ -17,7 +18,7 @@ export function createFakeEngine(): Engine {
 
   const run = (plan: SitePlan): Promise<Result> => {
     if (disposed) {
-      return Promise.reject(new EngineError("disposed", "fake engine has been disposed"));
+      return Promise.reject(new EngineError("worker", "engine disposed"));
     }
     return Promise.resolve(fakeResult(plan));
   };

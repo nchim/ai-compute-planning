@@ -1,5 +1,5 @@
-import type { Engine } from "../engine/types";
-import { isEngineError } from "../engine/types";
+import type { Engine } from "../engine/client";
+import { EngineError } from "../engine/protocol";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -82,7 +82,7 @@ export function createStore(options: StoreOptions): Store {
         },
         (err: unknown) => {
           if (request !== latestRequest || disposed) return;
-          const kind = isEngineError(err) ? err.kind : "internal";
+          const kind = err instanceof EngineError ? err.kind : "worker";
           const message = err instanceof Error ? err.message : String(err);
           dispatch({ type: "errorRaised", error: { kind, message } });
         },

@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { loadAbilene } from "../bus/testPlan";
 import { Status } from "../gen/capplanner/v1/engine_pb";
 import { createFakeEngine } from "./fake";
-import { EngineError } from "./types";
+import { EngineError } from "./protocol";
 
 test("fake engine returns OK with a visible FAKE_ENGINE diagnostic", async () => {
   const engine = createFakeEngine();

@@ -4,8 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 
 import { createStore, type Store } from "../bus";
-import { createFakeEngine } from "../engine/fake";
-import { EngineError, type Engine } from "../engine/types";
+import { createFakeEngine, EngineError, type Engine } from "../engine";
 import { createHarnessApi, type HarnessApi } from "./install";
 
 const fixture = () => readFileSync(fileURLToPath(new URL("../../../fixtures/abilene-1.json", import.meta.url)), "utf8");
@@ -109,13 +108,13 @@ describe("harness api", () => {
 
   test("waitIdle rejects on an engine error and on timeout", async () => {
     const failing: Engine = {
-      analyze: () => Promise.reject(new EngineError("internal", "boom")),
-      optimize: () => Promise.reject(new EngineError("internal", "boom")),
+      analyze: () => Promise.reject(new EngineError("worker", "boom")),
+      optimize: () => Promise.reject(new EngineError("worker", "boom")),
       dispose: () => undefined,
     };
     const { api } = harness(failing);
     await api.loadPlan(fixture());
-    await expect(api.waitIdle()).rejects.toThrow("engine error (internal): boom");
+    await expect(api.waitIdle()).rejects.toThrow("engine error (worker): boom");
 
     const hanging: Engine = { ...failing, analyze: () => new Promise(() => undefined) };
     const slow = harness(hanging);
