@@ -95,6 +95,28 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("82.1%")).toBeTruthy();
   });
 
+  test("phasing: OPTIMIZE is not a selectable mode, and a blank state explains the two ways to get phases", () => {
+    const h = harness(null);
+    const { container } = mount(h, <PhasingLever />);
+    const options = Array.from(container.querySelectorAll("select option")).map((o) => o.getAttribute("value"));
+    expect(options).toContain("EXPLICIT");
+    expect(options).not.toContain("OPTIMIZE");
+    const blank = container.querySelector("[data-blank='phasing']");
+    expect(blank).not.toBeNull();
+    fireEvent.click(within(blank as HTMLElement).getByRole("button", { name: /optimize phasing/i }));
+    expect(h.optimizeCalls).toHaveLength(1);
+  });
+
+  test("phasing shows a running panel and disables the trigger while the optimizer is in flight", () => {
+    const h = harness();
+    const { container } = mount(h, <PhasingLever />);
+    fireEvent.click(screen.getByRole("button", { name: /optimize phasing/i }));
+    expect(h.store.getState().optimizing).toBe(true);
+    expect(container.querySelector("[data-running='optimize']")).not.toBeNull();
+    expect((screen.getByRole("button", { name: /optimizing/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector(".shade.shortfall")).toBeNull(); // the chart yields to the running panel
+  });
+
   test("critical path renders each task and the energize + grid markers", () => {
     const { container } = mount(harness(), <CriticalPath />);
     expect(container.querySelectorAll(".task")).toHaveLength(4);

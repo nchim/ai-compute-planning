@@ -47,6 +47,8 @@ export interface State {
   readonly baseline: Baseline | null;
   /** Compare mode: the site view juxtaposes the current Result against `baseline`. */
   readonly compare: boolean;
+  /** An optimizer run is in flight (the UI shows progress and disables the trigger). */
+  readonly optimizing: boolean;
   readonly proposals: readonly Proposal[];
   readonly selection: Selection;
   readonly error: AppError | null;
@@ -72,6 +74,8 @@ export type Command =
   | { readonly type: "clearBaseline" }
   | { readonly type: "toggleCompare" }
   | { readonly type: "select"; readonly selection: Selection }
+  | { readonly type: "optimizeStarted" }
+  | { readonly type: "optimizeSettled" }
   | { readonly type: "resultReceived"; readonly result: Result }
   | { readonly type: "errorRaised"; readonly error: AppError }
   | { readonly type: "clearError" };
@@ -94,6 +98,7 @@ export const initialState: State = {
   result: null,
   baseline: null,
   compare: false,
+  optimizing: false,
   proposals: [],
   selection: initialSelection,
   error: null,

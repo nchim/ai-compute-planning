@@ -117,7 +117,10 @@ export function createStore(options: StoreOptions): Store {
     const candidate = clone(SitePlanSchema, state.plan);
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
-    return guarded(++latestRequest, engine.optimize(candidate));
+    dispatch({ type: "optimizeStarted" });
+    return guarded(++latestRequest, engine.optimize(candidate)).finally(() => {
+      if (!disposed) dispatch({ type: "optimizeSettled" });
+    });
   };
 
   return {

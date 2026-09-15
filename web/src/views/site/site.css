@@ -23,6 +23,7 @@
 .site-view .panel-hd .t { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .site-view .panel-hd .actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 .site-view .two-col { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 14px; }
+.site-view .two-col > div { min-width: 0; }
 .site-view .empty { color: #a1a1aa; font-style: italic; border: 1px dashed #e4e4e7; border-radius: 4px; padding: 10px; }
 .site-view .app-error { color: #fff; background: #9c6b6b; border-radius: 4px; padding: 6px 10px; }
 
@@ -59,7 +60,7 @@
 .site-view fieldset .field { grid-template-columns: 90px 1fr; margin: 2px 0; }
 
 .site-view .diags { list-style: none; margin: 4px 0; padding: 0; font-size: 11.5px; }
-.site-view .diag { border-left: 3px solid var(--muted); padding: 3px 8px; margin: 3px 0; background: var(--soft); border-radius: 0 4px 4px 0; }
+.site-view .diag { display: block; border-left: 3px solid var(--muted); padding: 3px 8px; margin: 3px 0; background: var(--soft); border-radius: 0 4px 4px 0; overflow-wrap: anywhere; }
 .site-view .diag-warning { border-color: #b8860b; } .diag-error { border-color: #9c3b3b; } .diag-info { border-color: var(--space); }
 .site-view .diag .hint { color: var(--muted); }
 
@@ -141,3 +142,13 @@
 .site-view .stackbar .baseline rect { opacity: .45; }
 .site-view .bands .baseline { opacity: .5; } .site-view .bands .baseline line { stroke: var(--ink); stroke-dasharray: 3 2; }
 .site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 8; opacity: .5; }
+
+/* Blank and running states for regions that need an action before they have data. */
+.site-view .blank { display: grid; gap: 6px; justify-items: start; font-style: normal; color: #52525b; }
+.site-view .blank b { color: var(--ink); }
+.site-view .notice { font-size: 11.5px; color: #52525b; background: var(--soft); border-radius: 4px; padding: 6px 8px; margin: 4px 0; }
+.site-view .running { display: flex; gap: 10px; align-items: center; border: 1px dashed var(--line); border-radius: 4px; padding: 14px; color: var(--ink); font-size: 12px; min-height: 90px; }
+.site-view .running-sub { color: #52525b; font-size: 11.5px; margin-top: 2px; }
+.site-view .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: site-spin 0.9s linear infinite; flex: none; }
+@keyframes site-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .site-view .spinner { animation: none; } }

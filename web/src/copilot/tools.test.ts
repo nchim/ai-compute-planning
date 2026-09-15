@@ -104,7 +104,7 @@ describe("propose_change and run_optimize", () => {
     expect(plan.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
     const log = h.store.getLog().map((e) => e.command.type);
     // The load's debounced analyze is superseded by the patch's; then store.optimize stores its reply.
-    expect(log).toEqual(["loadPlan", "applyPatch", "resultReceived", "resultReceived"]);
+    expect(log).toEqual(["loadPlan", "applyPatch", "resultReceived", "optimizeStarted", "resultReceived", "optimizeSettled"]);
     // The fake engine returns no OptimizationResult, which is reported — not hidden.
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });
   });
