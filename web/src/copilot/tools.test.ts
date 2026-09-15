@@ -1,10 +1,12 @@
 import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
 import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
+import { toBinary } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
 
 import { createStore } from "../bus";
 import { loadAbilene } from "../bus/testPlan";
 import { createFakeEngine } from "../engine";
+import { SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createAnalysisTracker } from "./analysis";
 import { researchPaths } from "./research";
 import { createTools, type ToolEvent } from "./tools";
@@ -25,7 +27,7 @@ function harness() {
     const toolUse = { type: "tool_use" as const, id: `id-${name}`, name, input };
     return t.run(t.parse(input), { toolUse, toolUseBlock: toolUse });
   };
-  return { store, events, run, tools };
+  return { store, engine, events, run, tools };
 }
 
 describe("tool schemas", () => {
@@ -101,24 +103,30 @@ describe("propose_change and run_optimize", () => {
     expect(h.store.getState().proposals).toHaveLength(1);
   });
 
-  test("run_optimize writes objective/constraints/policy (not phasing.mode) and optimizes via the store", async () => {
+  test("run_optimize applies objective/constraints/policy to the candidate only; the live plan and screen are untouched", async () => {
     const h = harness();
+    const sent: SitePlan[] = [];
+    const engineOptimize = h.engine.optimize.bind(h.engine);
+    h.engine.optimize = (plan: SitePlan) => {
+      sent.push(plan);
+      return engineOptimize(plan);
+    };
+    const before = toBinary(SitePlanSchema, h.store.getState().plan!);
     await failure(h.run("run_optimize", {
       objective: "MIN_STRANDED_PLUS_LCOC",
       constraints: [{ metric: "total_capex", op: "LE", value: 8e9 }],
       decision_vars: null,
       policy: { max_phases: 4, min_phase_mw: null, max_phase_mw: null, min_months_between_phases: null, max_shortfall_mw: 20 },
     }));
-    const plan = h.store.getState().plan!;
-    expect(plan.phasing?.mode).toBe(1); // SINGLE_SHOT: the live plan never flips to OPTIMIZE
-    expect(plan.optimization?.objective?.type).toBe(1);
-    expect(plan.optimization?.constraints[0]).toMatchObject({ metric: "total_capex", op: 1, value: 8e9 });
-    expect(plan.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
-    const log = h.store.getLog().map((e) => e.command.type);
-    // The load's debounced analyze is superseded by the patch's; then store.optimize stores its reply.
-    expect(log).toEqual(["loadPlan", "applyPatch", "resultReceived", "resultReceived"]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.phasing?.mode).toBe(3); // OPTIMIZE on the candidate
+    expect(sent[0]!.optimization?.constraints[0]).toMatchObject({ metric: "total_capex", op: 1, value: 8e9 });
+    expect(sent[0]!.phasing?.policy).toMatchObject({ maxPhases: 4, maxShortfallMw: 20 });
+    expect(toBinary(SitePlanSchema, h.store.getState().plan!)).toEqual(before); // nothing written to the live plan
+    expect(h.store.getLog().map((e) => e.command.type)).not.toContain("applyPatch");
     // The fake engine returns no OptimizationResult, which is reported — not hidden.
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });
+  });
   });
 });
 
