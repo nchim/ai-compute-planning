@@ -1,0 +1,13 @@
+# Docker build context for deploy/Dockerfile (mirrors .gcloudignore).
+.git
+.github
+.claude
+design
+harness
+research/sources
+node_modules
+**/node_modules
+web/dist
+web/public/engine.wasm
+web/public/wasm_exec.js
+**/.DS_Store
