@@ -134,8 +134,12 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
         fixMs = timings["T2 analyze after fix"] = await timedIdle(s);
       }
       expect(firstResult.status).toBe("INVALID_INPUT");
-      expect(findDiagnostic(firstResult, "DENSITY_EXCEEDS_COOLING")?.proto_path).toBe("compute.kw_per_rack");
+      // The slab is always too light for 130 kW/rack; the cooling error only fires when cooling was left on
+      // AIR (a live Copilot may bundle the cooling switch into its proposal, which the doc allows).
       expect(findDiagnostic(firstResult, "FLOOR_LOAD_INSUFFICIENT")?.proto_path).toBe("site.floor_load_psf");
+      const density = findDiagnostic(firstResult, "DENSITY_EXCEEDS_COOLING");
+      if (!live) expect(density, "DENSITY_EXCEEDS_COOLING on the naive proposal").toBeDefined();
+      if (density !== undefined) expect(density.proto_path).toBe("compute.kw_per_rack");
       for (const d of firstResult.diagnostics ?? []) expect(d, `diagnostic ${d.code} is complete`).toMatchObject({ proto_path: expect.any(String), expected: expect.any(String), actual: expect.any(String), hint: expect.any(String) });
 
       const allowed = new Set(["compute.kw_per_rack", "compute.cooling", "site.floor_load_psf", "compute.gpus_per_rack"]);
@@ -222,7 +226,7 @@ test(`acceptance session: Abilene-1 T1–T7 (${mode})`, async ({}, info) => {
       expect(captureDelta).toBeCloseTo(metric(t3.result, "demand_capture_pct") - (baselineSummary["demand_capture_pct"] as number), 6);
       await expect(s.page.locator(".step-chart .line.baseline"), "ghosted baseline demand + capacity").toHaveCount(2);
       if (live) {
-        grounding.addFacts(deltaFacts(baselineSummary, (t3.result.summary ?? {}) as Record<string, unknown>));
+        grounding.addFacts(deltaFacts(flattenNumbers(baselineSummary as Json), flattenNumbers((t3.result.summary ?? {}) as Json)));
         await grounding.turn(s, "T3b", H.t3b);
       }
     });
@@ -413,6 +417,13 @@ function expectStrictlyIncreasing(xs: readonly number[], what: string): void {
   for (let i = 1; i < xs.length; i++) expect(xs[i]!, `${what} strictly increasing at ${i}: ${xs.join(", ")}`).toBeGreaterThan(xs[i - 1]!);
 }
 
+/** Leaf numbers of a summary keyed by dotted path (`extra.racks`), so deltas cover the extras too. */
+function flattenNumbers(value: Json, prefix = ""): Record<string, number> {
+  if (typeof value === "number") return { [prefix]: value };
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.assign({}, ...Object.entries(value).map(([k, v]) => flattenNumbers(v, prefix === "" ? k : `${prefix}.${k}`))) as Record<string, number>;
+}
+
 /** Numbers quoted inside a tool output's prose (research excerpts, glossary text). */
 function numbersInStrings(value: Json): number[] {
   if (typeof value === "string") return numbersIn(value);
@@ -452,8 +463,9 @@ function analysisOf(output: Json | null): Result | null {
 class Grounding {
   /** Benchmarks the system prompt itself cites (interconnection years, $/MW…) are fair to quote. */
   private facts: number[] = numbersIn(readFileSync(fileURLToPath(new URL("../../docs/agent-system-prompt.md", import.meta.url)), "utf8"));
-  private lastSummary: Record<string, unknown> | null = null;
+  private lastSummary: Record<string, number> | null = null;
   private markdown = "";
+  private turns: Turn[] = [];
   private transcriptPath: string | null = null;
 
   constructor(private readonly session: Session) {}
@@ -469,8 +481,9 @@ class Grounding {
     if (result === null) return;
     const parsed = JSON.parse(result) as { summary?: Record<string, unknown> };
     this.facts.push(...numbersOf(JSON.parse(result) as Json));
-    if (this.lastSummary !== null && parsed.summary !== undefined) this.facts.push(...deltaFacts(this.lastSummary, parsed.summary));
-    this.lastSummary = parsed.summary ?? null;
+    const summary = parsed.summary === undefined ? null : flattenNumbers(parsed.summary as Json);
+    if (this.lastSummary !== null && summary !== null) this.facts.push(...deltaFacts(this.lastSummary, summary));
+    this.lastSummary = summary;
   }
 
   /** Sends one human turn, learns what the engine said during it, and checks the narration. */
@@ -480,6 +493,7 @@ class Grounding {
     for (const c of turn.toolCalls) if (c.output !== null) this.facts.push(...numbersOf(c.output), ...numbersInStrings(c.output));
     await this.learn(s);
     this.markdown += turnMarkdown(label, turn);
+    this.turns.push(turn);
     await this.flush();
     expect(untraceable(turn.text, this.facts), `${label}: every number in the narration traces to a Result`).toEqual([]);
     if (label !== "T1") expect(turn.usage?.cache_read_input_tokens ?? 0, `${label}: prompt cache hit`).toBeGreaterThan(0);
@@ -489,6 +503,8 @@ class Grounding {
   async flush(): Promise<void> {
     if (this.markdown === "") return;
     this.transcriptPath = await this.session.writeArtifact("transcript.md", `# Abilene-1 acceptance session (live)\n\n${this.markdown}`);
+    // The raw turns (tool inputs/outputs included) for debugging a narration or tool-loop miss.
+    await this.session.writeArtifact("copilot-turns.json", JSON.stringify(this.turns, null, 2));
   }
 
   get transcript(): string | null {
