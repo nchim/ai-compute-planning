@@ -98,6 +98,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
+- 2026-09-15 (WS3) — Risk composes over the core without hooks: `risk.SetNumeric` writes dotted
+  `input_path`s via protoreflect (`Mutable` creates unset parents; int fields are rounded). Draw from
+  `(0,1)` open (`uniform01`) so `math.Erfinv` never returns ±Inf. 1k Monte Carlo iterations cost ~125 ms
+  native and are dominated by `core.Analyze` rendering tables/charts every draw — a render-free core
+  entry point would roughly halve it if WASM needs the headroom. LCOC is a *cost* metric: a tornado on
+  `gpu_hour_price` is ~flat (only the EGR-linked mgmt fee moves), which is why the tornado is reported
+  for both LCOC and NPV (one `SensitivityVar` per path × target, LCOC block first).
 - 2026-09-15 (WS1) — Proto enum values share the *package* scope: two enums in one file cannot both
   define `OPTIMIZE`. `RunMode` values are therefore `RUN_ANALYZE`/`RUN_OPTIMIZE`. `buf lint` passes
   with `ENUM_VALUE_PREFIX`/`ENUM_ZERO_VALUE_SUFFIX` excepted; do not rename enum values to "fix" lint.
