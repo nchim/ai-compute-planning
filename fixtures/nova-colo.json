@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "plan_id": "nova-colo",
+    "site_name": "Nova-Colo",
+    "scenario_name": "Gas-bridged two-phase colo",
+    "schema_version": "v1"
+  },
+  "site": {
+    "land_acres": 5,
+    "usable_acres": 4,
+    "floor_load_psf": 300,
+    "market": "PJM / Northern Virginia",
+    "iso": "PJM",
+    "location": { "lat": 39.02, "lng": -77.45 },
+    "latency_tier": "INFERENCE_METRO",
+    "water_stress_index": 0.3,
+    "avg_temp_c": 14
+  },
+  "compute": {
+    "accelerator": "GB200 (tenant-supplied)",
+    "gpus_per_rack": 72,
+    "kw_per_rack": 125,
+    "target_it_load_mw": 20,
+    "pue": 1.5,
+    "cooling": "LIQUID_DTC",
+    "network_fabric": "tenant"
+  },
+  "power": {
+    "sources": [
+      {
+        "id": "gas",
+        "type": "BTM_GAS",
+        "capacity_mw": 15,
+        "available_month": 18,
+        "cost_per_mwh": 95,
+        "capex_per_kw": 1200,
+        "lead_time_months": 12
+      },
+      {
+        "id": "grid",
+        "type": "GRID",
+        "capacity_mw": 30,
+        "available_month": 60,
+        "cost_per_mwh": 150,
+        "capex_per_kw": 255,
+        "lead_time_months": 36
+      }
+    ],
+    "interconnection": {
+      "queue_start_month": 0,
+      "grid_energize_month": 60,
+      "transformer_lead_months": 36
+    }
+  },
+  "phasing": {
+    "mode": "EXPLICIT",
+    "phases": [
+      { "id": "p1", "it_load_mw": 10, "start_month": 0, "energize_month": 24, "power_source_id": "gas" },
+      { "id": "p2", "it_load_mw": 10, "start_month": 42, "energize_month": 60, "power_source_id": "grid" }
+    ]
+  },
+  "demand": {
+    "points": [
+      { "month": 6, "demand_mw": 5 },
+      { "month": 18, "demand_mw": 10 },
+      { "month": 36, "demand_mw": 20 },
+      { "month": 60, "demand_mw": 20 }
+    ],
+    "class": "INFERENCE_METRO"
+  },
+  "costs": {
+    "shell_capex_per_mw": 4207000,
+    "electrical_capex_per_mw": 1594000,
+    "cooling_capex_per_mw": 1147500,
+    "network_capex_per_mw": 0,
+    "land_capex_per_acre": 2260000,
+    "gpu": {
+      "unit_cost": 35000,
+      "depreciation_years": 5,
+      "residual_curve": [0.8, 0.65, 0.5, 0.35, 0.2]
+    },
+    "opex": {
+      "staffing_per_mw_yr": 69000,
+      "maintenance_pct_of_capex": 1.64,
+      "insurance_pct_of_capex": 0.082,
+      "mgmt_fee_pct_of_egr": 3,
+      "property_tax_per_yr": 1100000
+    },
+    "agility_premium_pct": 12
+  },
+  "revenue": {
+    "mode": "COLO_LEASE",
+    "colo": {
+      "rate_per_kw_month": 285,
+      "annual_escalation_pct": 2,
+      "vacancy_pct": 5
+    }
+  },
+  "finance": {
+    "discount_rate": 0.09,
+    "hold_period_months": 72,
+    "exit_cap_rate": 0.0675
+  },
+  "run": {
+    "mode": "RUN_ANALYZE",
+    "monte_carlo": { "enabled": false, "iterations": 1000, "seed": 42 },
+    "sensitivity": { "enabled": false }
+  }
+}

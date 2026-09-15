@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "plan_id": "epoch-100mw",
+    "site_name": "Epoch-100MW",
+    "scenario_name": "GB200 campus, grid + nuclear PPA",
+    "schema_version": "v1"
+  },
+  "site": {
+    "land_acres": 60,
+    "usable_acres": 45,
+    "floor_load_psf": 350,
+    "market": "MISO / Central Illinois",
+    "iso": "MISO",
+    "location": { "lat": 40.12, "lng": -88.24 },
+    "latency_tier": "TRAINING_REMOTE",
+    "water_stress_index": 0.2,
+    "avg_temp_c": 11
+  },
+  "compute": {
+    "accelerator": "GB200",
+    "gpus_per_rack": 72,
+    "kw_per_rack": 125,
+    "target_it_load_mw": 87.7,
+    "pue": 1.14,
+    "cooling": "LIQUID_DTC",
+    "network_fabric": "InfiniBand"
+  },
+  "power": {
+    "sources": [
+      {
+        "id": "grid",
+        "type": "GRID",
+        "capacity_mw": 70,
+        "available_month": 36,
+        "cost_per_mwh": 88,
+        "capex_per_kw": 160,
+        "lead_time_months": 36
+      },
+      {
+        "id": "nuclear_ppa",
+        "type": "NUCLEAR_PPA",
+        "capacity_mw": 31,
+        "available_month": 36,
+        "cost_per_mwh": 95,
+        "capex_per_kw": 160,
+        "lead_time_months": 24
+      }
+    ],
+    "interconnection": {
+      "queue_start_month": 0,
+      "grid_energize_month": 36,
+      "transformer_lead_months": 36
+    }
+  },
+  "phasing": { "mode": "SINGLE_SHOT" },
+  "demand": {
+    "points": [
+      { "month": 6, "demand_mw": 20 },
+      { "month": 24, "demand_mw": 60 },
+      { "month": 36, "demand_mw": 87.7 },
+      { "month": 60, "demand_mw": 87.7 }
+    ],
+    "class": "TRAINING_REMOTE"
+  },
+  "costs": {
+    "shell_capex_per_mw": 2867000,
+    "electrical_capex_per_mw": 6517000,
+    "cooling_capex_per_mw": 3649000,
+    "network_capex_per_mw": 5621000,
+    "land_capex_per_acre": 283333,
+    "gpu": {
+      "unit_cost": 41900,
+      "depreciation_years": 5,
+      "residual_curve": [0.8, 0.65, 0.5, 0.35, 0.2]
+    },
+    "opex": {
+      "staffing_per_mw_yr": 75200,
+      "maintenance_pct_of_capex": 0.726,
+      "insurance_pct_of_capex": 0,
+      "mgmt_fee_pct_of_egr": 0,
+      "property_tax_per_yr": 14300000
+    },
+    "agility_premium_pct": 0
+  },
+  "revenue": {
+    "mode": "COMPUTE_SALES",
+    "compute": {
+      "gpu_hour_price": 3.0,
+      "utilization_pct": 71,
+      "price_decay_pct_yr": 0
+    }
+  },
+  "finance": {
+    "discount_rate": 0.1,
+    "hold_period_months": 84,
+    "exit_cap_rate": 0.06
+  },
+  "run": {
+    "mode": "RUN_ANALYZE",
+    "monte_carlo": { "enabled": false, "iterations": 1000, "seed": 42 },
+    "sensitivity": { "enabled": false }
+  }
+}

@@ -190,6 +190,16 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
   optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
   diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
+- 2026-09-15 (WS12) — Grounding against an external model: mirror its *inputs* field by field in a table
+  (source cell → our field → value → note) and compare outputs on the basis the source itself
+  computes (A.CRE's untrended column, Epoch's per-gross-MW), restating each structural difference
+  explicitly (our equity-only cost basis vs K76, energy at nameplate vs utilization) instead of tuning
+  inputs; pin the known gap's direction/band so the test flips when the engine changes. Gitignored
+  sources (`research/sources/*.zip`) live only in the main checkout, not worktrees — unzip to the
+  scratchpad; openpyxl `data_only=True` gives the cached values (the workbook's own results).
+  `fixtures/*.json` are enumerated by `web/src/fixtures.ts` (Vite glob) — a new fixture needs no code,
+  but `meta.plan_id` must equal the file name and it must be added to `engine/scenarios_test.go`'s
+  MC/optimize table and `engine/core/fixture_test.go`'s `fixtureNames`.
 - 2026-09-15 (docs sync) — The docs drifted from the build in three ways worth avoiding: specs kept
   describing the *plan* after the code diverged (tool count, harness API, package layout), process
   changes lived only in Playbook bullets (merge queue, worktree convention, cross-arch goldens), and the
