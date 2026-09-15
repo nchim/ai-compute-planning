@@ -3,8 +3,10 @@ export { logToJson, commandToJson } from "./log";
 export { PathError, applyPatch } from "./paths";
 export { planChanged, reduce } from "./reducer";
 export { createStore, type Store, type StoreOptions } from "./store";
+export { defaultBaselineLabel } from "./baseline";
 export type {
   AppError,
+  Baseline,
   Command,
   CommandType,
   FieldValue,

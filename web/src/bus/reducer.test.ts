@@ -254,3 +254,51 @@ describe("selection, results, errors", () => {
     expect(reduce(errored, { type: "clearError" }).error).toBeNull();
   });
 });
+
+describe("baseline and compare", () => {
+  const analyzed = (): State => reduce(loaded(), { type: "resultReceived", result: fakeResult(loadAbilene()) });
+
+  test("setBaseline snapshots independent clones of the plan and result", () => {
+    const s = reduce(analyzed(), { type: "setBaseline", label: "single-shot" });
+    expect(s.error).toBeNull();
+    expect(s.baseline?.label).toBe("single-shot");
+    expect(s.baseline?.plan).not.toBe(s.plan);
+    expect(bytes(s.baseline!.plan)).toEqual(bytes(s.plan));
+    expect(s.baseline?.result).not.toBe(s.result);
+    expect(s.baseline?.result.summary?.lcocPerGpuHour).toBe(s.result?.summary?.lcocPerGpuHour);
+    // The live plan moves on; the baseline does not.
+    const moved = reduce(s, { type: "setField", path: "compute.pue", value: 1.5 });
+    expect(moved.baseline!.plan.compute!.pue).toBe(1.2);
+  });
+
+  test("setBaseline is rejected without a result or with an empty label", () => {
+    expect(reduce(loaded(), { type: "setBaseline", label: "x" }).error?.message).toContain("no result");
+    expect(reduce(initialState, { type: "setBaseline", label: "x" }).error?.message).toContain("no result");
+    expect(reduce(analyzed(), { type: "setBaseline", label: "  " }).error?.message).toContain("label");
+  });
+
+  test("toggleCompare flips only with a baseline; clearBaseline drops both", () => {
+    expect(reduce(analyzed(), { type: "toggleCompare" }).error?.message).toContain("no baseline");
+    const pinned = reduce(analyzed(), { type: "setBaseline", label: "b" });
+    const on = reduce(pinned, { type: "toggleCompare" });
+    expect(on.compare).toBe(true);
+    expect(reduce(on, { type: "toggleCompare" }).compare).toBe(false);
+    const cleared = reduce(on, { type: "clearBaseline" });
+    expect(cleared.baseline).toBeNull();
+    expect(cleared.compare).toBe(false);
+    expect(reduce(cleared, { type: "clearBaseline" }).error?.message).toContain("no baseline");
+  });
+
+  test("undo and redo leave the baseline and compare flag untouched", () => {
+    const pinned = reduce(analyzed(), { type: "setBaseline", label: "b" });
+    const edited = reduce(reduce(pinned, { type: "toggleCompare" }), { type: "setField", path: "compute.pue", value: 1.5 });
+    const undone = reduce(edited, { type: "undo" });
+    expect(undone.plan!.compute!.pue).toBe(1.2);
+    expect(undone.baseline).toBe(edited.baseline);
+    expect(undone.compare).toBe(true);
+    const redone = reduce(undone, { type: "redo" });
+    expect(redone.plan!.compute!.pue).toBe(1.5);
+    expect(redone.baseline).toBe(edited.baseline);
+    expect(redone.history.past.every((p) => p !== edited.baseline!.plan)).toBe(true);
+  });
+});
