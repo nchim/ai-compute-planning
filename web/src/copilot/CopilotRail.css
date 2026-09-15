@@ -1,0 +1,24 @@
+/* Copilot-specific pieces; the rail layout itself comes from app.css (.rail/.thread/.msg/.composer). */
+.copilot-usage { font-size: 10px; color: var(--text-faint); font-weight: 400; }
+.copilot-key { padding: 8px 14px; border-bottom: 1px solid var(--border-soft); font-size: 11.5px; }
+.copilot-warn { color: var(--danger); font-weight: 600; margin-bottom: 4px; }
+.copilot-key-row { display: flex; gap: 6px; align-items: center; }
+.copilot-key-row input {
+  flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit;
+  background: var(--surface); color: var(--text);
+}
+.copilot-notice {
+  margin: 8px 14px 0; padding: 7px 10px; border-radius: 6px; font-size: 12px;
+  background: var(--surface-2); border: 1px solid var(--warn); color: var(--text-strong);
+}
+.rail .banner { margin: 8px 14px 0; }
+.msg p, .msg ul { margin: 4px 0; }
+.copilot-chip {
+  display: inline-block; margin: 3px 4px 0 0; padding: 1px 8px; border-radius: 10px; font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid var(--border); background: var(--surface);
+}
+.copilot-chip-running { border-color: var(--warn); color: var(--warn); }
+.copilot-chip-done { border-color: var(--info); color: var(--info); }
+.copilot-chip-error { border-color: var(--danger); color: var(--danger); }
+.proposal pre { margin: 6px 0 0; font-size: 11px; white-space: pre-wrap; }
+.copilot-disabled { padding: 10px 14px; border-top: 1px solid var(--border-soft); font-size: 12px; color: var(--text-muted); }
