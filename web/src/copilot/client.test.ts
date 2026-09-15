@@ -90,7 +90,7 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(setControl["strict"]).toBe(true);
     expect(setControl["eager_input_streaming"]).toBeUndefined();
     expect(tools.map((t) => t["name"])).toEqual([
-      "edit_site_plan", "set_control", "run_analyze", "run_optimize", "propose_change", "explain", "query_research",
+      "edit_site_plan", "set_control", "run_analyze", "run_optimize", "propose_change", "set_baseline", "toggle_compare", "explain", "query_research",
     ]);
 
     // ViewContext is the first block of the user message, after the system prompt — never inside it.

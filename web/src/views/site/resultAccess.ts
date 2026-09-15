@@ -1,4 +1,4 @@
-import type { Cell, Chart, Diagnostic, Result, SitePlan, Table } from "../../gen/capplanner/v1/engine_pb";
+import type { Cell, Chart, Diagnostic, Result, SitePlan, SummaryMetrics, Table } from "../../gen/capplanner/v1/engine_pb";
 import type { FieldValue } from "../../bus";
 
 /** Lookups that return `undefined` (never throw) so a missing Result section renders as "not computed". */
@@ -24,6 +24,12 @@ export function diagnosticsAt(result: Result | null, path: string): Diagnostic[]
 }
 
 const snakeToCamel = (s: string) => s.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+
+/** A numeric `Result.summary` field by its proto (snake_case) name; `undefined` if absent or not a number. */
+export function summaryValue(summary: SummaryMetrics | undefined, key: string): number | undefined {
+  const v = summary === undefined ? undefined : (summary as unknown as Record<string, unknown>)[snakeToCamel(key)];
+  return typeof v === "number" ? v : undefined;
+}
 const segmentRe = /^([a-z0-9_]+)(?:\[(\d+)\])?$/i;
 
 /**

@@ -7,6 +7,8 @@ export interface GlossaryEntry {
   readonly formula: string;
   readonly benchmark: string;
   readonly source: string;
+  /** Metrics only: which direction is an improvement, so a Δ vs. baseline can be coloured. */
+  readonly betterWhen?: "lower" | "higher";
 }
 
 const kpi = "research/02-kpi-architecture.md";
@@ -23,20 +25,20 @@ export const glossary: Record<string, GlossaryEntry> = {
     concept: "Levelized Cost of Compute: lifecycle cost per delivered GPU-hour.",
     formula: "(capex + PV(opex + power)) / PV(GPU-hours delivered)",
     benchmark: "~$1.5–2 / GPU-hr",
-    source: kpi,
+    source: kpi, betterWhen: "lower",
   },
-  total_capex: { concept: "All-in development cost.", formula: "Σ capex stack components", benchmark: "~$30–40M/MW full capex", source: proForma },
-  capex_per_mw: { concept: "Capex intensity per MW of IT load.", formula: "total_capex / target_it_load_mw", benchmark: "~$30–40M/MW", source: proForma },
-  yield_on_cost_pct: { concept: "Stabilized NOI over total cost.", formula: "stabilized NOI / total_capex", benchmark: "~10–12%", source: proForma },
-  npv: { concept: "Net present value of the hold-period cash flows.", formula: "Σ CF_t / (1+r)^t − capex", benchmark: "> 0 at the discount rate", source: proForma },
-  unlevered_irr_pct: { concept: "Unlevered internal rate of return.", formula: "r such that NPV = 0", benchmark: "12–16% unlevered", source: proForma },
-  time_to_energize_months: { concept: "Months until the first revenue-bearing MW.", formula: "min(phase.energize_month)", benchmark: "grid 5–7 yr · BTM gas 18–30 mo", source: speed },
-  demand_capture_pct: { concept: "Share of addressable demand actually served.", formula: "∫min(demand, capacity) / ∫demand", benchmark: "> 85% for a well-phased site", source: kpi },
-  stranded_capacity_mw_months: { concept: "Capacity built ahead of demand (underutilization).", formula: "∫max(capacity − demand, 0)", benchmark: "cheaper than shortfall, not free", source: bubble },
-  shortfall_mw_months: { concept: "Demand you could not serve (shortage).", formula: "∫max(demand − capacity, 0)", benchmark: "asymmetric: shortage costs more than surplus", source: kpi },
-  composite_risk_score: { concept: "Blended 0–100 risk across the radar axes.", formula: "weighted mean of axis scores", benchmark: "< 40 investable", source: kpi },
-  utilization_breakeven_pct: { concept: "Utilization at which NPV = 0.", formula: "solve NPV(utilization) = 0", benchmark: "keep ≥ 15 pts below plan", source: bubble },
-  mw_online_final: { concept: "IT load online at the end of the hold.", formula: "Σ phase.it_load_mw", benchmark: "= target_it_load_mw", source: kpi },
+  total_capex: { concept: "All-in development cost.", formula: "Σ capex stack components", benchmark: "~$30–40M/MW full capex", source: proForma, betterWhen: "lower" },
+  capex_per_mw: { concept: "Capex intensity per MW of IT load.", formula: "total_capex / target_it_load_mw", benchmark: "~$30–40M/MW", source: proForma, betterWhen: "lower" },
+  yield_on_cost_pct: { concept: "Stabilized NOI over total cost.", formula: "stabilized NOI / total_capex", benchmark: "~10–12%", source: proForma, betterWhen: "higher" },
+  npv: { concept: "Net present value of the hold-period cash flows.", formula: "Σ CF_t / (1+r)^t − capex", benchmark: "> 0 at the discount rate", source: proForma, betterWhen: "higher" },
+  unlevered_irr_pct: { concept: "Unlevered internal rate of return.", formula: "r such that NPV = 0", benchmark: "12–16% unlevered", source: proForma, betterWhen: "higher" },
+  time_to_energize_months: { concept: "Months until the first revenue-bearing MW.", formula: "min(phase.energize_month)", benchmark: "grid 5–7 yr · BTM gas 18–30 mo", source: speed, betterWhen: "lower" },
+  demand_capture_pct: { concept: "Share of addressable demand actually served.", formula: "∫min(demand, capacity) / ∫demand", benchmark: "> 85% for a well-phased site", source: kpi, betterWhen: "higher" },
+  stranded_capacity_mw_months: { concept: "Capacity built ahead of demand (underutilization).", formula: "∫max(capacity − demand, 0)", benchmark: "cheaper than shortfall, not free", source: bubble, betterWhen: "lower" },
+  shortfall_mw_months: { concept: "Demand you could not serve (shortage).", formula: "∫max(demand − capacity, 0)", benchmark: "asymmetric: shortage costs more than surplus", source: kpi, betterWhen: "lower" },
+  composite_risk_score: { concept: "Blended 0–100 risk across the radar axes.", formula: "weighted mean of axis scores", benchmark: "< 40 investable", source: kpi, betterWhen: "lower" },
+  utilization_breakeven_pct: { concept: "Utilization at which NPV = 0.", formula: "solve NPV(utilization) = 0", benchmark: "keep ≥ 15 pts below plan", source: bubble, betterWhen: "lower" },
+  mw_online_final: { concept: "IT load online at the end of the hold.", formula: "Σ phase.it_load_mw", benchmark: "= target_it_load_mw", source: kpi, betterWhen: "higher" },
 
   // --- SitePlan controls ---
   "revenue.compute.gpu_hour_price": { concept: "Contracted $/GPU-hour (master lever).", formula: "revenue = price × GPUs × 8760 × utilization", benchmark: "20–60% premium for speed", source: speed },
@@ -73,6 +75,8 @@ export const glossary: Record<string, GlossaryEntry> = {
   "region.optimization": { concept: "Objective + constraints + decision vars → frontier → apply best plan.", formula: "Result.optimization", benchmark: "converged=true", source: kpi },
   "chart.risk_radar": { concept: "Risk score per axis, 0 (none) to 100.", formula: "Result.charts[risk_radar]", benchmark: "< 40 per axis", source: kpi },
   "chart.frontier": { concept: "Every candidate the optimizer evaluated.", formula: "x = LCOC, y = stranded MW-months", benchmark: "best = lowest-left feasible", source: kpi },
+  "toolbar.set_baseline": { concept: "Pin the current plan and its Result as the baseline scenario.", formula: "baseline = clone(plan, Result); undo/redo never touch it", benchmark: "pin before an optimize or a what-if", source: kpi },
+  "toolbar.compare": { concept: "Juxtapose the current Result against the baseline: Δ on every tile, ghosted baseline series on the charts.", formula: "Δ = current − baseline (and % of baseline)", benchmark: "green = better in that metric's direction", source: kpi },
   "chart.tornado": { concept: "Swing of the target metric when each input moves ±delta.", formula: "(high − base, low − base) / base", benchmark: "top-2 usually price + utilization", source: bubble },
 };
 

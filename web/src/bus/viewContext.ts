@@ -9,6 +9,10 @@ export interface ViewContext {
   readonly resultSummary: SummaryMetrics | null;
   readonly diagnostics: readonly Diagnostic[];
   readonly selection: Selection;
+  /** The pinned scenario's summary (null when none) and whether compare mode is on. */
+  readonly baselineLabel: string | null;
+  readonly baselineSummary: SummaryMetrics | null;
+  readonly compare: boolean;
 }
 
 export function viewContext(state: State): ViewContext {
@@ -19,5 +23,8 @@ export function viewContext(state: State): ViewContext {
     resultSummary: state.result?.summary ?? null,
     diagnostics: state.result?.diagnostics ?? [],
     selection: state.selection,
+    baselineLabel: state.baseline?.label ?? null,
+    baselineSummary: state.baseline?.result.summary ?? null,
+    compare: state.compare,
   };
 }

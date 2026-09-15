@@ -5,10 +5,21 @@ export interface XY {
   readonly y: number;
 }
 
+export interface BaselineSeries {
+  readonly demand: readonly XY[];
+  readonly capacity: readonly XY[];
+}
+
+const linePath = (pts: readonly XY[], x: (v: number) => number, y: (v: number) => number) =>
+  pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.x)},${y(p.y)}`).join(" ");
+const stepPath = (pts: readonly XY[], x: (v: number) => number, y: (v: number) => number) =>
+  pts.map((p, i) => (i === 0 ? `M${x(p.x)},${y(p.y)}` : `H${x(p.x)} V${y(p.y)}`)).join(" ");
+
 /**
  * Demand (line) vs online capacity (step) with the engine's per-month `shortfall` / `stranded`
  * series drawn as columns above / below the capacity step, so both halves of the asymmetry show.
- * All four series share the engine's month grid (`charts[demand_vs_capacity]`).
+ * All four series share the engine's month grid (`charts[demand_vs_capacity]`). In compare mode the
+ * baseline's demand and capacity are drawn ghosted underneath.
  */
 export function StepChart(props: {
   demand: readonly XY[];
@@ -17,8 +28,9 @@ export function StepChart(props: {
   stranded: readonly XY[];
   xLabel: string;
   yLabel: string;
+  baseline?: BaselineSeries;
 }) {
-  const all = [...props.demand, ...props.capacity];
+  const all = [...props.demand, ...props.capacity, ...(props.baseline?.demand ?? []), ...(props.baseline?.capacity ?? [])];
   const x = linear(extent(all.map((p) => p.x), [0, 1]), [plot.x0, plot.x1]);
   const y = linear([0, Math.max(1, ...all.map((p) => p.y)) * 1.05], [plot.y0, plot.y1]);
   const capacityAt = new Map(props.capacity.map((p) => [p.x, p.y]));
@@ -29,8 +41,6 @@ export function StepChart(props: {
     return <rect key={`${kind}${p.x}`} className={`shade ${kind}`} x={x(p.x)} y={top} width={x(p.x + 1) - x(p.x)} height={bottom - top} />;
   };
 
-  const demandPath = props.demand.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.x)},${y(p.y)}`).join(" ");
-  const capacityPath = props.capacity.map((p, i) => (i === 0 ? `M${x(p.x)},${y(p.y)}` : `H${x(p.x)} V${y(p.y)}`)).join(" ");
 
   return (
     <svg className="chart step-chart" viewBox={`0 0 ${frame.w} ${frame.h}`} role="img" aria-label="demand vs capacity">
@@ -45,8 +55,14 @@ export function StepChart(props: {
       {ticks(x.domain, 7).map((t) => (
         <text key={t} className="tick" x={x(t)} y={frame.h - 8} textAnchor="middle">m{t}</text>
       ))}
-      <path className="line demand" d={demandPath} />
-      <path className="line capacity" d={capacityPath} />
+      {props.baseline !== undefined && (
+        <g className="baseline" aria-label="baseline">
+          <path className="line baseline" d={linePath(props.baseline.demand, x, y)} />
+          <path className="line baseline" d={stepPath(props.baseline.capacity, x, y)} />
+        </g>
+      )}
+      <path className="line demand" d={linePath(props.demand, x, y)} />
+      <path className="line capacity" d={stepPath(props.capacity, x, y)} />
       <text className="axis-label" x={plot.x1} y={frame.h - 8} textAnchor="end">{props.xLabel}</text>
       <text className="axis-label" x={plot.x0 + 4} y={plot.y1 + 8}>{props.yLabel}</text>
     </svg>

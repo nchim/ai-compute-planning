@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
 import { PhasingMode, ResultSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { defaultBaselineLabel } from "./baseline";
+import { fakeResult } from "../engine/fake";
 import { logToJson } from "./log";
 import { createStore } from "./store";
 import { loadAbilene } from "./testPlan";
@@ -200,5 +202,33 @@ describe("store", () => {
     expect(engine.calls).toHaveLength(0);
     expect(engine.dispose).toHaveBeenCalledOnce();
     expect(() => store.dispatch({ type: "undo" })).toThrow("disposed");
+  });
+});
+
+describe("baseline in the view context", () => {
+  test("viewContext exposes the pinned summary, label and compare flag", () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    store.dispatch({ type: "resultReceived", result: fakeResult(loadAbilene()) });
+    expect(viewContext(store.getState())).toMatchObject({ baselineLabel: null, baselineSummary: null, compare: false });
+    expect(defaultBaselineLabel(store.getState(), store.getLog())).toBe(loadAbilene().meta!.scenarioName);
+
+    store.dispatch({ type: "setBaseline", label: "pinned" });
+    store.dispatch({ type: "toggleCompare" });
+    const ctx = viewContext(store.getState());
+    expect(ctx.baselineLabel).toBe("pinned");
+    expect(ctx.baselineSummary?.lcocPerGpuHour).toBe(store.getState().result?.summary?.lcocPerGpuHour);
+    expect(ctx.compare).toBe(true);
+    expect(store.getLog().slice(-2).map((e) => [e.command.type, e.rejected])).toEqual([["setBaseline", null], ["toggleCompare", null]]);
+
+    store.dispatch({ type: "setField", path: "meta.scenario_name", value: "  " });
+    store.dispatch({ type: "setBaseline", label: "second" });
+    expect(defaultBaselineLabel(store.getState(), store.getLog())).toBe("Baseline 3");
+    store.dispatch({ type: "toggleCompare" });
+    store.dispatch({ type: "clearBaseline" });
+    store.dispatch({ type: "toggleCompare" });
+    expect(store.getLog().at(-1)?.rejected?.message).toContain("no baseline");
+    expect(viewContext(store.getState()).compare).toBe(false);
   });
 });
