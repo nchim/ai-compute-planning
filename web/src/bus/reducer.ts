@@ -2,7 +2,7 @@ import { clone } from "@bufbuild/protobuf";
 
 import { ResultSchema, SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { PathError, applyPatch, removeAt } from "./paths";
-import type { AppError, Command, PatchOp, Proposal, State } from "./types";
+import { initialState, type AppError, type Command, type PatchOp, type Proposal, type State } from "./types";
 
 /**
  * Pure reducer: `(state, command) → state`. No clock, no ids, no I/O — the store supplies those.
@@ -25,6 +25,8 @@ export function reduce(state: State, cmd: Command): State {
       return settleProposal(state, cmd.id, "accepted");
     case "rejectProposal":
       return settleProposal(state, cmd.id, "rejected");
+    case "reset":
+      return { ...initialState, engine: state.engine }; // engine activity is derived; everything else starts over
     case "undo":
       return shiftHistory(state, "past", "future");
     case "redo":

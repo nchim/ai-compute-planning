@@ -6,6 +6,7 @@ import { createCopilot, emptySnapshot, type Activity, type Copilot } from "./cli
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
 import { useRegisterCopilotSend } from "./handle";
+import { resetSession } from "../session/reset";
 import { safeStorage, type Message } from "./history";
 import { Markdown } from "./Markdown";
 import type { ToolEvent } from "./tools";
@@ -96,18 +97,20 @@ export function CopilotRail() {
           viewing: {tabLabels[ctx.activeTab]}
           {ctx.selectedSiteId === null ? "" : ` · ${ctx.selectedSiteId}`}
         </span>
-        {copilot !== null && snapshot.transcript.messages.length > 0 && (
+        {state.plan !== null && (
           <button
             type="button"
             className="btn mini-btn"
-            data-action="clear-conversation"
+            data-action="reset-session"
             disabled={snapshot.running}
-            title="Forget this plan's conversation (the plan itself stays; reload a fixture to reset it)"
+            title="Start over on this fixture: forgets the conversation and every edit, result, proposal and baseline"
             onClick={() => {
-              if (window.confirm("Clear this plan's conversation? The plan and its results stay as they are.")) copilot.clear();
+              if (window.confirm("Reset this session? The conversation, all plan edits, results, proposals and the baseline are discarded and the fixture reloads fresh.")) {
+                resetSession(store, copilot);
+              }
             }}
           >
-            Clear
+            Reset
           </button>
         )}
       </div>
