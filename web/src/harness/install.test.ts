@@ -43,7 +43,7 @@ describe("harness api", () => {
     await api.waitIdle();
     const after = await api.getPlan();
     expect(after).not.toBe(before);
-    expect(JSON.parse(after).costs.gpu.depreciationYears).toBe(4);
+    expect(JSON.parse(after).costs.gpu.depreciation_years).toBe(4);
 
     const log = (await api.getCommandLog()) as { command: { type: string; path?: string } }[];
     expect(log.map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived", "setField", "resultReceived"]);
@@ -99,7 +99,7 @@ describe("harness api", () => {
     store.proposeChange("liquid", [{ path: "compute.cooling", value: "LIQUID_DTC" }]);
     const second = store.proposeChange("denser", [{ path: "compute.kw_per_rack", value: 130 }]);
     await api.acceptCard();
-    expect(JSON.parse(await api.getPlan()).compute.kwPerRack).toBe(130);
+    expect(JSON.parse(await api.getPlan()).compute.kw_per_rack).toBe(130);
     await expect(api.acceptCard(second)).rejects.toThrow("already accepted");
     await api.rejectCard();
     await expect(api.rejectCard("p9")).rejects.toThrow('no proposal "p9"');

@@ -19,6 +19,14 @@ export interface Control {
   readonly value: ControlValue;
 }
 
+/** One command-log entry as `bus/log.ts` serializes it; messages inside `command` are protojson. */
+export interface CommandLogEntry {
+  readonly seq: number;
+  readonly ts: number;
+  readonly command: { readonly type: string; readonly [field: string]: Json };
+  readonly rejected: { readonly kind: string; readonly message: string } | null;
+}
+
 export interface HarnessApi {
   loadPlan(protojson: string): Promise<void>;
   getPlan(): Promise<string>;
@@ -34,7 +42,7 @@ export interface HarnessApi {
   undo(): Promise<void>;
   redo(): Promise<void>;
   getViewContext(): Promise<Json>;
-  getCommandLog(): Promise<Json>;
+  getCommandLog(): Promise<CommandLogEntry[]>;
   /** Resolves when no analyze is debounced or in flight; rejects on an engine error or timeout. */
   waitIdle(timeoutMs?: number): Promise<void>;
   /** console.error calls, uncaught errors and unhandled rejections seen since install, oldest first. */

@@ -7,9 +7,12 @@ import {
   SitePlanSchema,
   SummaryMetricsSchema,
 } from "../gen/capplanner/v1/engine_pb";
-import type { Control, ControlValue, CopilotFn, HarnessApi } from "./api";
+import type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi } from "./api";
 
-export type { Control, ControlValue, CopilotFn, HarnessApi, Json } from "./api";
+export type { CommandLogEntry, Control, ControlValue, CopilotFn, HarnessApi, Json } from "./api";
+
+/** Proto field names (snake_case) so plan JSON lines up with bus paths and diagnostics' proto_path. */
+const jsonOptions = { useProtoFieldName: true } as const;
 
 export interface HarnessOptions {
   /** Registered up front, or later through `__harness.setCopilot` (WS8). */
@@ -66,12 +69,12 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
     },
 
     async getPlan() {
-      return toJsonString(SitePlanSchema, requirePlan());
+      return toJsonString(SitePlanSchema, requirePlan(), jsonOptions);
     },
 
     async getResult() {
       const result = store.getState().result;
-      return result === null ? null : toJsonString(ResultSchema, result);
+      return result === null ? null : toJsonString(ResultSchema, result, jsonOptions);
     },
 
     async setControl(path, value) {
@@ -122,14 +125,15 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
       return {
         ...ctx,
         selection: { ...ctx.selection },
-        plan: ctx.plan === null ? null : toJson(SitePlanSchema, ctx.plan),
-        resultSummary: ctx.resultSummary === null ? null : toJson(SummaryMetricsSchema, ctx.resultSummary),
-        diagnostics: ctx.diagnostics.map((d) => toJson(DiagnosticSchema, d)),
+        plan: ctx.plan === null ? null : toJson(SitePlanSchema, ctx.plan, jsonOptions),
+        resultSummary: ctx.resultSummary === null ? null : toJson(SummaryMetricsSchema, ctx.resultSummary, jsonOptions),
+        diagnostics: ctx.diagnostics.map((d) => toJson(DiagnosticSchema, d, jsonOptions)),
       };
     },
 
     async getCommandLog() {
-      return logToJson(store.getLog());
+      // logToJson is typed as generic JSON; its shape is exactly CommandLogEntry (see bus/log.ts).
+      return logToJson(store.getLog()) as unknown as CommandLogEntry[];
     },
 
     async waitIdle(timeoutMs = 10_000) {
