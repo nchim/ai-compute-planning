@@ -17,7 +17,7 @@ narration quality (numbers traceable to a `Result`, framing present).
 
 ## Setup
 Reference plan `fixtures/abilene-1.json` (protojson `SitePlan`): Abilene-1, ERCOT / W. Texas,
-200 MW target IT load, GB300 racks, **air-cooled at 40 kW/rack** (deliberately conservative), grid-only
+200 MW target IT load, GB300 GPUs at 22 per 40 kW air-cooled rack (deliberately conservative density), grid-only
 power (`grid_energize_month = 30`, i.e. ~2029), `SINGLE_SHOT` phasing, `COMPUTE_SALES` revenue, demand
 ramp 40 → 200 MW over months 6–42, 7-year hold. Internally consistent so the baseline analyzes `OK`.
 
@@ -37,10 +37,13 @@ ramp 40 → 200 MW over months 6–42, 7-year hold. Internally consistent so the
   `INVALID_INPUT` with `DENSITY_EXCEEDS_COOLING` (+ `FLOOR_LOAD_INSUFFICIENT` if the slab is below the
   liquid threshold), each with `proto_path`/`expected`/`actual`/`hint`.
 - C explains the diagnostics, then fixes **exactly the named fields**: `compute.cooling=LIQUID_DTC`,
-  `site.floor_load_psf` raised, and `costs.agility_premium_pct` applied; re-runs → `OK`.
+  `site.floor_load_psf` raised to the liquid threshold, and (because 130 kW/rack is an NVL72-class
+  rack) `compute.gpus_per_rack=72` so the GPU count stays ≈ constant; the agility premium in
+  `costs.agility_premium_pct` now applies; re-runs → `OK`.
 - **Assert:** first Result has the expected codes; the command log shows edits only on the
-  `proto_path`s named; second Result `OK` with conservation green; footprint (`schematic.footprint_used_pct`)
-  decreased vs. T1; capex per MW increased (agility premium visible, not silent).
+  `proto_path`s named plus `compute.gpus_per_rack`; second Result `OK` with conservation green;
+  footprint (`schematic.footprint_used_pct`) decreased vs. T1; `capex_per_mw` increased (the agility
+  premium is a visible capex line, not silent).
 
 ### T3 — The flagship: phase to the demand ramp (Optimize)
 - H: *"We can't wait until 2029. Phase this to track demand and keep cost sane. Cap capex at $8B and

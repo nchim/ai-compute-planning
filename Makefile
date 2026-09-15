@@ -45,6 +45,6 @@ wasm:
 web:
 	cd web && npm run build
 
-## harness: run the Playwright harness (placeholder until WS9)
+## harness: Playwright smoke + acceptance against the dev server (uses engine.wasm when built, else the fake engine)
 harness:
-	cd harness && npm test
+	cd harness && npm run typecheck && npm test

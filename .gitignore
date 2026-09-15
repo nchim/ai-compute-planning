@@ -19,3 +19,7 @@ web/public/wasm_exec.js
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# Harness run artifacts (WS10 force-adds one reviewed run)
+harness/runs/
+harness/test-results/

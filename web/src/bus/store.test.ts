@@ -136,6 +136,30 @@ describe("store", () => {
     expect(ctx.diagnostics).toEqual([]);
   });
 
+  test("whenIdle resolves once the debounce has fired and the latest analyze has settled", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    await expect(store.whenIdle()).resolves.toBeUndefined(); // nothing pending: immediate
+
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    let idle = false;
+    const waiting = store.whenIdle().then(() => (idle = true));
+    await flush();
+    expect(idle).toBe(false); // debounce pending
+    vi.advanceTimersByTime(16);
+    await flush();
+    expect(idle).toBe(false); // analyze in flight
+
+    store.dispatch({ type: "setField", path: "compute.pue", value: 1.3 });
+    vi.advanceTimersByTime(16);
+    engine.calls[0]!.resolve(resultWithMw(1)); // stale reply: still not idle
+    await flush();
+    expect(idle).toBe(false);
+    engine.calls[1]!.reject(new EngineError("decode", "bad"));
+    await waiting;
+    expect(store.getState().error?.kind).toBe("decode"); // idle even when the analyze failed
+  });
+
   test("dispose cancels pending work and disposes the engine", () => {
     const engine = controllableEngine();
     const store = createStore({ engine });
