@@ -132,7 +132,9 @@ message PhasingPolicy {
   double min_phase_mw = 2;
   double max_phase_mw = 3;
   int32 min_months_between_phases = 4;
-  double max_shortfall_mw = 5;      // never be short of demand by more than this
+  // Applied to the hold-average shortfall: shortfall_mw_months / hold_period_months ≤ this. An
+  // instantaneous cap is unsatisfiable when demand precedes the earliest power source.
+  double max_shortfall_mw = 5;
 }
 
 message DemandRamp {

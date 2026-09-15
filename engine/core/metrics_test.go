@@ -13,8 +13,8 @@ func TestDemandAt(t *testing.T) {
 		want float64
 	}{{0, 0}, {5, 0}, {6, 40}, {12, 70}, {18, 100}, {40, 100}}
 	for _, tc := range cases {
-		if got := demandAt(pts, tc.t); !approxEq(got, tc.want, 1e-12) {
-			t.Errorf("demandAt(%d) = %g, want %g", tc.t, got, tc.want)
+		if got := DemandAt(pts, tc.t); !approxEq(got, tc.want, 1e-12) {
+			t.Errorf("DemandAt(%d) = %g, want %g", tc.t, got, tc.want)
 		}
 	}
 }

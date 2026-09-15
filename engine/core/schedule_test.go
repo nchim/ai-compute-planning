@@ -28,7 +28,7 @@ func TestScheduleSingleShot(t *testing.T) {
 		wantEnergize int
 	}{
 		{"power is the critical path", 30, 30},
-		{"construction is the critical path", 6, constructionLeadMonths},
+		{"construction is the critical path", 6, ConstructionLeadMonths},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

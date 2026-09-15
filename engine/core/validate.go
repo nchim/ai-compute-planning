@@ -228,7 +228,7 @@ func validateDensity(kwPerRack float64, cooling pb.CoolingMode, floorPsf float64
 	}
 }
 
-// validatePhasing checks phases against power readiness, pooled supply and the parcel.
+// validatePhasing checks phases against power readiness, per-source and pooled supply, and the parcel.
 func validatePhasing(plan *pb.SitePlan, d *diags) {
 	srcs := newSources(plan.GetPower())
 	c := plan.GetCompute()
@@ -246,6 +246,7 @@ func validatePhasing(plan *pb.SitePlan, d *diags) {
 		return
 	}
 	byID := sourceIndex(srcs)
+	sourceLoad := map[string]float64{} // facility MW assigned to each named source so far
 	prevEnergize := int32(0)
 	for i, ph := range plan.GetPhasing().GetPhases() {
 		path := fmt.Sprintf("phasing.phases[%d]", i)
@@ -257,8 +258,10 @@ func validatePhasing(plan *pb.SitePlan, d *diags) {
 				"list phases in energization order", "phase %q energizes before the previous phase", ph.GetId())
 		}
 		prevEnergize = ph.GetEnergizeMonth()
-		cumLoad += ph.GetItLoadMw() * c.GetPue()
-		validatePhasePower(ph, path, srcs, byID, cumLoad, d)
+		facilityMw := ph.GetItLoadMw() * c.GetPue()
+		cumLoad += facilityMw
+		sourceLoad[ph.GetPowerSourceId()] += facilityMw
+		validatePhasePower(ph, path, srcs, byID, sourceLoad[ph.GetPowerSourceId()], cumLoad, d)
 		footprint += phaseFootprint(ph, c)
 	}
 	validateFootprint(footprint, plan.GetSite().GetUsableAcres(), d)
@@ -268,16 +271,23 @@ func validatePhasing(plan *pb.SitePlan, d *diags) {
 	}
 }
 
-func validatePhasePower(ph *pb.Phase, path string, srcs []source, byID map[string]source, cumLoad float64, d *diags) {
+// validatePhasePower checks a phase's named source (exists, ready, not overloaded by the facility MW
+// assigned to it so far — sourceLoad) and the pooled firm supply against the cumulative load.
+func validatePhasePower(ph *pb.Phase, path string, srcs []source, byID map[string]source, sourceLoad, cumLoad float64, d *diags) {
 	if id := ph.GetPowerSourceId(); id != "" {
 		src, ok := byID[id]
-		if !ok {
+		switch {
+		case !ok:
 			d.errorf(codeUnknownPowerSource, path+".power_source_id", "one of "+strings.Join(sourceIDs(srcs), ", "), id,
 				"reference an id from power.sources", "phase %q references unknown power source %q", ph.GetId(), id)
-		} else if int(ph.GetEnergizeMonth()) < src.ready {
+		case int(ph.GetEnergizeMonth()) < src.ready:
 			d.errorf(codePhaseBeforePower, path+".energize_month", fmt.Sprintf("≥ m%d (%s ready)", src.ready, id), fmt.Sprintf("m%d", ph.GetEnergizeMonth()),
 				fmt.Sprintf("delay phase %q to m%d or use an earlier source (e.g. BTM gas)", ph.GetId(), src.ready),
 				"phase %q energizes at m%d but power source %q is ready at m%d", ph.GetId(), ph.GetEnergizeMonth(), id, src.ready)
+		case sourceLoad > src.capacityMw+1e-9:
+			d.errorf(codeSourceOverloaded, path+".power_source_id", fmt.Sprintf("≤ %.1f MW on %s", src.capacityMw, id), fmt.Sprintf("%.1f MW", sourceLoad),
+				fmt.Sprintf("move %.1f MW to another source or add capacity to %s", sourceLoad-src.capacityMw, id),
+				"phase %q brings the load on power source %q to %.1f MW at m%d, over its %.1f MW capacity", ph.GetId(), id, sourceLoad, ph.GetEnergizeMonth(), src.capacityMw)
 		}
 	}
 	if avail := firmSupplyAt(srcs, int(ph.GetEnergizeMonth())); avail < cumLoad-1e-9 {

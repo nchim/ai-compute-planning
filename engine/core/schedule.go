@@ -6,9 +6,10 @@ import (
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
 
-// constructionLeadMonths is the shell + fit-out duration from construction start to a hall ready to
-// energize. STUB: a single greenfield figure; real builds vary 12–24 months with size and modularity.
-const constructionLeadMonths = 18
+// ConstructionLeadMonths is the shell + fit-out duration from construction start to a hall ready to
+// energize; the optimizer derives start_month = energize − lead from it. STUB: a single greenfield
+// figure; real builds vary 12–24 months with size and modularity.
+const ConstructionLeadMonths = 18
 
 // shellLifeMonths is the straight-line life of facility (non-GPU) capex for terminal value and LCOC
 // levelization (research: 15–30 yr shell life; 25 yr chosen).
@@ -102,7 +103,7 @@ func schedule(plan *pb.SitePlan, srcs []source, months int, d *diags) []phase {
 	highFloor := plan.GetSite().GetFloorLoadPsf() >= floorLoadLiquidMinPsf
 	if plan.GetPhasing().GetMode() == pb.PhasingMode_SINGLE_SHOT {
 		ph := newPhase("p1", c.GetTargetItLoadMw(), c, c.GetCooling(), highFloor)
-		ph.constructionReady = constructionLeadMonths
+		ph.constructionReady = ConstructionLeadMonths
 		ph.powerReady, _ = firstMonthCovering(srcs, ph.size.facilityMw, months) // validated to exist
 		ph.energize = maxInt(ph.powerReady, ph.constructionReady)
 		warnIfAfterHold(ph, months, d)

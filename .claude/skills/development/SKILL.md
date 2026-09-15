@@ -171,3 +171,7 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `fixtures/*.json` are enumerated by `web/src/fixtures.ts` (Vite glob) — a new fixture needs no code,
   but `meta.plan_id` must equal the file name and it must be added to `engine/scenarios_test.go`'s
   MC/optimize table and `engine/core/fixture_test.go`'s `fixtureNames`.
+- 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
+  per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
+  optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
+  diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
