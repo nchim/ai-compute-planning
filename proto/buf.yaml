@@ -1,0 +1,14 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # The enum values in engine.proto (e.g. TRAINING_REMOTE, OK) are the contract; the agent and
+    # docs refer to them by these names, so we do not rename them to satisfy the prefix rules.
+    - ENUM_VALUE_PREFIX
+    - ENUM_ZERO_VALUE_SUFFIX
+breaking:
+  use:
+    - FILE

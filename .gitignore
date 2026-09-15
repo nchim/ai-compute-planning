@@ -8,6 +8,14 @@ research/sources/*.zip
 research/sources/*.xlsm
 research/sources/*.skill
 
+# Node
+node_modules/
+dist/
+
+# WASM build artifacts (`make wasm` produces both; wasm_exec.js is copied from GOROOT)
+web/public/engine.wasm
+web/public/wasm_exec.js
+
 # OS / editor cruft
 .DS_Store
 *.swp

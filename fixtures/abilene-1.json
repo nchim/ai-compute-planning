@@ -1,0 +1,94 @@
+{
+  "meta": {
+    "plan_id": "abilene-1",
+    "site_name": "Abilene-1",
+    "scenario_name": "Grid-only single shot",
+    "schema_version": "v1"
+  },
+  "site": {
+    "land_acres": 400,
+    "usable_acres": 300,
+    "floor_load_psf": 250,
+    "market": "ERCOT / W. Texas",
+    "iso": "ERCOT",
+    "location": { "lat": 32.45, "lng": -99.73 },
+    "latency_tier": "TRAINING_REMOTE",
+    "water_stress_index": 0.6,
+    "avg_temp_c": 18
+  },
+  "compute": {
+    "accelerator": "GB300",
+    "gpus_per_rack": 72,
+    "kw_per_rack": 40,
+    "target_it_load_mw": 200,
+    "pue": 1.2,
+    "cooling": "AIR",
+    "network_fabric": "InfiniBand"
+  },
+  "power": {
+    "sources": [
+      {
+        "id": "grid",
+        "type": "GRID",
+        "capacity_mw": 220,
+        "available_month": 30,
+        "cost_per_mwh": 45,
+        "capex_per_kw": 400,
+        "lead_time_months": 36
+      }
+    ],
+    "interconnection": {
+      "queue_start_month": 0,
+      "grid_energize_month": 30,
+      "transformer_lead_months": 36
+    }
+  },
+  "phasing": { "mode": "SINGLE_SHOT" },
+  "demand": {
+    "points": [
+      { "month": 6, "demand_mw": 40 },
+      { "month": 18, "demand_mw": 100 },
+      { "month": 30, "demand_mw": 150 },
+      { "month": 42, "demand_mw": 200 }
+    ],
+    "class": "TRAINING_REMOTE"
+  },
+  "costs": {
+    "shell_capex_per_mw": 3000000,
+    "electrical_capex_per_mw": 4000000,
+    "cooling_capex_per_mw": 2000000,
+    "network_capex_per_mw": 1000000,
+    "land_capex_per_acre": 50000,
+    "gpu": {
+      "unit_cost": 40000,
+      "depreciation_years": 5,
+      "residual_curve": [0.8, 0.65, 0.5, 0.35, 0.2]
+    },
+    "opex": {
+      "staffing_per_mw_yr": 150000,
+      "maintenance_pct_of_capex": 2,
+      "insurance_pct_of_capex": 0.5,
+      "mgmt_fee_pct_of_egr": 3,
+      "property_tax_per_yr": 20000000
+    },
+    "agility_premium_pct": 12
+  },
+  "revenue": {
+    "mode": "COMPUTE_SALES",
+    "compute": {
+      "gpu_hour_price": 2.25,
+      "utilization_pct": 80,
+      "price_decay_pct_yr": 8
+    }
+  },
+  "finance": {
+    "discount_rate": 0.1,
+    "hold_period_months": 84,
+    "exit_cap_rate": 0.07
+  },
+  "run": {
+    "mode": "RUN_ANALYZE",
+    "monte_carlo": { "enabled": false, "iterations": 1000, "seed": 42 },
+    "sensitivity": { "enabled": false }
+  }
+}
