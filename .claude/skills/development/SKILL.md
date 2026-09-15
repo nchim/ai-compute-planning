@@ -80,12 +80,13 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - [ ] Docs updated if any contract/interface changed; no proto change without orchestrator sign-off.
 - [ ] Scoped to the assigned workstream; no drive-by edits elsewhere. Playbook entry added if you learned something.
 
-## Commands (WS1 lands these; keep this list current)
-- Everything: `make check` · engine: `go test -race ./engine/...` · lint: `go vet ./... && staticcheck ./...`
-- Proto: `buf lint && buf generate` (from repo root; generated code is committed)
-- WASM: `make wasm` → `web/public/engine.wasm`
-- Web: `cd web && npm ci && npm run typecheck && npm test && npm run dev`
-- Harness: `cd harness && npm ci && npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`
+## Commands (keep this list current)
+- Once: `make deps` (npm ci in `web/` and `harness/`). Everything: `make check` (= `make lint` + `make test`, exactly what CI runs).
+- Engine: `go test -race ./engine/...` · lint: `go vet ./engine/... && staticcheck ./engine/...` (always `./engine/...`, never `./...` — `web/node_modules` contains stray Go code).
+- Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
+- WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
+- Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
+- Harness: `make harness` (or `cd harness && npm run smoke`; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `npm run acceptance -- --copilot=scripted` (WS10)
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -107,3 +108,23 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   native and are dominated by `core.Analyze` rendering tables/charts every draw — a render-free core
   entry point would roughly halve it if WASM needs the headroom. LCOC is a *cost* metric: a tornado on
   `gpu_hour_price` is ~flat (only the EGR-linked mgmt fee moves); use NPV if price sensitivity matters.
+- 2026-09-15 (WS1) — Proto enum values share the *package* scope: two enums in one file cannot both
+  define `OPTIMIZE`. `RunMode` values are therefore `RUN_ANALYZE`/`RUN_OPTIMIZE`. `buf lint` passes
+  with `ENUM_VALUE_PREFIX`/`ENUM_ZERO_VALUE_SUFFIX` excepted; do not rename enum values to "fix" lint.
+- 2026-09-15 (WS1) — If `buf generate` fails with "Buf API token ... invalid", a stale `~/.netrc`
+  entry for buf.build is being sent; run `NETRC=/dev/null make gen`. Remote plugins need no login.
+- 2026-09-15 (WS1) — `@bufbuild/protobuf` v2 API: `fromJsonString(SitePlanSchema, s)`, `toBinary`,
+  `fromBinary`, `equals(Schema, a, b)`; messages are plain objects, schemas are `*Schema` exports.
+- 2026-09-15 (WS5) — WASM gotchas: keep `syscall/js` code to a thin adapter; put the logic in a plain
+  package so it runs under `-race` (js/wasm can't). Vite module workers have no `importScripts`, so load
+  Go's `wasm_exec.js` with a dynamic `import()` of a *variable* URL (a literal path makes `tsc` try to
+  resolve it). `go.run(instance)` registers the exports synchronously before it awaits, so don't await
+  it (main blocks in `select{}`). Node ≥ 22 runs `wasm_exec.js` + `WebAssembly.instantiate` directly —
+  no jsdom needed for the integration test. `js.CopyBytesToGo` panics on non-Uint8Array args: check
+  `InstanceOf` first. Add build outputs in `web/public` to ESLint ignores.
+- 2026-09-15 (WS6) — `toJson()` from @bufbuild/protobuf emits lowerCamel keys by default; pass
+  `{ useProtoFieldName: true }` wherever the JSON must line up with dotted bus paths or diagnostics'
+  `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
+  `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
+  `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
+- 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.

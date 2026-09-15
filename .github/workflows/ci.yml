@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            harness/package-lock.json
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.54.0
+          setup_only: true
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+
+      - run: make deps
+      - run: make wasm   # before check so the real-wasm integration test runs in CI
+      - run: make check
+
+      - name: Generated code is up to date
+        run: make gen && git diff --exit-code -- engine/pb web/src/gen
+
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            harness/package-lock.json
+
+      - run: make deps
+      - run: make wasm   # the smoke drives the real engine when it is built
+      - run: cd harness && npx playwright install --with-deps chromium
+      - run: make harness
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-runs
+          path: harness/runs/
+          if-no-files-found: ignore
