@@ -38,7 +38,15 @@ export interface CopilotSnapshot {
   readonly error: string | null;
   readonly notice: string | null;
   readonly lastUsage: Usage | null;
+  /** What the Copilot is doing right now, so the UI can show progress before any text arrives. */
+  readonly activity: Activity;
 }
+
+export type Activity =
+  | { readonly kind: "idle" }
+  | { readonly kind: "thinking" }
+  | { readonly kind: "writing" }
+  | { readonly kind: "tool"; readonly name: string };
 
 export type CopilotEvent =
   | { readonly type: "textDelta"; readonly text: string }
@@ -67,6 +75,7 @@ export const emptySnapshot: CopilotSnapshot = {
   error: null,
   notice: null,
   lastUsage: null,
+  activity: { kind: "idle" },
 };
 
 export function createCopilot(options: CopilotOptions): Copilot {
@@ -86,7 +95,9 @@ export function createCopilot(options: CopilotOptions): Copilot {
 
   const onTool = (event: ToolEvent) => {
     const rest = snapshot.toolEvents.filter((e) => e.id !== event.id);
-    update({ toolEvents: [...rest, event] }, { type: "tool", event });
+    // A finished tool hands control back to the model, which thinks before its next block.
+    const activity: Activity = event.status === "running" ? { kind: "tool", name: event.name } : { kind: "thinking" };
+    update({ toolEvents: [...rest, event], activity }, { type: "tool", event });
   };
 
   const tools = createTools({ store, engine, tracker, onEvent: onTool });
@@ -116,7 +127,9 @@ export function createCopilot(options: CopilotOptions): Copilot {
 
   const consume = async (runner: BetaToolRunner<true>) => {
     for await (const stream of runner) {
-      stream.on("text", (delta) => update({ streamingText: snapshot.streamingText + delta }, { type: "textDelta", text: delta }));
+      stream.on("text", (delta) =>
+        update({ streamingText: snapshot.streamingText + delta, activity: { kind: "writing" } }, { type: "textDelta", text: delta }),
+      );
       stream.on("streamEvent", (ev) => {
         if (ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
           onTool({ id: ev.content_block.id, name: ev.content_block.name, status: "running", detail: "" });
@@ -127,6 +140,7 @@ export function createCopilot(options: CopilotOptions): Copilot {
       update(
         {
           streamingText: "",
+          activity: { kind: "thinking" },
           lastUsage: message.usage,
           transcript: { ...snapshot.transcript, messages: [...runner.params.messages, { role: "assistant", content: message.content }] },
         },
@@ -152,7 +166,7 @@ export function createCopilot(options: CopilotOptions): Copilot {
       ],
     };
     const messages = [...snapshot.transcript.messages, userMessage];
-    update({ running: true, streamingText: "", error: null, transcript: { ...snapshot.transcript, messages } });
+    update({ running: true, streamingText: "", error: null, activity: { kind: "thinking" }, transcript: { ...snapshot.transcript, messages } });
 
     const params = {
       model,
@@ -178,15 +192,15 @@ export function createCopilot(options: CopilotOptions): Copilot {
         }
       }
       commit(planId, runner.params.messages);
-      update({ running: false }, { type: "turnEnd" });
+      update({ running: false, activity: { kind: "idle" } }, { type: "turnEnd" });
     } catch (err) {
       commit(planId, runner.params.messages);
       if (err instanceof Anthropic.APIUserAbortError || controller.signal.aborted) {
-        update({ running: false, streamingText: "", notice: "Stopped." }, { type: "turnEnd" });
+        update({ running: false, streamingText: "", activity: { kind: "idle" }, notice: "Stopped." }, { type: "turnEnd" });
         return;
       }
       const message = describe(err);
-      update({ running: false, streamingText: "", error: message }, { type: "error", message });
+      update({ running: false, streamingText: "", activity: { kind: "idle" }, error: message }, { type: "error", message });
       throw err;
     } finally {
       controller = null;
