@@ -83,8 +83,14 @@ export function OptimizationPanel() {
       title="Optimization · frontier"
       dimensions={["time", "capital"]}
       actions={
-        <button type="button" className="btnp" onClick={() => void store.optimize().catch(() => undefined) /* surfaced via state.error */}>
-          Run optimize
+        <button
+          type="button"
+          className="btnp"
+          disabled={state.engine.optimizing || state.plan === null}
+          aria-busy={state.engine.optimizing}
+          onClick={() => void store.optimize().catch(() => undefined) /* surfaced via state.error */}
+        >
+          {state.engine.optimizing ? "Optimizing…" : "Run optimize"}
         </button>
       }
     >

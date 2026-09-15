@@ -41,14 +41,23 @@ export interface Baseline {
   readonly result: Result;
 }
 
+export interface EngineActivity {
+  /** A (debounced or in-flight) analyze is pending. */
+  readonly analyzing: boolean;
+  /** An optimizer run is in flight. */
+  readonly optimizing: boolean;
+}
+
+export const idleEngine: EngineActivity = { analyzing: false, optimizing: false };
+
 export interface State {
   readonly plan: SitePlan | null;
   readonly result: Result | null;
   readonly baseline: Baseline | null;
   /** Compare mode: the site view juxtaposes the current Result against `baseline`. */
   readonly compare: boolean;
-  /** An optimizer run is in flight (the UI shows progress and disables the trigger). */
-  readonly optimizing: boolean;
+  /** What the engine is doing right now; updated by the store outside the command log. */
+  readonly engine: EngineActivity;
   readonly proposals: readonly Proposal[];
   readonly selection: Selection;
   readonly error: AppError | null;
@@ -74,8 +83,6 @@ export type Command =
   | { readonly type: "clearBaseline" }
   | { readonly type: "toggleCompare" }
   | { readonly type: "select"; readonly selection: Selection }
-  | { readonly type: "optimizeStarted" }
-  | { readonly type: "optimizeSettled" }
   | { readonly type: "resultReceived"; readonly result: Result }
   | { readonly type: "errorRaised"; readonly error: AppError }
   | { readonly type: "clearError" };
@@ -98,7 +105,7 @@ export const initialState: State = {
   result: null,
   baseline: null,
   compare: false,
-  optimizing: false,
+  engine: idleEngine,
   proposals: [],
   selection: initialSelection,
   error: null,

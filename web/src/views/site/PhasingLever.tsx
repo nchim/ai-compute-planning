@@ -29,7 +29,7 @@ export function PhasingLever() {
   const baseline = baselineChart === undefined ? undefined : { demand: series("demand", baselineChart), capacity: series("capacity", baselineChart) };
   const summary = state.result?.summary;
   const lastEnergize = Math.max(0, ...phases.map((p) => p.energizeMonth));
-  const optimizing = state.optimizing;
+  const optimizing = state.engine.optimizing;
   // OPTIMIZE is an action, not a plan state: the button runs the optimizer on a clone. A plan that
   // still carries mode=OPTIMIZE (older fixtures, an agent edit) cannot be analyzed, so offer the way out.
   const modeIsOptimize = state.plan?.phasing?.mode === PhasingMode.OPTIMIZE;

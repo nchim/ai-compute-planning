@@ -111,7 +111,7 @@ describe("regions render from the golden Result", () => {
     const h = harness();
     const { container } = mount(h, <PhasingLever />);
     fireEvent.click(screen.getByRole("button", { name: /optimize phasing/i }));
-    expect(h.store.getState().optimizing).toBe(true);
+    expect(h.store.getState().engine.optimizing).toBe(true);
     expect(container.querySelector("[data-running='optimize']")).not.toBeNull();
     expect((screen.getByRole("button", { name: /optimizing/i }) as HTMLButtonElement).disabled).toBe(true);
     expect(container.querySelector(".shade.shortfall")).toBeNull(); // the chart yields to the running panel

@@ -4,7 +4,7 @@ import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
 import { PhasingMode, PhasingSchema, SitePlanSchema, type Result } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
-import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
+import { initialState, type Command, type EngineActivity, type LogEntry, type PatchOp, type State } from "./types";
 
 export interface StoreOptions {
   readonly engine: Engine;
@@ -47,11 +47,20 @@ export function createStore(options: StoreOptions): Store {
   let latestRequest = 0;
   let proposalCounter = 0;
   let debounce: ReturnType<typeof setTimeout> | null = null;
-  let inFlight = 0;
+  let inFlight = 0; // analyze + optimize replies outstanding (drives whenIdle)
+  let analyzeInFlight = 0;
   const idleWaiters: (() => void)[] = [];
   let disposed = false;
 
   const notify = () => listeners.forEach((l) => l());
+
+  /** Engine activity is derived state, not intent: it changes `state` but never enters the command log. */
+  const setEngine = (patch: Partial<EngineActivity>) => {
+    const next = { ...state.engine, ...patch };
+    if (next.analyzing === state.engine.analyzing && next.optimizing === state.engine.optimizing) return;
+    state = { ...state, engine: next };
+    notify();
+  };
 
   const dispatch = (command: Command) => {
     if (disposed) throw new Error("store is disposed");
@@ -67,11 +76,13 @@ export function createStore(options: StoreOptions): Store {
     latestRequest++; // anything still in flight is for a superseded plan: drop its reply
     if (debounce !== null) clearTimeout(debounce);
     debounce = setTimeout(runAnalyze, debounceMs);
+    setEngine({ analyzing: true });
   };
 
   const isIdle = () => debounce === null && inFlight === 0;
 
   const settleIfIdle = () => {
+    if (analyzeInFlight === 0 && debounce === null) setEngine({ analyzing: false });
     if (!isIdle()) return;
     idleWaiters.splice(0).forEach((resolve) => resolve());
   };
@@ -84,7 +95,13 @@ export function createStore(options: StoreOptions): Store {
       return;
     }
     // Fire-and-forget: the guarded handler already reported any failure to the UI.
-    guarded(latestRequest, engine.analyze(plan)).catch(() => undefined);
+    analyzeInFlight++;
+    guarded(latestRequest, engine.analyze(plan))
+      .catch(() => undefined)
+      .finally(() => {
+        analyzeInFlight--;
+        settleIfIdle();
+      });
   };
 
   /** Tracks an engine reply as in flight and applies it only while `request` is still the latest. */
@@ -117,10 +134,8 @@ export function createStore(options: StoreOptions): Store {
     const candidate = clone(SitePlanSchema, state.plan);
     candidate.phasing ??= create(PhasingSchema);
     candidate.phasing.mode = PhasingMode.OPTIMIZE;
-    dispatch({ type: "optimizeStarted" });
-    return guarded(++latestRequest, engine.optimize(candidate)).finally(() => {
-      if (!disposed) dispatch({ type: "optimizeSettled" });
-    });
+    setEngine({ optimizing: true });
+    return guarded(++latestRequest, engine.optimize(candidate)).finally(() => setEngine({ optimizing: false }));
   };
 
   return {

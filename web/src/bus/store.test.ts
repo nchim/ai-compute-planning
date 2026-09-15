@@ -150,7 +150,10 @@ describe("store", () => {
     const listener = vi.fn();
     store.subscribe(listener);
     store.dispatch({ type: "loadPlan", plan: loadAbilene() });
-    expect(listener).toHaveBeenCalledTimes(1);
+    // Two notifications: the command itself, then the engine going busy (derived state, not logged).
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(store.getState().engine.analyzing).toBe(true);
+    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan"]);
     const ctx = viewContext(store.getState());
     expect(ctx.selectedSiteId).toBe("abilene-1");
     expect(ctx.activeTab).toBe("site");
@@ -194,13 +197,13 @@ describe("store", () => {
     expect(engine.calls).toHaveLength(2);
     expect(engine.calls[1]!.plan.phasing?.mode).toBe(PhasingMode.OPTIMIZE);
     expect(store.getState().plan?.phasing?.mode).toBe(PhasingMode.SINGLE_SHOT);
-    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived", "optimizeStarted"]);
-    expect(store.getState().optimizing).toBe(true);
+    expect(store.getLog().map((e) => e.command.type)).toEqual(["loadPlan", "resultReceived"]);
+    expect(store.getState().engine.optimizing).toBe(true);
 
     engine.calls[1]!.resolve(resultWithMw(2));
     expect((await pending).summary?.mwOnlineFinal).toBe(2);
     expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
-    expect(store.getState().optimizing).toBe(false);
+    expect(store.getState().engine.optimizing).toBe(false);
 
     // A newer analyze supersedes an optimize still in flight: its reply is returned but not stored.
     const stale = store.optimize();
@@ -223,10 +226,10 @@ describe("store", () => {
     engine.calls[0]!.resolve(resultWithMw(1));
     await flush();
     const pending = store.optimize();
-    expect(store.getState().optimizing).toBe(true);
+    expect(store.getState().engine.optimizing).toBe(true);
     engine.calls[1]!.reject(new Error("boom"));
     await expect(pending).rejects.toThrow("boom");
-    expect(store.getState().optimizing).toBe(false);
+    expect(store.getState().engine.optimizing).toBe(false);
     expect(store.getState().error?.message).toBe("boom");
   });
 

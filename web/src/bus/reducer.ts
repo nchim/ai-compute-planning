@@ -35,10 +35,6 @@ export function reduce(state: State, cmd: Command): State {
       return state.baseline === null ? reject(state, "no baseline is set: pin one before comparing") : { ...state, compare: !state.compare };
     case "select":
       return { ...state, selection: cmd.selection };
-    case "optimizeStarted":
-      return { ...state, optimizing: true };
-    case "optimizeSettled":
-      return { ...state, optimizing: false };
     case "resultReceived":
       return { ...state, result: cmd.result, error: null };
     case "errorRaised":
