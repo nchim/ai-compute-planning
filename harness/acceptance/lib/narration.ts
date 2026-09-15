@@ -8,7 +8,9 @@
  * (`P10`, `Q3-28`, `GB300`, `m30`, `NVL72`) is an identifier, not a number, and is skipped.
  */
 export function numbersIn(text: string): number[] {
-  const re = /(?<![A-Za-z0-9_.])([-−–]?)\$?(\d[\d,]*(?:\.\d+)?)\s?(%|bps|[kKmMbB](?![A-Za-z])|bn|billion|million|thousand)?/g;
+  // Any dash-like sign counts (hyphen, non-breaking hyphen, figure/en dash, minus sign) unless the dash
+  // joins an identifier (`Q3-28`).
+  const re = /(?<![A-Za-z0-9_.])(?<![A-Za-z0-9][-\u2010\u2011\u2012\u2013\u2212])([-\u2010\u2011\u2012\u2013\u2212]?)\$?(\d[\d,]*(?:\.\d+)?)\s?(%|bps|[kKmMbB](?![A-Za-z])|bn|billion|million|thousand)?/g;
   const out: number[] = [];
   for (const m of text.matchAll(re)) {
     const digits = (m[2] as string).replace(/,/g, "");
