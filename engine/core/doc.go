@@ -14,7 +14,8 @@
 //	PV(GPU-hours)       = Σ_t gpus_online_t × utilization × 730 / (1+r)^t
 //
 // where r is the monthly equivalent of finance.discount_rate, H the hold in months, and terminal is the
-// exit value of the assets (GPUs at costs.gpu.residual_curve[years online], facility capex straight-line
+// exit value of the assets (GPUs at costs.gpu.residual_curve[years online], or straight-line over
+// depreciation_years when no curve is given, as in the fixture; facility capex straight-line
 // over a 25-year shell life, land at cost). Discounting both numerator and denominator is the LCOE
 // convention: it charges early capex more than late GPU-hours, so a plan that energizes sooner earns a
 // lower LCOC for the same total spend. GPU capex is only incurred (and only depreciated) under
@@ -26,11 +27,11 @@
 //	Facility capex (shell+electrical+cooling+network) $10M/MW × 200 = $2.0B at m0; grid capex $104M;
 //	land $20M; GPUs 110,000 × $40k = $4.4B at energize (m30, when the grid arrives). Total $6.52B.
 //	Delivered GPU-hours: 110,000 × 80% × 730 h × 54 months online ≈ 3.47B GPU-h; PV ≈ 2.23B.
-//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.43B power − $3.07B terminal (GPUs at 35% residual
-//	after 4 full years, shell 82% undepreciated, land at cost) → PV ≈ $4.88B.
-//	LCOC = 4.88B / 2.23B ≈ $2.19 per GPU-hour, against a $3.25 GB300-class opening price decaying
-//	8%/yr; breakeven utilization 78% vs. 80% assumed — thin, because an air-cooled 22-GPU rack carries
-//	the same shell and power as a dense one. T2's move to NVL72 racks is the fix the session finds.
+//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.43B power − $2.41B terminal (GPUs at 20% residual
+//	after 4 of 5 straight-line years, shell 82% undepreciated, land at cost) → PV ≈ $5.22B.
+//	LCOC = 5.22B / 2.23B ≈ $2.34 per GPU-hour, against a $3.25 GB300-class opening price decaying
+//	8%/yr; breakeven utilization 84% vs. 80% assumed — underwater, because an air-cooled 22-GPU rack
+//	carries the same shell and power as a dense one. T2's move to NVL72 racks is the fix the session finds.
 //
 // The exact figures are in testdata/abilene-1.result.json (summary.lcoc_per_gpu_hour, summary.extra).
 //

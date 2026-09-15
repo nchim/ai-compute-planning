@@ -74,7 +74,7 @@ describe("harness api", () => {
     expect(byPath.get("compute.cooling")).toMatchObject({ type: "CoolingMode", value: "AIR" });
     expect(byPath.get("compute.cooling")?.options).toContain("LIQUID_DTC");
     expect(byPath.get("power.sources[0].capacity_mw")?.value).toBe(260);
-    expect(byPath.get("costs.gpu.residual_curve[2]")?.value).toBe(0.5);
+    expect(byPath.get("demand.points[1].demand_mw")?.value).toBe(100);
     expect(byPath.get("run.monte_carlo.seed")?.value).toBe(42);
     expect(byPath.get("run.sensitivity.delta_pct")).toBeDefined(); // unset sub-message: still settable
     for (const c of controls) await api.setControl(c.path, c.value); // every listed path round-trips

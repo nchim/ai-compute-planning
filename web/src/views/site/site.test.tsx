@@ -106,7 +106,7 @@ describe("regions render from the golden Result", () => {
   test("pro forma renders the KPI tiles, the capex stack and the table", () => {
     const { container } = mount(harness(), <ProForma />);
     const tiles = within(container.querySelector(".tiles") as HTMLElement);
-    expect(tiles.getByText("$2.19")).toBeTruthy();
+    expect(tiles.getByText("$2.34")).toBeTruthy();
     expect(tiles.getByText("$6.5B")).toBeTruthy();
     expect(tiles.getByText("26.1%")).toBeTruthy();
     expect(container.querySelectorAll(".stackbar rect")).toHaveLength(7);
