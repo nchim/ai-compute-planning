@@ -14,8 +14,10 @@ const wasmUrl = "/engine.wasm";
 
 async function load(): Promise<EngineOps> {
   // wasm_exec.js is a classic script that defines globalThis.Go; importing it as a module is fine
-  // because it has no import/export statements (module workers cannot use importScripts).
-  await import(/* @vite-ignore */ execUrl);
+  // because it has no import/export statements (module workers cannot use importScripts). The
+  // absolute URL keeps the Vite dev server from rewriting the import to `?import`, which it refuses
+  // for files in public/.
+  await import(/* @vite-ignore */ new URL(execUrl, self.location.origin).href);
   const go = new Go();
   const { instance } = await WebAssembly.instantiateStreaming(fetch(wasmUrl), go.importObject);
   // main() registers capplanner synchronously and then blocks forever, so run() never settles

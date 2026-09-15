@@ -86,7 +86,7 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - Proto: `make gen` (runs `buf generate` in `proto/`; regenerates `engine/pb` + `web/src/gen`, which are committed — CI fails if they are stale). `make lint` runs `buf lint`.
 - WASM: `make wasm` → `web/public/engine.wasm` + `web/public/wasm_exec.js` (both gitignored).
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev`
-- Harness: `cd harness && npm test` (placeholder until WS9; then `npx playwright test` · acceptance: `npm run acceptance -- --copilot=scripted`)
+- Harness: `make harness` (or `cd harness && npm run smoke`; `make wasm` first for the real engine; see `harness/README.md`) · acceptance: `npm run acceptance -- --copilot=scripted` (WS10)
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -117,6 +117,7 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
   `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
   `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
+- 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
 - 2026-09-15 (WS8) — Copilot/SDK gotchas: `betaZodTool` already installs a zod `parse` the tool runner
   calls inside its try/catch, so a schema failure or a thrown `Error`/`ToolError` becomes an `is_error`
   tool_result for free — throw `ToolError(message)` to control the exact content. `strict`/

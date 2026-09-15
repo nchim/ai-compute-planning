@@ -6,6 +6,7 @@ import "./app.css";
 import { StoreProvider, createStore } from "./bus";
 import { EngineProvider } from "./copilot";
 import { selectEngine } from "./engine";
+import { installHarness } from "./harness/install";
 
 const root = document.getElementById("root");
 if (root === null) {
@@ -18,6 +19,7 @@ const engine = selectEngine((reason) => {
   console.info(`[engine] using fake engine: ${reason}`);
 });
 const store = createStore({ engine });
+installHarness(store);
 
 createRoot(root).render(
   <StrictMode>
