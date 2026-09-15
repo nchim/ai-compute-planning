@@ -134,3 +134,9 @@ offending numbers listed, so an unexpected failure usually means a prompt/tool w
 
 Per-turn reasoning effort is fixed in the spec (`output_config.effort`: high for T3/T7/T8, low for the
 T5/T6 what-ifs, the API default elsewhere) and reaches the Copilot through `sendCopilot(text, { effort })`.
+
+## Performance budgets
+The acceptance session measures a plain Analyze (< 100 ms) and a 1,000-iteration Monte Carlo (< 1 s)
+in the browser. They are **hard on a developer machine and soft on CI** (shared 2-vCPU runners; a miss
+is logged and archived in `timings.json`). Set `ACCEPTANCE_ENFORCE_BUDGETS=1` to make them hard anywhere.
+`make harness` runs `tests/` (smoke, schematic); `make acceptance` runs `acceptance/`.
