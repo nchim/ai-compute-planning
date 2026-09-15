@@ -219,3 +219,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   energization (not t0) is what reconciles; its sale value is forward-12 NOI ÷ cap (`K207`). When the
   cost side moves with utilization, keep the breakeven exact by discounting the variable lines
   separately (`opexSeries.variable`, `exit.variable`) rather than assuming cost is fixed.
+- 2026-09-15 (#39) — SVGs whose user unit is a physical one (the schematic's metres) must not put
+  font-size/stroke-width in user units: they scale inversely with the parcel. Measure the rendered
+  width (ResizeObserver, a fallback under jsdom), use `vector-effect="non-scaling-stroke"` on every
+  rect and put each label in a `<g transform="translate(x y) scale(mPerPx)">` so text is in px; hide a
+  label when the block is narrower than `chars × 0.62 em`. Engine side, a first-fit row wrap of 2:1
+  blocks wastes half of every row on a small square parcel — let a crowded row narrow its blocks
+  together (down to 1:1) and keep a phase's hall + yard as one group. `harness/tests/schematic.spec.ts`
+  screenshots the region per fixture; look at the PNGs (Read tool) — a passing geometry assertion
+  did not catch white-on-hatch labels, a CSS specificity slip (`.schematic .x text` loses to
+  `.site-view .schematic .block text`).

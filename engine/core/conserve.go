@@ -5,7 +5,7 @@ import "github.com/nchim/ai-compute-planning/engine/pb"
 // Tolerances: relative 1e-6 for money/MW (scaled by the quantity), exact for counts and months.
 const relTolerance = 1e-6
 
-// conserve runs the 13 model-correctness invariants from docs/engine-design.md. A failed check is a bug
+// conserve runs the 14 model-correctness invariants from docs/engine-design.md. A failed check is a bug
 // in the model, not in the input, so it is reported as a WARNING diagnostic (status OK_WITH_WARNINGS)
 // with the residual, never silently dropped.
 func conserve(m *model, d *diags) *pb.ConservationReport {
@@ -31,6 +31,7 @@ func checks(m *model) []*pb.ConservationCheck {
 		// STUB: 100% equity, no debt; uses = total capex.
 		{Name: "capital_uses_eq_sources", Residual: equity(m) - m.capex.total, Tolerance: money},
 		{Name: "land_footprint_le_parcel", Residual: maxf(0, blockAcres(m.schematic)-m.plan.GetSite().GetLandAcres()), Tolerance: relTolerance * m.plan.GetSite().GetLandAcres()},
+		{Name: "blocks_within_parcel", Residual: acresOutsideParcel(m.schematic), Tolerance: relTolerance * m.plan.GetSite().GetLandAcres()},
 		{Name: "whitespace_le_gross", Residual: maxf(0, m.site.whitespaceSqft-m.site.grossSqft), Tolerance: 0},
 		{Name: "power_load_eq_racks", Residual: m.site.itMw - float64(m.site.racks)*m.plan.GetCompute().GetKwPerRack()/1000, Tolerance: mw},
 		{Name: "facility_power_pue", Residual: m.site.facilityMw - m.site.itMw*m.plan.GetCompute().GetPue(), Tolerance: mw},
@@ -59,6 +60,17 @@ func blockAcres(s *pb.Schematic) float64 {
 	for _, b := range s.GetBlocks() {
 		if b.GetKind() != pb.BlockKind_EXPANSION_PAD {
 			sqm += b.GetWM() * b.GetHM()
+		}
+	}
+	return sqm / sqmPerAcre
+}
+
+// acresOutsideParcel is the area of every non-setback block that lies outside the parcel rectangle.
+func acresOutsideParcel(s *pb.Schematic) float64 {
+	var sqm float64
+	for _, b := range s.GetBlocks() {
+		if b.GetKind() != pb.BlockKind_SETBACK {
+			sqm += outsideArea(b, 0, 0, s.GetParcelWM(), s.GetParcelHM())
 		}
 	}
 	return sqm / sqmPerAcre

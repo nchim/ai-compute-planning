@@ -10,6 +10,7 @@ human or the Copilot exercises.
 |---|---|
 | Everything (typecheck + all specs) | `make harness` |
 | Smoke only | `cd harness && npm run smoke` |
+| Schematic screenshots (every fixture, scrubbed to the last month → `<runDir>/schematic-<fixture>.png`) | `cd harness && npx playwright test tests/schematic.spec.ts` |
 | All specs | `cd harness && npm test` |
 | Watch the browser | `cd harness && npx playwright test --headed` (or `HEADED=1` for a `Session` launched from your own script) |
 | One spec, verbose | `cd harness && npx playwright test tests/smoke.spec.ts --reporter=list` |

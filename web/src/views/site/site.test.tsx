@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { fromJsonString } from "@bufbuild/protobuf";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
-import { PhasingMode, type Result } from "../../gen/capplanner/v1/engine_pb";
+import { PhasingMode, ResultSchema, type Result } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
 import { OptimizationPanel, patchFromBestPlan } from "./OptimizationPanel";
@@ -14,6 +15,7 @@ import { Risk } from "./Risk";
 import { SiteFeasibilityView } from "./SiteFeasibilityView";
 import { SiteSchematic } from "./SiteSchematic";
 import { loadGoldenPlan, loadGoldenResult } from "./testdata";
+import novaResultJson from "../../../../engine/core/testdata/nova-colo.result.json?raw";
 
 interface Harness {
   readonly store: Store;
@@ -83,7 +85,7 @@ describe("regions render from the golden Result", () => {
 
   test("schematic renders all blocks at the final month with the footprint badge and phase legend", () => {
     const { container } = mount(harness(), <SiteSchematic />);
-    expect(container.querySelectorAll("[data-block]")).toHaveLength(8);
+    expect(container.querySelectorAll("[data-block]")).toHaveLength(9);
     expect(screen.getByText(/footprint \d+% used/)).toBeTruthy();
     expect(container.querySelectorAll(".legend li")).toHaveLength(1);
   });
@@ -163,7 +165,7 @@ describe("controls dispatch through the bus", () => {
     fireEvent.change(screen.getByLabelText("time scrubber (month)"), { target: { value: "20" } });
     expect(h.dispatched[0]).toMatchObject({ type: "select", selection: { month: 20 } });
     const visible = [...container.querySelectorAll("[data-block]")].map((el) => el.getAttribute("data-block"));
-    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion"]);
+    expect(visible).toEqual(["setback_n", "setback_s", "setback_w", "setback_e", "expansion", "expansion_e"]);
     expect(h.store.getState().selection.month).toBe(20);
   });
 
@@ -295,5 +297,78 @@ describe("compare mode", () => {
     h.store.dispatch({ type: "toggleCompare" });
     const { container } = mount(h, <SiteFeasibilityView />);
     expect(container.querySelectorAll(".delta, .baseline, [data-baseline]")).toHaveLength(0);
+  });
+});
+
+describe("schematic renders in screen pixels regardless of parcel size (#39)", () => {
+  /** The golden with its schematic swapped for the nova-colo one (5 acres, 142 m; the golden is 400 acres, 1272 m). */
+  function withNovaSchematic(): Result {
+    const result = loadGoldenResult();
+    result.schematic = fromJsonString(ResultSchema, novaResultJson).schematic;
+    return result;
+  }
+
+  function labelScales(container: HTMLElement): { id: string; scale: number }[] {
+    return [...container.querySelectorAll(".block .label")].map((g) => {
+      const m = /scale\(([\d.e+-]+)\)/.exec(g.getAttribute("transform") ?? "");
+      expect(m, `label transform ${g.getAttribute("transform")}`).not.toBeNull();
+      return { id: g.closest("[data-block]")!.getAttribute("data-block")!, scale: Number(m![1]) };
+    });
+  }
+
+  test("label font size on screen is the same on a 5-acre and a 400-acre parcel", () => {
+    const sizes = new Set<string>();
+    for (const result of [loadGoldenResult(), withNovaSchematic()]) {
+      const { container } = mount(harness(result), <SiteSchematic />);
+      const svg = container.querySelector("svg.schematic")!;
+      const [, , w] = svg.getAttribute("viewBox")!.split(" ").map(Number);
+      const pxPerM = Number(svg.getAttribute("data-px-per-m"));
+      expect(pxPerM * w!, "rendered width in px").toBeGreaterThan(100);
+      const labels = labelScales(container);
+      expect(labels.length).toBeGreaterThan(3);
+      for (const { id, scale } of labels) {
+        const text = container.querySelector(`[data-block="${id}"] text`)!;
+        const px = Number(text.getAttribute("font-size")) * scale * pxPerM; // screen px = font × label scale × px/m
+        sizes.add(px.toFixed(3));
+      }
+      cleanup();
+    }
+    expect([...sizes]).toHaveLength(1);
+  });
+
+  test("a block narrower or shorter than its label gets no label", () => {
+    const result = withNovaSchematic();
+    const blocks = result.schematic!.blocks;
+    blocks.find((b) => b.id === "hall_p1")!.wM = 3; // 3 m: a few px wide on any screen
+    blocks.find((b) => b.id === "hall_p2")!.hM = 0.5;
+    const { container } = mount(harness(result), <SiteSchematic />);
+    expect(container.querySelector('[data-block="hall_p1"] text')).toBeNull();
+    expect(container.querySelector('[data-block="hall_p2"] text')).toBeNull();
+    expect(container.querySelector('[data-block="substation"] text')?.textContent).toBe("substation");
+  });
+
+  test("every rect and label lies inside the viewBox, and strokes do not scale with the parcel", () => {
+    for (const result of [loadGoldenResult(), withNovaSchematic()]) {
+      const { container } = mount(harness(result), <SiteSchematic />);
+      const svg = container.querySelector("svg.schematic")!;
+      const [, , w, h] = svg.getAttribute("viewBox")!.split(" ").map(Number);
+      for (const rect of svg.querySelectorAll("rect")) {
+        const [x, y, rw, rh] = ["x", "y", "width", "height"].map((a) => Number(rect.getAttribute(a)));
+        expect(x, rect.outerHTML).toBeGreaterThanOrEqual(0);
+        expect(y, rect.outerHTML).toBeGreaterThanOrEqual(0);
+        expect(x! + rw!, rect.outerHTML).toBeLessThanOrEqual(w! + 1e-6);
+        expect(y! + rh!, rect.outerHTML).toBeLessThanOrEqual(h! + 1e-6);
+        expect(rect.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+      }
+      for (const g of svg.querySelectorAll(".label")) {
+        const [tx, ty] = /translate\(([\d.e+-]+) ([\d.e+-]+)\)/.exec(g.getAttribute("transform")!)!.slice(1).map(Number);
+        expect(tx).toBeGreaterThanOrEqual(0);
+        expect(ty).toBeGreaterThanOrEqual(0);
+        expect(tx).toBeLessThanOrEqual(w!);
+        expect(ty).toBeLessThanOrEqual(h!);
+      }
+      expect(svg.querySelectorAll(".setback rect[fill^='url(#']").length).toBe(4);
+      cleanup();
+    }
   });
 });

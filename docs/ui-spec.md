@@ -48,7 +48,10 @@ four dimension chips. Regions, each a `Region` tagged by dimension (Space/Time/C
 2. **Site schematic · phase reveal (Space + Time)** — parcel + blocks from `Result.schematic` (data
    halls, substation, cooling yard, gas pad, expansion pads), `footprint_used_pct`, and a **time
    scrubber** (`input[type=range]`, "time scrubber (month)") that writes `selection.month` so blocks
-   reveal by `energize_month`. In compare mode the baseline's blocks are ghosted.
+   reveal by `energize_month`. In compare mode the baseline's blocks are ghosted. The SVG's user unit
+   is the metre, so strokes are `non-scaling-stroke`, labels live in a group counter-scaled to 1 px
+   units (constant 11 px on any parcel; measured via ResizeObserver) and are dropped when the block
+   is narrower than the text; setbacks are hatched strips.
 3. **Phasing — demand ramp vs. staged capacity (Time; first-class)** — mode select (`phasing.mode`),
    per-phase editors (`id`, IT MW, start month, energize month, power source) for EXPLICIT plans, and the
    `demand_vs_capacity` step chart with shortfall/stranded shading; tiles for demand capture,
