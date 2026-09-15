@@ -54,3 +54,39 @@ func TestBreakevenModeGuards(t *testing.T) {
 		t.Fatalf("no revenue → breakeven 0, got %g", got)
 	}
 }
+
+// opex_growth_pct_yr compounds every cost rate — staffing, maintenance, insurance, property tax and
+// energy — once per year from the first energization (nova-colo: m24); the management fee follows
+// revenue, so it does not grow.
+func TestOpexGrowthCompoundsCostRatesFromFirstEnergize(t *testing.T) {
+	flat := loadFixtureNamed(t, "nova-colo")
+	flat.Costs.Opex.OpexGrowthPctYr = 0
+	grown := clonePlan(flat)
+	grown.Costs.Opex.OpexGrowthPctYr = 10
+	a, b := build(flat, &diags{}).opex, build(grown, &diags{}).opex
+	for _, tc := range []struct {
+		t      int
+		factor float64
+	}{{0, 1}, {23, 1}, {24, 1}, {35, 1}, {36, 1.1}, {59, 1.21}, {60, 1.331}} {
+		for name, lines := range map[string][2][]float64{
+			"staffing": {a.staffing, b.staffing}, "maintenance": {a.maintenance, b.maintenance},
+			"insurance": {a.insurance, b.insurance}, "tax": {a.tax, b.tax}, "power": {a.power, b.power},
+		} {
+			if want := lines[0][tc.t] * tc.factor; !approxEq(lines[1][tc.t], want, 1e-9) {
+				t.Errorf("%s[%d] = %g, want %g (×%g)", name, tc.t, lines[1][tc.t], want, tc.factor)
+			}
+		}
+		if a.mgmtFee[tc.t] != b.mgmtFee[tc.t] {
+			t.Errorf("month %d: the management fee changed with opex growth", tc.t)
+		}
+	}
+}
+
+func TestOpexGrowthIsValidated(t *testing.T) {
+	p := loadFixtureNamed(t, "nova-colo")
+	p.Costs.Opex.OpexGrowthPctYr = -1
+	res := Analyze(p)
+	if d := findDiag(res, codeOutOfRange); res.GetStatus() != pb.Status_INVALID_INPUT || d == nil || d.GetProtoPath() != "costs.opex.opex_growth_pct_yr" {
+		t.Fatalf("negative growth must be rejected at costs.opex.opex_growth_pct_yr: %v", diagCodes(res))
+	}
+}

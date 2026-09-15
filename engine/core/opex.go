@@ -20,7 +20,9 @@ func (o opexSeries) opexAt(t int) float64 {
 // buildOpex prices operations month by month. Staffing scales with energized IT MW; maintenance and
 // insurance are a percentage of facility capex spent to date; property tax runs from t0 (the land is
 // owned); the management fee is a share of revenue; power is dispatched cheapest-first over the
-// billed load (energyLoadMw).
+// billed load (energyLoadMw). Every cost rate is in year-1-of-operations dollars and compounds at
+// opex_growth_pct_yr once per year from the first energization (the pro-forma convention, matching
+// rents quoted as year-1 rent); the management fee follows revenue instead.
 func buildOpex(plan *pb.SitePlan, phases []phase, srcs []source, capex capexBuild, revenue []float64, months int) opexSeries {
 	o := plan.GetCosts().GetOpex()
 	s := opexSeries{
@@ -30,15 +32,17 @@ func buildOpex(plan *pb.SitePlan, phases []phase, srcs []source, capex capexBuil
 	facilitySpend := capex.monthly(months, facilityLine)
 	var facilityToDate float64
 	computeSales := plan.GetRevenue().GetMode() == pb.RevenueMode_COMPUTE_SALES
+	opsStart := firstEnergize(phases)
 	for t := 0; t < months; t++ {
 		facilityToDate += facilitySpend[t]
 		it := onlineItMw(phases, t)
-		s.staffing[t] = o.GetStaffingPerMwYr() * it / 12
-		s.maintenance[t] = facilityToDate * o.GetMaintenancePctOfCapex() / 100 / 12
-		s.insurance[t] = facilityToDate * o.GetInsurancePctOfCapex() / 100 / 12
+		growth := annualStep(o.GetOpexGrowthPctYr(), t-opsStart)
+		s.staffing[t] = o.GetStaffingPerMwYr() * it / 12 * growth
+		s.maintenance[t] = facilityToDate * o.GetMaintenancePctOfCapex() / 100 / 12 * growth
+		s.insurance[t] = facilityToDate * o.GetInsurancePctOfCapex() / 100 / 12 * growth
 		s.mgmtFee[t] = revenue[t] * o.GetMgmtFeePctOfEgr() / 100
-		s.tax[t] = o.GetPropertyTaxPerYr() / 12
-		s.power[t] = energyCost(srcs, energyLoadMw(plan, it), t)
+		s.tax[t] = o.GetPropertyTaxPerYr() / 12 * growth
+		s.power[t] = energyCost(srcs, energyLoadMw(plan, it), t) * growth
 		s.variable[t] = s.mgmtFee[t]
 		if computeSales {
 			s.variable[t] += s.power[t]

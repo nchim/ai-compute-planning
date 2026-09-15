@@ -54,6 +54,19 @@
 //
 // exact up to the kinks cheapest-first dispatch puts in energy where the load crosses a source's capacity.
 //
+// # Trending
+//
+// Rates are quoted in year-1-of-operations dollars and step once per year (no continuous growth):
+//
+//	colo rent      × (1 + annual_escalation_pct)^⌊(t − phase energize)/12⌋   per phase, from its lease start
+//	opex rates     × (1 + opex_growth_pct_yr)^⌊(t − first energize)/12⌋       staffing, maintenance, insurance,
+//	                                                                          property tax and energy $/MWh
+//	management fee follows revenue; compute-sales price decays continuously from t0 (a market curve,
+//	not a contract escalator).
+//
+// This is the A.CRE convention (escalation per tenant from lease start, growth on every opex line
+// from the operations start), which is what makes nova-colo's trended NOI reconcile.
+//
 // # Other metrics
 //
 //   - capex_per_mw: total capex / sized IT MW.

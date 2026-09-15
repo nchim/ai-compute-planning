@@ -81,8 +81,9 @@ development spread against an exit cap.
 | H156 insurance | $0.5/kW/mo = $0.12M/yr | `costs.opex.insurance_pct_of_capex` | 0.082 | same base |
 | I158 management fee | 3% of EGR | `costs.opex.mgmt_fee_pct_of_egr` | 3 | |
 | K159 property taxes | $1.1M/yr | `costs.opex.property_tax_per_yr` | 1,100,000 | ours runs from t0 (land owned); A.CRE from operations |
+| G153–G159 expense growth | 2.5% | `costs.opex.opex_growth_pct_yr` | 2.5 | every cost rate incl. utilities, stepping per year of operations (both) |
 | I121–I126 rent | $285/kW/mo | `revenue.colo.rate_per_kw_month` | 285 | |
-| J121–J126 rent growth | 2% | `revenue.colo.annual_escalation_pct` | 2 | ours compounds from t0 (#29); A.CRE per tenant from lease start |
+| J121–J126 rent growth | 2% | `revenue.colo.annual_escalation_pct` | 2 | per phase from its energize month (A.CRE: per tenant from lease start + 3-month ramp) |
 | I147 general vacancy | 5% | `revenue.colo.vacancy_pct` | 5 | |
 | K176 cap rate at sale | 6.75% | `finance.exit_cap_rate` | 0.0675 | K175 "cap rate today" (6.0%) has no field |
 | D178 sale month | 72 | `finance.hold_period_months` | 72 | |
@@ -97,9 +98,11 @@ Untrended (escalation 0, as A.CRE's column I): stabilized NOI $18.606M vs I195 $
 yield-on-cost 11.78% vs I195/K68 (−0.03%). A.CRE's headline yield I233 = 8.73% divides by K76
 ($213.1M), which adds $20.4M capitalized construction interest and a $34.7M operating-shortfall reserve
 that our 100%-equity STUB does not book; restated on K76 our yield is 8.732% (−0.02%) and the
-development spread over the sale cap rate 198 bps vs 198 bps. Tolerance 1%. Trended (fixture escalation
-2%): our NOI is **+24.8%** above J195 because escalation compounds from t0 and opex never grows (#29);
-the test pins the direction and a 0..+30% band rather than claiming agreement. Other structural
+development spread over the sale cap rate 198 bps vs 198 bps. Tolerance 1%. Trended (2% rent
+escalation per lease, 2.5% growth on every opex rate from operations start): stabilized NOI $18.31M vs
+J195 $18.01M (**+1.7%**, tolerance 5%); the residual is the window (ours m37–48 from the last
+energization, A.CRE's months 46–57 after absorption) and A.CRE's 3-month ramp before each tenant's
+escalation clock starts. Other structural
 differences that do not touch stabilized NOI: no S-curve (capex lumped at construction start, which
 also starts maintenance/insurance early), no debt, no tenant absorption ramp (417 kW/mo in A.CRE),
 asset-based terminal value instead of NOI ÷ exit cap (#30 — the reason nova-colo's breakeven occupancy

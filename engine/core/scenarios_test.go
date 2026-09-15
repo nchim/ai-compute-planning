@@ -111,14 +111,17 @@ func acreMirror(t *testing.T) *pb.SitePlan {
 //     construction interest and operating-shortfall reserve. Our 100%-equity STUB books neither, so
 //     our cost basis is K68 and our yield is higher by K76/K68 − 1 = +34.9%. The test compares on
 //     K68 (both are workbook cells) and checks the restated yield against the headline I233.
-//   - Trending: our colo escalation compounds from t0 by calendar year (3 steps by the m37 stabilization
-//     window) and opex does not grow; A.CRE escalates each tenant from its lease start and grows opex
-//     2.5%/yr. On the trended basis our NOI is therefore ~25% above J195 (follow-up issue in the PR);
-//     the untrended comparison (escalation 0, growth 0 on both sides) is the like-for-like one.
+//   - Trending: both escalate each tenant's rent per lease year from its start and grow every opex
+//     rate (utilities included, G153:G159) 2.5%/yr per year of operations. What differs is the
+//     stabilized window — ours is the 12 months from the last energization (m37–48), A.CRE's J195 is
+//     months 46–57 (after tenant absorption) — and A.CRE's 3-month ramp before each escalation clock
+//     starts, so the trended NOI is compared within ±5%; the untrended (escalation 0, growth 0 on
+//     both sides) within ±1%.
 func TestAcreReconciliation(t *testing.T) {
 	t.Run("untrended", func(t *testing.T) {
 		p := acreMirror(t)
 		p.Revenue.Colo.AnnualEscalationPct = 0
+		p.Costs.Opex.OpexGrowthPctYr = 0
 		res := requireOK(t, Analyze(p))
 		s := res.GetSummary()
 		if !approxEq(s.GetTotalCapex(), acreCostBeforeFinancing, 1e-6) {
@@ -141,11 +144,7 @@ func TestAcreReconciliation(t *testing.T) {
 		res := requireOK(t, Analyze(acreMirror(t)))
 		s := res.GetSummary()
 		noi := s.GetYieldOnCostPct() / 100 * s.GetTotalCapex()
-		gap := noi/acreNoiTrended - 1
-		t.Logf("trended NOI vs J195: got %.4g, want %.4g (gap %+.1f%%, structural)", noi, acreNoiTrended, gap*100)
-		if gap < 0 || gap > 0.30 {
-			t.Errorf("trended NOI %.0f is %+.1f%% vs J195: expected 0..+30%% (escalation from t0, no opex growth); if the revenue model changed, revisit", noi, gap*100)
-		}
+		requireWithin(t, "trended NOI vs J195 (2% rent escalation per lease, 2.5% opex growth)", noi, acreNoiTrended, 0.05)
 	})
 }
 
