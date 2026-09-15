@@ -140,6 +140,7 @@ func validateCosts(c *pb.CostModel, d *diags) {
 	percent(d, "costs.opex.insurance_pct_of_capex", o.GetInsurancePctOfCapex())
 	percent(d, "costs.opex.mgmt_fee_pct_of_egr", o.GetMgmtFeePctOfEgr())
 	nonNegative(d, "costs.opex.property_tax_per_yr", o.GetPropertyTaxPerYr())
+	percent(d, "costs.opex.opex_growth_pct_yr", o.GetOpexGrowthPctYr())
 }
 
 func validateRevenue(r *pb.RevenueModel, d *diags) {

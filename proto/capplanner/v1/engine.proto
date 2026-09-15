@@ -167,6 +167,7 @@ message OpexModel {
   double insurance_pct_of_capex = 3;
   double mgmt_fee_pct_of_egr = 4;
   double property_tax_per_yr = 5;
+  double opex_growth_pct_yr = 6;    // whole percent; cost rates (staffing, maintenance, insurance, property tax, energy $/MWh) are year-1-of-operations dollars and compound once per year from the first energization (mgmt fee follows revenue)
 }
 
 message RevenueModel {
@@ -175,7 +176,7 @@ message RevenueModel {
   ComputeTerms compute = 3;         // COMPUTE_SALES
 }
 enum RevenueMode { REVENUE_UNSPECIFIED = 0; COLO_LEASE = 1; COMPUTE_SALES = 2; }
-message ColoTerms { double rate_per_kw_month = 1; double annual_escalation_pct = 2; double vacancy_pct = 3; }
+message ColoTerms { double rate_per_kw_month = 1; double annual_escalation_pct = 2; double vacancy_pct = 3; } // escalation compounds per lease year from each phase's energize month
 message ComputeTerms { double gpu_hour_price = 1; double utilization_pct = 2; double price_decay_pct_yr = 3; }
 
 message FinanceParams {

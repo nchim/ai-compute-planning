@@ -56,6 +56,16 @@ describe("harness api", () => {
     await expect(api.undo()).rejects.toThrow("nothing to undo");
   });
 
+  test("loadFixture loads a fixture by name and rejects unknown names with the known list", async () => {
+    const { api } = harness();
+    await expect(api.loadFixture("nope")).rejects.toThrow('unknown fixture "nope"; known: abilene-1');
+    await expect(api.loadFixture(3 as unknown as string)).rejects.toThrow("name must be a string");
+    await api.loadFixture("nova-colo");
+    await api.waitIdle();
+    expect(JSON.parse(await api.getPlan()).meta.plan_id).toBe("nova-colo");
+    expect(JSON.parse((await api.getResult()) as string).status).toBe("OK");
+  });
+
   test("a bad path or value rejects with the reducer's message and leaves the plan untouched", async () => {
     const { api } = await loaded();
     const before = await api.getPlan();

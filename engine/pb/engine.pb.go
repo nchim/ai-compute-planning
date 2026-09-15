@@ -1899,6 +1899,7 @@ type OpexModel struct {
 	InsurancePctOfCapex   float64                `protobuf:"fixed64,3,opt,name=insurance_pct_of_capex,json=insurancePctOfCapex,proto3" json:"insurance_pct_of_capex,omitempty"`
 	MgmtFeePctOfEgr       float64                `protobuf:"fixed64,4,opt,name=mgmt_fee_pct_of_egr,json=mgmtFeePctOfEgr,proto3" json:"mgmt_fee_pct_of_egr,omitempty"`
 	PropertyTaxPerYr      float64                `protobuf:"fixed64,5,opt,name=property_tax_per_yr,json=propertyTaxPerYr,proto3" json:"property_tax_per_yr,omitempty"`
+	OpexGrowthPctYr       float64                `protobuf:"fixed64,6,opt,name=opex_growth_pct_yr,json=opexGrowthPctYr,proto3" json:"opex_growth_pct_yr,omitempty"` // whole percent; cost rates (staffing, maintenance, insurance, property tax, energy $/MWh) are year-1-of-operations dollars and compound once per year from the first energization (mgmt fee follows revenue)
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1964,6 +1965,13 @@ func (x *OpexModel) GetMgmtFeePctOfEgr() float64 {
 func (x *OpexModel) GetPropertyTaxPerYr() float64 {
 	if x != nil {
 		return x.PropertyTaxPerYr
+	}
+	return 0
+}
+
+func (x *OpexModel) GetOpexGrowthPctYr() float64 {
+	if x != nil {
+		return x.OpexGrowthPctYr
 	}
 	return 0
 }
@@ -4352,13 +4360,14 @@ const file_capplanner_v1_engine_proto_rawDesc = "" +
 	"\aGpuCost\x12\x1b\n" +
 	"\tunit_cost\x18\x01 \x01(\x01R\bunitCost\x12-\n" +
 	"\x12depreciation_years\x18\x02 \x01(\x05R\x11depreciationYears\x12%\n" +
-	"\x0eresidual_curve\x18\x03 \x03(\x01R\rresidualCurve\"\x83\x02\n" +
+	"\x0eresidual_curve\x18\x03 \x03(\x01R\rresidualCurve\"\xb0\x02\n" +
 	"\tOpexModel\x12+\n" +
 	"\x12staffing_per_mw_yr\x18\x01 \x01(\x01R\x0fstaffingPerMwYr\x127\n" +
 	"\x18maintenance_pct_of_capex\x18\x02 \x01(\x01R\x15maintenancePctOfCapex\x123\n" +
 	"\x16insurance_pct_of_capex\x18\x03 \x01(\x01R\x13insurancePctOfCapex\x12,\n" +
 	"\x13mgmt_fee_pct_of_egr\x18\x04 \x01(\x01R\x0fmgmtFeePctOfEgr\x12-\n" +
-	"\x13property_tax_per_yr\x18\x05 \x01(\x01R\x10propertyTaxPerYr\"\xa3\x01\n" +
+	"\x13property_tax_per_yr\x18\x05 \x01(\x01R\x10propertyTaxPerYr\x12+\n" +
+	"\x12opex_growth_pct_yr\x18\x06 \x01(\x01R\x0fopexGrowthPctYr\"\xa3\x01\n" +
 	"\fRevenueModel\x12.\n" +
 	"\x04mode\x18\x01 \x01(\x0e2\x1a.capplanner.v1.RevenueModeR\x04mode\x12,\n" +
 	"\x04colo\x18\x02 \x01(\v2\x18.capplanner.v1.ColoTermsR\x04colo\x125\n" +

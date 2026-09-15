@@ -1,6 +1,7 @@
 import { ScalarType, create, fromJsonString, toJson, toJsonString, type DescEnum, type DescField, type DescMessage } from "@bufbuild/protobuf";
 
 import { defaultBaselineLabel, logToJson, viewContext, type Command, type Proposal, type Store } from "../bus";
+import { fixtureJson } from "../fixtures";
 import {
   DiagnosticSchema,
   ResultSchema,
@@ -71,6 +72,11 @@ export function createHarnessApi(store: Store, options: HarnessOptions = {}, err
         throw new Error(`loadPlan: invalid SitePlan protojson: ${describe(err)}`);
       }
       run({ type: "loadPlan", plan });
+    },
+
+    async loadFixture(name) {
+      expectString("name", name);
+      run({ type: "loadPlan", plan: fromJsonString(SitePlanSchema, fixtureJson(name)) });
     },
 
     async getPlan() {

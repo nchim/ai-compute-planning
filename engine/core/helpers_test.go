@@ -120,15 +120,18 @@ func scalarOrMessageDiff(fd protoreflect.FieldDescriptor, got, want protoreflect
 }
 
 // loadFixture returns a fresh copy of the reference plan; tests mutate it freely.
-func loadFixture(t testing.TB) *pb.SitePlan {
+func loadFixture(t testing.TB) *pb.SitePlan { return loadFixtureNamed(t, "abilene-1") }
+
+// loadFixtureNamed reads fixtures/<name>.json.
+func loadFixtureNamed(t testing.TB, name string) *pb.SitePlan {
 	t.Helper()
-	raw, err := os.ReadFile(fixturePath)
+	raw, err := os.ReadFile(fixtureDir + name + ".json")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
 	var plan pb.SitePlan
 	if err := protojson.Unmarshal(raw, &plan); err != nil {
-		t.Fatalf("parse fixture: %v", err)
+		t.Fatalf("parse fixture %s: %v", name, err)
 	}
 	return &plan
 }

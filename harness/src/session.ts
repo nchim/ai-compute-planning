@@ -111,6 +111,9 @@ export class Session {
   loadPlan(protojson: string): Promise<void> {
     return this.call("loadPlan", protojson);
   }
+  loadFixture(name: string): Promise<void> {
+    return this.call("loadFixture", name);
+  }
   getPlan(): Promise<string> {
     return this.call("getPlan");
   }

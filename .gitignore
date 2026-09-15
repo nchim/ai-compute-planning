@@ -16,10 +16,16 @@ dist/
 web/public/engine.wasm
 web/public/wasm_exec.js
 
+# Staged by `make deploy` for the Cloud Build upload; deploy/Dockerfile is the source of truth
+/Dockerfile
+
 # OS / editor cruft
 .DS_Store
 *.swp
 
-# Harness run artifacts (WS10 force-adds one reviewed run)
+# Harness run artifacts (WS10 force-adds one reviewed run — never its trace.zip or .webm, which are
+# 100+ MB; those stay local: `npx playwright show-trace harness/runs/<ts>/trace.zip`)
 harness/runs/
+harness/runs/**/trace.zip
+harness/runs/**/*.webm
 harness/test-results/

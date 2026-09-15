@@ -14,11 +14,10 @@ type cashflow struct {
 }
 
 func buildCashflow(capex capexBuild, opex opexSeries, rev revenueSeries, terminal float64, months int) cashflow {
-	cf := cashflow{months: months, capex: capex.monthly(months, anyLine), revenue: rev.revenue, power: opex.power,
-		opex: make([]float64, months), terminal: make([]float64, months), net: make([]float64, months)}
+	cf := cashflow{months: months, capex: capex.monthly(months, anyLine), revenue: rev.revenue, opex: opex.opex, power: opex.power,
+		terminal: make([]float64, months), net: make([]float64, months)}
 	cf.terminal[months-1] = terminal
 	for t := 0; t < months; t++ {
-		cf.opex[t] = opex.opexAt(t)
 		cf.net[t] = cf.revenue[t] + cf.terminal[t] - cf.capex[t] - cf.opex[t] - cf.power[t]
 	}
 	return cf

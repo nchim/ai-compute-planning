@@ -2,13 +2,17 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := check
 
-# Go packages: `./engine/...` rather than `./...` because web/node_modules contains stray Go code.
-GO_PKGS    := ./engine/...
+# Go packages: explicit rather than `./...` because web/node_modules contains stray Go code.
+GO_PKGS    := ./engine/... ./deploy/...
 STATICCHECK ?= $(shell go env GOPATH)/bin/staticcheck
 WASM_OUT   := web/public/engine.wasm
 WASM_EXEC  := $(shell go env GOROOT)/lib/wasm/wasm_exec.js
 
-.PHONY: deps gen lint test check wasm web harness acceptance
+GCP_PROJECT ?= ai-compute-planner
+GCP_REGION  ?= us-central1
+SERVICE     ?= capplanner
+
+.PHONY: deps gen lint test check wasm web harness acceptance serve deploy
 
 ## deps: install JS dependencies (run once, and after lockfile changes)
 deps:
@@ -22,7 +26,7 @@ gen:
 ## lint: buf lint, gofmt, go vet (native + js/wasm), staticcheck, tsc, eslint
 lint:
 	cd proto && buf lint
-	@unformatted="$$(gofmt -l engine)"; if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
+	@unformatted="$$(gofmt -l engine deploy)"; if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
 	go vet $(GO_PKGS)
 	GOOS=js GOARCH=wasm go vet ./engine/wasm/...
 	$(STATICCHECK) $(GO_PKGS)
@@ -47,8 +51,18 @@ web:
 
 ## harness: harness typecheck + Playwright smoke against the dev server (uses engine.wasm when built, else the fake engine)
 harness:
-	cd harness && npm run typecheck && npm run smoke
+	cd harness && npm run typecheck && npm test
 
-## acceptance: the scripted acceptance session (docs/acceptance-session.md T1–T7; the CI gate). Live mode: cd harness && npm run acceptance:live
-acceptance:
-	cd harness && npm run acceptance
+## serve: run the deployed configuration locally (relay build + Go server) — needs ANTHROPIC_API_KEY and APP_PASSWORD
+serve: wasm
+	cd web && VITE_COPILOT_RELAY=/api/anthropic VITE_ENGINE=wasm npm run build
+	go run ./deploy/server
+
+## deploy: build from source on Cloud Build and roll out the Cloud Run service (see deploy/cloudrun.md).
+## Cloud Build only honours a root Dockerfile, so deploy/Dockerfile is staged there for the upload.
+deploy:
+	cp deploy/Dockerfile Dockerfile
+	trap 'rm -f Dockerfile' EXIT; \
+	gcloud run deploy $(SERVICE) --source . --region $(GCP_REGION) --project $(GCP_PROJECT) \
+		--allow-unauthenticated --min-instances 0 --max-instances 1 \
+		--set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest,APP_PASSWORD=app-password:latest

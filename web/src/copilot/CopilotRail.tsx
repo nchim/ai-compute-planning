@@ -8,9 +8,11 @@ import type { CopilotHandle, Json } from "../harness/api";
 import { safeStorage, type Message } from "./history";
 import { renderMarkdownLite } from "./markdownLite";
 import type { ToolEvent } from "./tools";
+import { RELAY_PLACEHOLDER_KEY, transport } from "./transport";
 import "./CopilotRail.css";
 
 const KEY_STORAGE = "copilot.apiKey";
+const RELAY_MODE = transport.mode === "relay";
 const tabLabels = { site: "Site Feasibility", portfolio: "Portfolio", scenario: "Scenario", demand: "Demand" };
 
 const noSubscribe = () => () => undefined;
@@ -20,7 +22,8 @@ export function CopilotRail() {
   const { state, store } = useStore();
   const engine = useEngine();
   const ctx = viewContext(state);
-  const [apiKey, setApiKey] = useState(() => safeStorage("session")?.getItem(KEY_STORAGE) ?? "");
+  // In relay mode the server holds the key, so the Copilot is always enabled and nothing is stored.
+  const [apiKey, setApiKey] = useState(() => (RELAY_MODE ? RELAY_PLACEHOLDER_KEY : (safeStorage("session")?.getItem(KEY_STORAGE) ?? "")));
   const [draft, setDraft] = useState("");
 
   // One Copilot per (store, engine, key); the effect owns its lifetime and registers it with the dev
@@ -72,7 +75,13 @@ export function CopilotRail() {
           {ctx.selectedSiteId === null ? "" : ` · ${ctx.selectedSiteId}`}
         </span>
       </div>
-      <KeyPanel apiKey={apiKey} onChange={updateKey} />
+      {RELAY_MODE ? (
+        <div className="copilot-key">
+          <div className="copilot-notice">Relay mode — key held server-side.</div>
+        </div>
+      ) : (
+        <KeyPanel apiKey={apiKey} onChange={updateKey} />
+      )}
       {snapshot.transcript.droppedTurns > 0 && (
         <div className="copilot-notice">
           The oldest {snapshot.transcript.droppedTurns} turn(s) were dropped from the saved transcript to stay under the size cap.

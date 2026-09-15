@@ -48,7 +48,8 @@ runs/2026-09-15T17-07-39-547Z/
     console-errors.json   { page: [...__harness.getConsoleErrors()], playwright: [console.error text], uncaught: [page errors] }
   02-set-depreciation/
   final.png               session.screenshot("final")
-  run.webm / run.mp4      HARNESS_VIDEO=1 only; trace.zip alongside (open with `npx playwright show-trace runs/<ts>/trace.zip`)
+  run.webm / run.mp4      HARNESS_VIDEO=1 only; trace.zip alongside (open with `npx playwright show-trace runs/<ts>/trace.zip`).
+                          A committed run keeps run.mp4 only — trace.zip (100+ MB) and the .webm are gitignored even under a force-add.
 ```
 
 Playwright's own `test-results/` holds its failure context; it is gitignored too.
@@ -80,7 +81,7 @@ try {
 }
 ```
 
-`Session` methods mirror `window.__harness` one-to-one (`loadPlan`, `getPlan`, `getResult`, `setControl`,
+`Session` methods mirror `window.__harness` one-to-one (`loadPlan`, `loadFixture(name)` for any `fixtures/*.json`, `getPlan`, `getResult`, `setControl`,
 `listControls`, `optimize`, `proposeChange`, `sendCopilot`, `getCopilotSnapshot`, `acceptCard`, `rejectCard`,
 `undo`, `redo`, `setBaseline`, `clearBaseline`, `toggleCompare`, `getBaseline`, `getViewContext`,
 `getCommandLog`, `waitIdle`, `getConsoleErrors`) plus `screenshot(name)`, `writeArtifact(name, text)`,

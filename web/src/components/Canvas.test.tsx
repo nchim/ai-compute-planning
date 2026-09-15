@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { StoreProvider, createStore } from "../bus";
 import { createFakeEngine } from "../engine";
+import { fixtureNames } from "../fixtures";
 import { Canvas } from "./Canvas";
 
 afterEach(cleanup);
@@ -26,7 +27,7 @@ describe("baseline toolbar", () => {
     expect(setBaseline.hasAttribute("disabled")).toBe(true);
     expect(compare.hasAttribute("disabled")).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Load Abilene-1 fixture" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Load fixture" }), { target: { value: "abilene-1" } });
     await store.whenIdle();
     expect(setBaseline.hasAttribute("disabled")).toBe(false);
     fireEvent.click(setBaseline);
@@ -42,6 +43,18 @@ describe("baseline toolbar", () => {
     expect(store.getState().baseline).toBeNull();
     expect(compare.hasAttribute("disabled")).toBe(true);
     expect(store.getLog().map((e) => e.command.type)).toContain("clearBaseline");
+  });
+
+  test("the fixture dropdown lists every fixtures/*.json and loads the chosen one", async () => {
+    const store = mount();
+    const select = screen.getByRole("combobox", { name: "Load fixture" });
+    const names = [...select.querySelectorAll("option")].map((o) => o.value).filter((v) => v !== "");
+    expect(names).toEqual(fixtureNames);
+    expect(names).toContain("nova-colo");
+    fireEvent.change(select, { target: { value: "epoch-100mw" } });
+    await store.whenIdle();
+    expect(store.getState().plan?.meta?.planId).toBe("epoch-100mw");
+    expect((select as HTMLSelectElement).value).toBe("");
   });
 
   test("a rejected toggle surfaces in the error banner", () => {
