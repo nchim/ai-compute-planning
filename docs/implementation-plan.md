@@ -143,8 +143,9 @@ and per-step artifact archiving under `harness/runs/<ts>/`.
 
 ### WS10 — Acceptance session  *(#10 → branch `ws10-acceptance`, PR open)*
 `harness/acceptance/abilene-1.spec.ts` runs `docs/acceptance-session.md` T1–T7 (+ T3b) over one
-`Session` in `scripted` (CI gate, `make acceptance`) and `live` (`npm run acceptance:live`, real Copilot,
-narration checks, video + trace) modes; the branch also carries the fixture, prompt and tool-schema
+`Session` in `scripted` (CI gate) and `live` (real Copilot, narration checks, video + trace) modes,
+run with the branch's `make acceptance` / `cd harness && npm run acceptance:live` (neither target
+exists on `main` yet); the branch also carries the fixture, prompt and tool-schema
 adjustments the session surfaced. See `harness/README.md` on that branch for the design.
 **DoD:** `scripted` green in CI; one `live` run archived and reviewed by the orchestrator.
 
