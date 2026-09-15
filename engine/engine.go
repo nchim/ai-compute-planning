@@ -4,6 +4,7 @@ package engine
 
 import (
 	"github.com/nchim/ai-compute-planning/engine/core"
+	"github.com/nchim/ai-compute-planning/engine/optimize"
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
 
@@ -11,4 +12,9 @@ import (
 // are composed here by WS3; until then the corresponding Result fields stay empty.
 func Analyze(plan *pb.SitePlan) *pb.Result {
 	return core.Analyze(plan)
+}
+
+// Optimize designs the phasing of a plan in phasing.mode=OPTIMIZE (see engine/optimize).
+func Optimize(plan *pb.SitePlan) *pb.Result {
+	return optimize.Optimize(plan)
 }

@@ -117,6 +117,13 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
   `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
   `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
+- 2026-09-15 (WS4) — `core.Analyze` costs ~130 µs on the fixture, so the optimizer's 400-evaluation
+  budget is ~50 ms worst case; a full T3 Optimize converges in ~40 evaluations (~8 ms). Core rejects
+  `run.mode=RUN_OPTIMIZE`, so every cloned candidate must set `RUN_ANALYZE`. Core checks *pooled* firm
+  supply and a phase's source readiness only — it does not cap load per source, and energy is dispatched
+  cheapest-first regardless of `power_source_id`; anything that must respect per-source capacity has to
+  enforce it itself. `phasing.policy.max_shortfall_mw` is applied to the hold-average shortfall
+  (instantaneous is unsatisfiable whenever demand starts before any source is ready).
 - 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
 - 2026-09-15 (WS8) — Copilot/SDK gotchas: `betaZodTool` already installs a zod `parse` the tool runner
   calls inside its try/catch, so a schema failure or a thrown `Error`/`ToolError` becomes an `is_error`
