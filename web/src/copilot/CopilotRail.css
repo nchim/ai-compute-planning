@@ -1,5 +1,20 @@
 /* Copilot-specific pieces; the rail layout itself comes from app.css (.rail/.thread/.msg/.composer). */
 .copilot-usage { font-size: 10px; color: var(--text-faint); font-weight: 400; }
+
+/* Session sharing: the toggle row under the header and the subtle "live" dot next to the title. */
+.share-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--info); box-shadow: 0 0 0 2px color-mix(in srgb, var(--info) 25%, transparent); }
+.copilot-share {
+  display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-bottom: 1px solid var(--border-soft);
+  font-size: 11.5px; color: var(--text-muted);
+}
+.copilot-share label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.copilot-share input { margin: 0; }
+.copilot-share-why .q {
+  display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%;
+  border: 1px solid var(--border); font-size: 9.5px; color: var(--text-faint); cursor: help;
+}
+/* The rail sits at the top of the viewport, so this popover opens downward (site.css's opens upward). */
+.copilot-share-why .pop { bottom: auto; top: calc(100% + 8px); }
 .copilot-key { padding: 8px 14px; border-bottom: 1px solid var(--border-soft); font-size: 11.5px; }
 .copilot-warn { color: var(--danger); font-weight: 600; margin-bottom: 4px; }
 .copilot-key-row { display: flex; gap: 6px; align-items: center; }

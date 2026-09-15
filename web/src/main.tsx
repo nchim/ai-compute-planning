@@ -5,8 +5,11 @@ import { App } from "./App";
 import "./app.css";
 import { StoreProvider, createStore } from "./bus";
 import { EngineProvider } from "./copilot";
+import { safeStorage } from "./copilot/history";
+import { transport } from "./copilot/transport";
 import { selectEngine } from "./engine";
 import { installHarness } from "./harness/install";
+import { SessionShareProvider, createSessionShare, loadSharePreference, sessionIdFor } from "./telemetry";
 
 const root = document.getElementById("root");
 if (root === null) {
@@ -21,11 +24,21 @@ const engine = selectEngine((reason) => {
 const store = createStore({ engine });
 installHarness(store);
 
+// Session sharing defaults on for the tester deployment (relay mode) and off for BYO-key dev builds;
+// the rail's toggle persists the tester's choice.
+const share = createSessionShare({
+  store,
+  enabled: loadSharePreference(safeStorage("local"), transport.mode === "relay"),
+  sessionId: sessionIdFor(safeStorage("session")),
+});
+
 createRoot(root).render(
   <StrictMode>
     <StoreProvider store={store}>
       <EngineProvider engine={engine}>
-        <App />
+        <SessionShareProvider share={share}>
+          <App />
+        </SessionShareProvider>
       </EngineProvider>
     </StoreProvider>
   </StrictMode>,
