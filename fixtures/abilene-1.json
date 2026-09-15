@@ -30,7 +30,7 @@
       {
         "id": "grid",
         "type": "GRID",
-        "capacity_mw": 220,
+        "capacity_mw": 260,
         "available_month": 30,
         "cost_per_mwh": 45,
         "capex_per_kw": 400,
