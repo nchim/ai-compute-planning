@@ -1,5 +1,6 @@
 import type { Engine } from "../engine/types";
 import { isEngineError } from "../engine/types";
+import type { Result, SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type LogEntry, type PatchOp, type State } from "./types";
 
@@ -17,6 +18,8 @@ export interface Store {
   dispatch(command: Command): void;
   /** Convenience over `proposeChange`: mints the proposal id and returns it. */
   proposeChange(summary: string, patch: readonly PatchOp[]): string;
+  /** Runs the optimizer on the current plan; the reply lands as `resultReceived` like an analyze. */
+  optimize(): void;
   getLog(): readonly LogEntry[];
   dispose(): void;
 }
@@ -56,10 +59,15 @@ export function createStore(options: StoreOptions): Store {
 
   const runAnalyze = () => {
     debounce = null;
+    runEngine((plan) => engine.analyze(plan));
+  };
+
+  /** Analyze and optimize share one request counter, so whichever reply is newest wins. */
+  const runEngine = (call: (plan: SitePlan) => Promise<Result>) => {
     const plan = state.plan;
     if (plan === null) return;
     const request = ++latestRequest;
-    engine.analyze(plan).then(
+    call(plan).then(
       (result) => {
         if (request === latestRequest && !disposed) dispatch({ type: "resultReceived", result });
       },
@@ -83,6 +91,10 @@ export function createStore(options: StoreOptions): Store {
       const id = `p${++proposalCounter}`;
       dispatch({ type: "proposeChange", id, summary, patch });
       return id;
+    },
+    optimize() {
+      if (disposed) throw new Error("store is disposed");
+      runEngine((plan) => engine.optimize(plan));
     },
     getLog: () => log,
     dispose() {

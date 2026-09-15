@@ -145,4 +145,21 @@ describe("store", () => {
     expect(engine.dispose).toHaveBeenCalledOnce();
     expect(() => store.dispatch({ type: "undo" })).toThrow("disposed");
   });
+
+  test("optimize() calls the engine's optimize and a stale analyze reply cannot overwrite it", async () => {
+    const engine = controllableEngine();
+    const store = createStore({ engine });
+    store.dispatch({ type: "loadPlan", plan: loadAbilene() });
+    vi.advanceTimersByTime(16); // analyze #1 in flight
+    store.optimize(); // optimize #2 in flight
+    expect(engine.calls).toHaveLength(2);
+    engine.calls[1]!.resolve(resultWithMw(2));
+    engine.calls[0]!.resolve(resultWithMw(1));
+    await flush();
+    expect(store.getState().result?.summary?.mwOnlineFinal).toBe(2);
+    expect(() => {
+      store.dispose();
+      store.optimize();
+    }).toThrow("disposed");
+  });
 });

@@ -15,6 +15,8 @@ export interface Selection {
   /** Dotted SitePlan path of the focused control, if any. */
   readonly path: string | null;
   readonly phaseId: string | null;
+  /** Month the schematic time scrubber is parked on (WS7); absent = show the final state. */
+  readonly month?: number;
 }
 
 export type ProposalStatus = "pending" | "accepted" | "rejected";

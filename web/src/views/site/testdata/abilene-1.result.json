@@ -1,0 +1,262 @@
+{
+  "status": "OK_WITH_WARNINGS",
+  "diagnostics": [
+    {
+      "severity": "INFO",
+      "code": "GOLDEN_FIXTURE",
+      "message": "Hand-built WS7 golden Result for Abilene-1 (phased, gas bridge). Replaced by the engine golden in WS10.",
+      "hint": "Numbers are illustrative and sit inside the benchmark ranges in docs/agent-system-prompt.md."
+    },
+    {
+      "severity": "WARNING",
+      "code": "DENSITY_NEAR_AIR_CEILING",
+      "message": "40 kW/rack is at the practical ceiling for air cooling; any density increase requires LIQUID_DTC.",
+      "proto_path": "compute.kw_per_rack",
+      "expected": "<= 40 for AIR",
+      "actual": "40",
+      "hint": "Set compute.cooling=LIQUID_DTC before raising density."
+    },
+    {
+      "severity": "INFO",
+      "code": "BTM_GAS_PREMIUM",
+      "message": "Phase 1 bridges on BTM gas at $72/MWh vs $45/MWh grid; the premium buys 12 months of earlier revenue.",
+      "proto_path": "power.sources[1].cost_per_mwh",
+      "expected": "grid parity ~45",
+      "actual": "72",
+      "hint": "Compare against the stranded/shortfall asymmetry in research/02-kpi-architecture.md."
+    }
+  ],
+  "summary": {
+    "lcoc_per_gpu_hour": 1.72,
+    "total_capex": 7400000000,
+    "capex_per_mw": 37000000,
+    "yield_on_cost_pct": 12.1,
+    "dev_spread_bps": 510,
+    "unlevered_irr_pct": 14.2,
+    "npv": 1100000000,
+    "time_to_energize_months": 18,
+    "mw_online_final": 200,
+    "demand_capture_pct": 91.4,
+    "stranded_capacity_mw_months": 640,
+    "shortfall_mw_months": 210,
+    "composite_risk_score": 38,
+    "utilization_breakeven_pct": 58,
+    "extra": { "gpu_count": 360000, "racks": 5000 }
+  },
+  "conservation": {
+    "all_passed": true,
+    "checks": [
+      { "name": "capex_components_sum_to_total", "passed": true, "residual": 0, "tolerance": 1 },
+      { "name": "land_footprint_le_parcel", "passed": true, "residual": 0, "tolerance": 0.001 },
+      { "name": "mw_phases_sum_to_target", "passed": true, "residual": 0, "tolerance": 0.001 },
+      { "name": "power_supply_ge_load_each_month", "passed": true, "residual": 0, "tolerance": 0.001 },
+      { "name": "demand_capture_identity", "passed": true, "residual": 0.0002, "tolerance": 0.001 }
+    ]
+  },
+  "tables": [
+    {
+      "id": "capex_stack",
+      "title": "Capex stack",
+      "columns": ["component", "capex_usd", "per_mw_usd", "share_pct"],
+      "rows": [
+        { "cells": [{ "s": "GPUs / IT" }, { "n": 5100000000 }, { "n": 25500000 }, { "n": 68.9 }] },
+        { "cells": [{ "s": "Electrical" }, { "n": 800000000 }, { "n": 4000000 }, { "n": 10.8 }] },
+        { "cells": [{ "s": "Shell" }, { "n": 600000000 }, { "n": 3000000 }, { "n": 8.1 }] },
+        { "cells": [{ "s": "Cooling" }, { "n": 400000000 }, { "n": 2000000 }, { "n": 5.4 }] },
+        { "cells": [{ "s": "Power (gas pad + grid tie)" }, { "n": 285000000 }, { "n": 1425000 }, { "n": 3.9 }] },
+        { "cells": [{ "s": "Network" }, { "n": 200000000 }, { "n": 1000000 }, { "n": 2.7 }] },
+        { "cells": [{ "s": "Land" }, { "n": 15000000 }, { "n": 75000 }, { "n": 0.2 }] }
+      ]
+    },
+    {
+      "id": "phase_schedule",
+      "title": "Phase schedule",
+      "columns": ["phase", "it_load_mw", "start_month", "energize_month", "power_source"],
+      "rows": [
+        { "cells": [{ "s": "p1" }, { "n": 60 }, { "n": 6 }, { "n": 18 }, { "s": "gas" }] },
+        { "cells": [{ "s": "p2" }, { "n": 100 }, { "n": 18 }, { "n": 30 }, { "s": "grid" }] },
+        { "cells": [{ "s": "p3" }, { "n": 40 }, { "n": 24 }, { "n": 36 }, { "s": "grid" }] }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "id": "demand_vs_capacity",
+      "type": "STEP",
+      "title": "Demand ramp vs. staged capacity",
+      "series": [
+        {
+          "name": "demand",
+          "points": [
+            { "x": 0, "y": 0 }, { "x": 6, "y": 40 }, { "x": 18, "y": 100 }, { "x": 30, "y": 150 },
+            { "x": 42, "y": 200 }, { "x": 84, "y": 200 }
+          ]
+        },
+        {
+          "name": "capacity",
+          "points": [
+            { "x": 0, "y": 0 }, { "x": 18, "y": 60, "label": "p1" }, { "x": 30, "y": 160, "label": "p2" },
+            { "x": 36, "y": 200, "label": "p3" }, { "x": 84, "y": 200 }
+          ]
+        }
+      ],
+      "meta": { "x": "month", "y": "MW", "dimension": "time" }
+    },
+    {
+      "id": "critical_path",
+      "type": "GANTT",
+      "title": "Critical path",
+      "series": [
+        { "name": "Interconnection queue", "points": [{ "x": 0, "y": 30, "label": "grid" }] },
+        { "name": "Transformers / switchgear", "points": [{ "x": 4, "y": 30, "label": "grid" }] },
+        { "name": "BTM gas bridge", "points": [{ "x": 4, "y": 18, "label": "gas" }] },
+        { "name": "Construction + fit-out P1", "points": [{ "x": 6, "y": 18, "label": "p1" }] },
+        { "name": "Construction P2", "points": [{ "x": 18, "y": 30, "label": "p2" }] },
+        { "name": "Construction P3", "points": [{ "x": 24, "y": 36, "label": "p3" }] }
+      ],
+      "meta": { "x": "month", "energize_month": "18", "grid_energize_month": "30", "dimension": "time" }
+    },
+    {
+      "id": "capex_stack",
+      "type": "BAR",
+      "title": "Capex stack",
+      "series": [
+        { "name": "GPUs / IT", "points": [{ "x": 0, "y": 5100000000 }] },
+        { "name": "Electrical", "points": [{ "x": 0, "y": 800000000 }] },
+        { "name": "Shell", "points": [{ "x": 0, "y": 600000000 }] },
+        { "name": "Cooling", "points": [{ "x": 0, "y": 400000000 }] },
+        { "name": "Power (gas pad + grid tie)", "points": [{ "x": 0, "y": 285000000 }] },
+        { "name": "Network", "points": [{ "x": 0, "y": 200000000 }] },
+        { "name": "Land", "points": [{ "x": 0, "y": 15000000 }] }
+      ],
+      "meta": { "y": "USD", "dimension": "capital" }
+    },
+    {
+      "id": "cashflow",
+      "type": "AREA",
+      "title": "Net cash flow by year",
+      "series": [
+        {
+          "name": "net_cashflow",
+          "points": [
+            { "x": 1, "y": -2100000000 }, { "x": 2, "y": -3200000000 }, { "x": 3, "y": -1400000000 },
+            { "x": 4, "y": 1250000000 }, { "x": 5, "y": 1620000000 }, { "x": 6, "y": 1580000000 },
+            { "x": 7, "y": 2900000000 }
+          ]
+        }
+      ],
+      "meta": { "x": "year", "y": "USD", "dimension": "capital" }
+    },
+    {
+      "id": "risk_radar",
+      "type": "RADAR",
+      "title": "Risk profile",
+      "series": [
+        {
+          "name": "risk",
+          "points": [
+            { "x": 0, "y": 55, "label": "Energization" }, { "x": 1, "y": 62, "label": "Utilization" },
+            { "x": 2, "y": 40, "label": "Obsolescence" }, { "x": 3, "y": 30, "label": "Concentration" },
+            { "x": 4, "y": 22, "label": "Credit" }, { "x": 5, "y": 34, "label": "Water" }
+          ]
+        }
+      ],
+      "meta": { "y": "score 0-100", "dimension": "risk" }
+    }
+  ],
+  "schematic": {
+    "parcel_w_m": 1100,
+    "parcel_h_m": 1000,
+    "footprint_used_pct": 41,
+    "blocks": [
+      { "id": "setback", "kind": "SETBACK", "x_m": 0, "y_m": 0, "w_m": 1100, "h_m": 60, "energize_month": 0 },
+      { "id": "substation", "kind": "SUBSTATION", "x_m": 60, "y_m": 120, "w_m": 180, "h_m": 140, "energize_month": 30 },
+      { "id": "gas-pad", "kind": "GAS_PAD", "x_m": 60, "y_m": 300, "w_m": 180, "h_m": 160, "phase_id": "p1", "energize_month": 18 },
+      { "id": "hall-1", "kind": "DATA_HALL", "x_m": 300, "y_m": 120, "w_m": 240, "h_m": 300, "phase_id": "p1", "energize_month": 18 },
+      { "id": "cool-1", "kind": "COOLING_YARD", "x_m": 300, "y_m": 440, "w_m": 240, "h_m": 90, "phase_id": "p1", "energize_month": 18 },
+      { "id": "hall-2", "kind": "DATA_HALL", "x_m": 570, "y_m": 120, "w_m": 240, "h_m": 300, "phase_id": "p2", "energize_month": 30 },
+      { "id": "cool-2", "kind": "COOLING_YARD", "x_m": 570, "y_m": 440, "w_m": 240, "h_m": 90, "phase_id": "p2", "energize_month": 30 },
+      { "id": "hall-3", "kind": "DATA_HALL", "x_m": 300, "y_m": 580, "w_m": 240, "h_m": 300, "phase_id": "p3", "energize_month": 36 },
+      { "id": "cool-3", "kind": "COOLING_YARD", "x_m": 570, "y_m": 580, "w_m": 120, "h_m": 90, "phase_id": "p3", "energize_month": 36 },
+      { "id": "water", "kind": "WATER", "x_m": 60, "y_m": 520, "w_m": 180, "h_m": 120, "energize_month": 18 },
+      { "id": "expansion", "kind": "EXPANSION_PAD", "x_m": 840, "y_m": 120, "w_m": 200, "h_m": 760, "energize_month": 0 }
+    ]
+  },
+  "monte_carlo": {
+    "iterations": 1000,
+    "metrics": {
+      "lcoc_per_gpu_hour": {
+        "p10": 1.58, "p50": 1.72, "p90": 1.94, "mean": 1.74, "stddev": 0.14,
+        "histogram": [
+          { "low": 1.40, "high": 1.48, "count": 22 }, { "low": 1.48, "high": 1.56, "count": 68 },
+          { "low": 1.56, "high": 1.64, "count": 141 }, { "low": 1.64, "high": 1.72, "count": 219 },
+          { "low": 1.72, "high": 1.80, "count": 208 }, { "low": 1.80, "high": 1.88, "count": 152 },
+          { "low": 1.88, "high": 1.96, "count": 96 }, { "low": 1.96, "high": 2.04, "count": 55 },
+          { "low": 2.04, "high": 2.12, "count": 27 }, { "low": 2.12, "high": 2.20, "count": 12 }
+        ]
+      },
+      "npv": {
+        "p10": 420000000, "p50": 1100000000, "p90": 1690000000, "mean": 1080000000, "stddev": 495000000,
+        "histogram": [
+          { "low": -200000000, "high": 100000000, "count": 31 }, { "low": 100000000, "high": 400000000, "count": 74 },
+          { "low": 400000000, "high": 700000000, "count": 138 }, { "low": 700000000, "high": 1000000000, "count": 201 },
+          { "low": 1000000000, "high": 1300000000, "count": 223 }, { "low": 1300000000, "high": 1600000000, "count": 168 },
+          { "low": 1600000000, "high": 1900000000, "count": 98 }, { "low": 1900000000, "high": 2200000000, "count": 44 },
+          { "low": 2200000000, "high": 2500000000, "count": 17 }, { "low": 2500000000, "high": 2800000000, "count": 6 }
+        ]
+      }
+    }
+  },
+  "sensitivity": {
+    "vars": [
+      { "input_path": "revenue.compute.gpu_hour_price", "target_metric": "npv", "low_output": 620000000, "high_output": 1580000000, "base_output": 1100000000 },
+      { "input_path": "revenue.compute.utilization_pct", "target_metric": "lcoc_per_gpu_hour", "low_output": 1.98, "high_output": 1.53, "base_output": 1.72 },
+      { "input_path": "costs.gpu.depreciation_years", "target_metric": "lcoc_per_gpu_hour", "low_output": 1.91, "high_output": 1.60, "base_output": 1.72 },
+      { "input_path": "power.interconnection.grid_energize_month", "target_metric": "lcoc_per_gpu_hour", "low_output": 1.66, "high_output": 1.80, "base_output": 1.72 },
+      { "input_path": "compute.pue", "target_metric": "lcoc_per_gpu_hour", "low_output": 1.68, "high_output": 1.76, "base_output": 1.72 }
+    ]
+  },
+  "optimization": {
+    "best_plan": {
+      "meta": { "plan_id": "abilene-1", "site_name": "Abilene-1", "scenario_name": "Phased, gas bridge", "schema_version": "v1" },
+      "phasing": {
+        "mode": "EXPLICIT",
+        "phases": [
+          { "id": "p1", "it_load_mw": 60, "start_month": 6, "energize_month": 18, "power_source_id": "gas", "cooling": "AIR", "footprint_acres": 36 },
+          { "id": "p2", "it_load_mw": 100, "start_month": 18, "energize_month": 30, "power_source_id": "grid", "cooling": "AIR", "footprint_acres": 60 },
+          { "id": "p3", "it_load_mw": 40, "start_month": 24, "energize_month": 36, "power_source_id": "grid", "cooling": "AIR", "footprint_acres": 24 }
+        ]
+      },
+      "power": {
+        "sources": [
+          { "id": "grid", "type": "GRID", "capacity_mw": 220, "available_month": 30, "cost_per_mwh": 45, "capex_per_kw": 400, "lead_time_months": 36 },
+          { "id": "gas", "type": "BTM_GAS", "capacity_mw": 75, "available_month": 18, "cost_per_mwh": 72, "capex_per_kw": 1100, "lead_time_months": 14 }
+        ],
+        "interconnection": { "queue_start_month": 0, "grid_energize_month": 30, "transformer_lead_months": 30 }
+      }
+    },
+    "best_metrics": {
+      "lcoc_per_gpu_hour": 1.72,
+      "total_capex": 7400000000,
+      "npv": 1100000000,
+      "time_to_energize_months": 18,
+      "demand_capture_pct": 91.4,
+      "stranded_capacity_mw_months": 640,
+      "shortfall_mw_months": 210
+    },
+    "frontier": [
+      { "decision_var_values": { "phase_count": 1, "first_energize_month": 30, "gas_mw": 0 }, "metrics": { "lcoc_per_gpu_hour": 1.64, "stranded_capacity_mw_months": 2900, "total_capex": 7100000000 }, "feasible": false },
+      { "decision_var_values": { "phase_count": 2, "first_energize_month": 30, "gas_mw": 0 }, "metrics": { "lcoc_per_gpu_hour": 1.66, "stranded_capacity_mw_months": 2100, "total_capex": 7150000000 }, "feasible": false },
+      { "decision_var_values": { "phase_count": 2, "first_energize_month": 20, "gas_mw": 100 }, "metrics": { "lcoc_per_gpu_hour": 1.78, "stranded_capacity_mw_months": 1200, "total_capex": 7550000000 }, "feasible": true },
+      { "decision_var_values": { "phase_count": 3, "first_energize_month": 18, "gas_mw": 60 }, "metrics": { "lcoc_per_gpu_hour": 1.72, "stranded_capacity_mw_months": 640, "total_capex": 7400000000 }, "feasible": true },
+      { "decision_var_values": { "phase_count": 3, "first_energize_month": 16, "gas_mw": 80 }, "metrics": { "lcoc_per_gpu_hour": 1.76, "stranded_capacity_mw_months": 520, "total_capex": 7600000000 }, "feasible": true },
+      { "decision_var_values": { "phase_count": 4, "first_energize_month": 14, "gas_mw": 100 }, "metrics": { "lcoc_per_gpu_hour": 1.84, "stranded_capacity_mw_months": 410, "total_capex": 7900000000 }, "feasible": true },
+      { "decision_var_values": { "phase_count": 4, "first_energize_month": 12, "gas_mw": 140 }, "metrics": { "lcoc_per_gpu_hour": 1.93, "stranded_capacity_mw_months": 380, "total_capex": 8300000000 }, "feasible": false },
+      { "decision_var_values": { "phase_count": 3, "first_energize_month": 24, "gas_mw": 40 }, "metrics": { "lcoc_per_gpu_hour": 1.69, "stranded_capacity_mw_months": 980, "total_capex": 7300000000 }, "feasible": true },
+      { "decision_var_values": { "phase_count": 5, "first_energize_month": 12, "gas_mw": 120 }, "metrics": { "lcoc_per_gpu_hour": 1.90, "stranded_capacity_mw_months": 300, "total_capex": 8150000000 }, "feasible": false }
+    ],
+    "decision_var_values": { "phase_count": 3, "first_energize_month": 18, "gas_mw": 60 },
+    "evaluations": 214,
+    "converged": true
+  }
+}
