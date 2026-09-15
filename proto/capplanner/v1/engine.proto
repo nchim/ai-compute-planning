@@ -6,6 +6,8 @@
 syntax = "proto3";
 package capplanner.v1;
 
+option go_package = "github.com/nchim/ai-compute-planning/engine/pb;pb";
+
 // ============================================================================
 // INPUT: SitePlan
 // ============================================================================
@@ -225,7 +227,9 @@ message RunOptions {
   MonteCarloOptions monte_carlo = 2;
   SensitivityOptions sensitivity = 3;
 }
-enum RunMode { RUN_UNSPECIFIED = 0; ANALYZE = 1; OPTIMIZE = 2; }
+// Values are RUN_-prefixed because proto enum values share the package scope and PhasingMode already
+// defines OPTIMIZE.
+enum RunMode { RUN_UNSPECIFIED = 0; RUN_ANALYZE = 1; RUN_OPTIMIZE = 2; }
 message MonteCarloOptions { bool enabled = 1; int32 iterations = 2; int64 seed = 3; }
 message SensitivityOptions { bool enabled = 1; repeated string input_paths = 2; double delta_pct = 3; }
 

@@ -1,0 +1,11 @@
+# Run from proto/ (or via `make gen` at the repo root). Remote plugins: no local protoc plugins needed.
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: ../engine/pb
+    # module= strips the go_package prefix so engine.pb.go lands directly in engine/pb.
+    opt: module=github.com/nchim/ai-compute-planning/engine/pb
+  - remote: buf.build/bufbuild/es:v2.15.0
+    out: ../web/src/gen
+    opt: target=ts
