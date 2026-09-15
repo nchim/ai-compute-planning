@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"log"
 	"net/http"
@@ -39,6 +40,8 @@ type fixture struct {
 	calls    chan upstreamCall
 	upstream *httptest.Server
 	clock    *time.Time
+	// sessionLog receives the session sink's JSON lines (stdout in production).
+	sessionLog *bytes.Buffer
 }
 
 // newFixture builds the full handler over an httptest upstream that records each call and answers
@@ -60,6 +63,7 @@ func newFixture(t *testing.T, limit int, reply http.HandlerFunc) *fixture {
 		t.Fatal(err)
 	}
 	clock := time.Date(2026, 9, 15, 23, 59, 30, 0, time.UTC)
+	sessionLog := &bytes.Buffer{}
 	h, err := newHandler(Config{
 		Dist:            dist,
 		Upstream:        u,
@@ -69,11 +73,12 @@ func newFixture(t *testing.T, limit int, reply http.HandlerFunc) *fixture {
 		DailyRequestCap: limit,
 		Now:             func() time.Time { return clock },
 		Logger:          log.New(io.Discard, "", 0),
+		SessionLogger:   newSessionLogger(sessionLog),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{handler: h, calls: calls, upstream: upstream, clock: &clock}
+	return &fixture{handler: h, calls: calls, upstream: upstream, clock: &clock, sessionLog: sessionLog}
 }
 
 func jsonReply(w http.ResponseWriter, _ *http.Request) {

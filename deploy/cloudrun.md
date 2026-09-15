@@ -18,6 +18,11 @@ shared password. Project `ai-compute-planner`, region `us-central1`, service `ca
   it is meaningful because the service runs with `--min-instances 0 --max-instances 1`. Over the cap
   the relay answers 429 in the Anthropic error envelope, which the Copilot shows verbatim.
 - Logs one line per request (method, path, status, duration); never headers or bodies.
+- **`POST /api/session`** (same Basic Auth, *not* counted against the daily cap) accepts one shared
+  session event per request (JSON ≤ 256 KB, else 413; malformed → 400) and writes it as one bare JSON
+  line on stdout — `{"session_event":true,"received_at":…,"session_id","plan_id","kind","seq","payload"}`
+  — which Cloud Logging parses into `jsonPayload`. Any `sk-ant-…` token in the payload is masked before
+  logging. See "Observing tester sessions" below.
 - `PORT` from the environment; graceful drain on SIGTERM (Cloud Run gives 10 s by default).
 
 The SPA is built with `VITE_COPILOT_RELAY=/api/anthropic VITE_ENGINE=wasm`, so the Copilot talks to
@@ -74,6 +79,36 @@ curl -sS https://<url>/healthz          # no auth needed
 curl -sS -u tester:<password> https://<url>/ | head -c 200
 ```
 
+## Observing tester sessions
+The Copilot transcript lives only in the tester's browser, so the SPA has an opt-in **"Share session
+with developer"** toggle in the Copilot rail (`web/src/telemetry/`). It is **on by default in the relay
+build** (this deployment) and off in BYO-key dev builds; the choice persists in `localStorage`
+(`share.session`) and a dot next to the rail title shows while it is on. When on, the browser posts to
+`/api/session`, one event per request, tagged with a random per-page-load `session_id`
+(sessionStorage) and the current `plan_id`:
+
+| `kind`         | when                                   | `payload`                                                                   |
+|----------------|----------------------------------------|-----------------------------------------------------------------------------|
+| `commands`     | new command-log entries, batched ~1 s  | `{entries:[{seq, ts, command, rejected}]}` (a `resultReceived` carries only its status) |
+| `result`       | newest Result in each batch            | `{status, summary, diagnostics}` (proto field names)                        |
+| `copilot_turn` | each turn's `turnEnd` or `error`       | `{user, assistant, tools:[{name, input≤300 chars, isError}], usage, error, notice}` |
+| `error`        | `errorRaised` commands; uncaught page errors / rejections | `{source: "app"|"page", kind, message}`                  |
+
+Not sent: the API key or anything from the key panel; the client also scrubs `sk-ant-…` from every
+body and the server masks it again. A failed post is reported once with `console.warn` and otherwise
+ignored, so sharing can never break the app.
+
+Read them back with the transcript printer (standard-library Python; groups by session, sorts by `seq`):
+```sh
+make sessions                      # last 4 hours
+make sessions HOURS=24
+deploy/sessions.py --hours 24 --session 3f2a9c1e     # one session
+gcloud logging read 'jsonPayload.session_event=true' --project ai-compute-planner --freshness 4h --format json \
+  | deploy/sessions.py --stdin                       # or feed it yourself
+```
+Locally (`make serve`) the same lines go to the server's stdout: `make serve | tee events.jsonl`, then
+`deploy/sessions.py --stdin < events.jsonl`. Cloud Logging keeps the default bucket 30 days.
+
 ## Run the same thing locally
 ```sh
 ANTHROPIC_API_KEY=sk-ant-... APP_PASSWORD=dev make serve   # http://localhost:8080, user tester
@@ -87,4 +122,6 @@ or build the image: `docker build -f deploy/Dockerfile -t capplanner .` then
   client-side and would be dropped by the relay anyway.
 - Basic Auth is a shared secret over TLS (Cloud Run terminates HTTPS). It is fine for a tester preview,
   not for per-user accountability — see issue #11 for the per-user auth follow-up.
-- Transcripts stay in each tester's `localStorage`; nothing is stored server-side.
+- Transcripts stay in each tester's `localStorage`; the server stores nothing itself. With session
+  sharing on (the relay default, one click to turn off), summaries of turns, commands, results and
+  errors go to Cloud Logging as described above — tell testers this when you hand out the password.

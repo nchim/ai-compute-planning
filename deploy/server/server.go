@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -29,6 +30,9 @@ type Config struct {
 	Now func() time.Time
 	// Logger receives one line per request; nil means log.Default.
 	Logger *log.Logger
+	// SessionLogger receives one bare JSON line per shared session event (see session.go); nil
+	// means stdout with no prefix, which is what Cloud Logging parses into jsonPayload.
+	SessionLogger *log.Logger
 }
 
 const (
@@ -38,7 +42,7 @@ const (
 	relayTimeout = 10 * time.Minute
 )
 
-// newHandler wires: request log → (healthz | basic auth → (relay | static SPA)).
+// newHandler wires: request log → (healthz | basic auth → (relay | session sink | static SPA)).
 func newHandler(cfg Config) (http.Handler, error) {
 	if cfg.Username == "" || cfg.Password == "" {
 		return nil, fmt.Errorf("basic auth credentials must be non-empty")
@@ -61,11 +65,17 @@ func newHandler(cfg Config) (http.Handler, error) {
 		logger = log.Default()
 	}
 
+	sessionLogger := cfg.SessionLogger
+	if sessionLogger == nil {
+		sessionLogger = newSessionLogger(os.Stdout)
+	}
+
 	quota := newDailyCap(cfg.DailyRequestCap, now)
 	relay := messagesOnly(quota.guard(newRelay(cfg.Upstream, cfg.AnthropicKey)))
 
 	authed := http.NewServeMux()
 	authed.Handle(relayPrefix+"/", http.StripPrefix(relayPrefix, relay))
+	authed.Handle(sessionPath, newSessionSink(sessionLogger, now)) // outside the daily cap: no upstream spend
 	authed.Handle("/", newSPA(cfg.Dist))
 
 	mux := http.NewServeMux()

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type FormEvent, type KeyboardEvent } from "react";
 
 import { useStore, viewContext, type Proposal } from "../bus";
+import { saveSharePreference, useSessionShare } from "../telemetry";
 import { createCopilot, emptySnapshot, type Activity, type Copilot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
@@ -33,17 +34,27 @@ export function CopilotRail() {
     [store, engine, apiKey],
   );
   const registerSend = useRegisterCopilotSend();
+  const share = useSessionShare();
   useEffect(() => {
     const register = (fn: ((text: string) => Promise<void>) | null) => {
       registerSend(fn); // in-app readers ("Explain" links)
       window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
     };
     register(copilot === null ? null : copilot.send);
+    const detachShare = copilot === null ? null : share?.attachCopilot(copilot); // session sharing sees each turn
     return () => {
+      detachShare?.();
       register(null);
       copilot?.dispose();
     };
-  }, [copilot, registerSend]);
+  }, [copilot, registerSend, share]);
+
+  const [sharing, setSharing] = useState(() => share?.isEnabled() ?? false);
+  const updateSharing = (on: boolean) => {
+    share?.setEnabled(on);
+    saveSharePreference(safeStorage("local"), on);
+    setSharing(on);
+  };
 
   const snapshot = useSyncExternalStore(copilot?.subscribe ?? noSubscribe, copilot?.getSnapshot ?? emptyGetter);
 
@@ -74,6 +85,7 @@ export function CopilotRail() {
     <aside className="rail" aria-label="Copilot">
       <div className="rail-hd">
         Copilot
+        {share !== null && sharing && <span className="share-dot" role="img" aria-label="Sharing this session with the developer" />}
         {import.meta.env.DEV && snapshot.lastUsage !== null && (
           <span className="copilot-usage" title="Last turn's token usage (dev only)">
             cache read {snapshot.lastUsage.cache_read_input_tokens ?? 0} · in {snapshot.lastUsage.input_tokens} · out{" "}
@@ -85,6 +97,7 @@ export function CopilotRail() {
           {ctx.selectedSiteId === null ? "" : ` · ${ctx.selectedSiteId}`}
         </span>
       </div>
+      {share !== null && <ShareToggle on={sharing} onChange={updateSharing} />}
       {RELAY_MODE ? (
         <div className="copilot-key">
           <div className="copilot-notice">Relay mode — key held server-side.</div>
@@ -184,6 +197,27 @@ function ActivityIndicator(props: { activity: Activity }) {
       </span>
       {label}
       {seconds >= 3 && <span className="copilot-elapsed"> · {seconds}s</span>}
+    </div>
+  );
+}
+
+/** Opt-in session sharing (see telemetry/share.ts); the explainer says exactly what leaves the browser. */
+function ShareToggle(props: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="copilot-share">
+      <label>
+        <input type="checkbox" checked={props.on} onChange={(e) => props.onChange(e.target.checked)} />
+        Share session with developer
+      </label>
+      <span className="explainer copilot-share-why" tabIndex={0}>
+        <span className="q" aria-hidden="true">
+          ?
+        </span>
+        <span role="tooltip" className="pop">
+          Sends what you do here — plan edits, Copilot questions and answers, result summaries and any errors — to this
+          deployment's server log so the developer can see what worked and what broke. Never your API key.
+        </span>
+      </span>
     </div>
   );
 }
