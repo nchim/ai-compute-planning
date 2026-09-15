@@ -97,3 +97,7 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
+- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
+  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
+  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
+  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
