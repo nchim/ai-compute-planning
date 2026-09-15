@@ -55,7 +55,7 @@ func TestAnalyzeComposesRisk(t *testing.T) {
 	if res.GetMonteCarlo().GetIterations() != 100 || len(res.GetMonteCarlo().GetMetrics()) == 0 {
 		t.Fatalf("monte_carlo not filled: %v", res.GetMonteCarlo())
 	}
-	if len(res.GetSensitivity().GetVars()) != 2 {
+	if len(res.GetSensitivity().GetVars()) != 4 { // 2 paths × {lcoc, npv}
 		t.Fatalf("sensitivity not filled: %v", res.GetSensitivity())
 	}
 	if res.GetSummary() == nil || !res.GetConservation().GetAllPassed() {

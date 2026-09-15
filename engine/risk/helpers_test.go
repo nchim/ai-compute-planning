@@ -43,7 +43,7 @@ func riskFixture(t testing.TB, iterations int32) *pb.SitePlan {
 	plan.Run.MonteCarlo = &pb.MonteCarloOptions{Enabled: true, Iterations: iterations, Seed: 42}
 	plan.Run.Sensitivity = &pb.SensitivityOptions{Enabled: true, InputPaths: []string{
 		"revenue.compute.gpu_hour_price", "revenue.compute.utilization_pct",
-		"power.sources[0].available_month", "costs.gpu.unit_cost", "finance.discount_rate",
+		"power.interconnection.grid_energize_month", "costs.gpu.depreciation_years", "costs.gpu.unit_cost",
 	}}
 	return plan
 }

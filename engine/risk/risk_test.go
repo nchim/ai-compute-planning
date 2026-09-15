@@ -176,38 +176,61 @@ func TestMonteCarloAllInvalid(t *testing.T) {
 
 func TestSensitivityFixture(t *testing.T) {
 	plan := riskFixture(t, 10)
-	s, ds := Sensitivity(plan, core.Analyze(plan).GetSummary())
+	base := core.Analyze(plan).GetSummary()
+	s, ds := Sensitivity(plan, base)
 	if len(ds) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", ds)
 	}
+	paths := plan.GetRun().GetSensitivity().GetInputPaths()
 	vars := s.GetVars()
-	if len(vars) != len(plan.GetRun().GetSensitivity().GetInputPaths()) {
-		t.Fatalf("%d vars, want %d", len(vars), len(plan.GetRun().GetSensitivity().GetInputPaths()))
+	if len(vars) != len(paths)*len(targetMetrics) {
+		t.Fatalf("%d vars, want %d", len(vars), len(paths)*len(targetMetrics))
 	}
-	base := vars[0].GetBaseOutput()
+	// One block per target in targetMetrics order, each ordered by |high−low| descending.
+	for ti, target := range targetMetrics {
+		block := vars[ti*len(paths) : (ti+1)*len(paths)]
+		for i, v := range block {
+			if v.GetTargetMetric() != target || v.GetBaseOutput() != metricValue(base, target) {
+				t.Errorf("%s var %d: target %q base %g", target, i, v.GetTargetMetric(), v.GetBaseOutput())
+			}
+			if i > 0 && swing(block[i-1]) < swing(v) {
+				t.Errorf("%s vars not ordered by |high−low|: %v before %v", target, block[i-1], v)
+			}
+		}
+	}
+	lcoc, npv := vars[:len(paths)], vars[len(paths):]
+	// LCOC is a cost metric: utilization (denominator) and GPU unit cost (numerator) lead; the
+	// price only reaches LCOC through the EGR-linked management fee and lands last.
+	if top := rank(lcoc); !top["costs.gpu.unit_cost"] || !top["revenue.compute.utilization_pct"] {
+		t.Errorf("LCOC tornado top-2 = %v, want unit_cost and utilization", top)
+	}
+	if pos := position(lcoc, "revenue.compute.gpu_hour_price"); pos < 3 {
+		t.Errorf("gpu_hour_price ranks %d on the LCOC tornado, want outside the top-3: %v", pos, lcoc)
+	}
+	// NPV is the value view: price is a top-3 lever there.
+	if pos := position(npv, "revenue.compute.gpu_hour_price"); pos < 0 || pos > 2 {
+		t.Errorf("gpu_hour_price ranks %d on the NPV tornado, want top-3: %v", pos, npv)
+	}
+	// Utilization moves both monotonically: more hours delivered → lower LCOC, higher NPV.
+	if v := npv[position(npv, "revenue.compute.utilization_pct")]; !(v.GetLowOutput() < v.GetBaseOutput() && v.GetBaseOutput() < v.GetHighOutput()) {
+		t.Errorf("utilization on NPV: low %g base %g high %g", v.GetLowOutput(), v.GetBaseOutput(), v.GetHighOutput())
+	}
+	if v := lcoc[position(lcoc, "revenue.compute.utilization_pct")]; !(v.GetLowOutput() > v.GetBaseOutput() && v.GetBaseOutput() > v.GetHighOutput()) {
+		t.Errorf("utilization on LCOC: low %g base %g high %g", v.GetLowOutput(), v.GetBaseOutput(), v.GetHighOutput())
+	}
+}
+
+func rank(vars []*pb.SensitivityVar) map[string]bool {
+	return map[string]bool{vars[0].GetInputPath(): true, vars[1].GetInputPath(): true}
+}
+
+func position(vars []*pb.SensitivityVar, path string) int {
 	for i, v := range vars {
-		if v.GetTargetMetric() != targetMetric || v.GetBaseOutput() != base {
-			t.Errorf("var %d: target %q base %g", i, v.GetTargetMetric(), v.GetBaseOutput())
-		}
-		if i > 0 && swing(vars[i-1]) < swing(v) {
-			t.Errorf("vars not ordered by |high−low|: %v before %v", vars[i-1], v)
+		if v.GetInputPath() == path {
+			return i
 		}
 	}
-	// LCOC is a cost metric: utilization (denominator) and GPU unit cost (numerator) dominate, while
-	// gpu_hour_price only reaches LCOC through the EGR-linked management fee and lands last.
-	top := map[string]bool{vars[0].GetInputPath(): true, vars[1].GetInputPath(): true}
-	if !top["costs.gpu.unit_cost"] || !top["revenue.compute.utilization_pct"] {
-		t.Errorf("tornado top-2 = %v, want unit_cost and utilization", top)
-	}
-	if last := vars[len(vars)-1].GetInputPath(); last != "revenue.compute.gpu_hour_price" {
-		t.Errorf("tornado last = %s, want gpu_hour_price", last)
-	}
-	// Utilization moves LCOC monotonically: more hours delivered → lower cost per hour.
-	for _, v := range vars {
-		if v.GetInputPath() == "revenue.compute.utilization_pct" && !(v.GetLowOutput() > base && base > v.GetHighOutput()) {
-			t.Errorf("utilization: low %g base %g high %g", v.GetLowOutput(), base, v.GetHighOutput())
-		}
-	}
+	return -1
 }
 
 func TestSensitivitySkipsInvalidVar(t *testing.T) {
@@ -220,9 +243,34 @@ func TestSensitivitySkipsInvalidVar(t *testing.T) {
 	if d.GetProtoPath() != "run.sensitivity.input_paths[0]" {
 		t.Fatalf("proto_path = %q", d.GetProtoPath())
 	}
-	if len(s.GetVars()) != 1 || s.GetVars()[0].GetInputPath() != "costs.gpu.unit_cost" {
+	if len(s.GetVars()) != len(targetMetrics) || s.GetVars()[0].GetInputPath() != "costs.gpu.unit_cost" {
 		t.Fatalf("vars = %v", s.GetVars())
 	}
+}
+
+// An override that fails after Validate is an internal inconsistency; it must surface in the
+// diagnostic, never as a silent no-op. Simulated by declaring a path the plan does not have.
+func TestOverrideFailureSurfaces(t *testing.T) {
+	plan := riskFixture(t, 5)
+	plan.Risk.Distributions[0].InputPath = "power.sources[7].capacity_mw"
+	_, ds := MonteCarlo(plan)
+	d := findDiag(ds, codeInvalidDraws)
+	requireComplete(t, d)
+	if d.GetActual() != "5; override failed: "+mustPathErr(plan, "power.sources[7].capacity_mw") {
+		t.Fatalf("actual = %q", d.GetActual())
+	}
+	plan.Run.Sensitivity.InputPaths = []string{"power.sources[7].capacity_mw"}
+	s, ds := Sensitivity(plan, core.Analyze(plan).GetSummary())
+	d = findDiag(ds, codeSensitivityInvalid)
+	requireComplete(t, d)
+	if len(s.GetVars()) != 0 || !bytes.Contains([]byte(d.GetActual()), []byte("out of range")) {
+		t.Fatalf("vars %v, actual %q", s.GetVars(), d.GetActual())
+	}
+}
+
+func mustPathErr(plan *pb.SitePlan, path string) string {
+	_, err := GetNumeric(plan, path)
+	return err.Error()
 }
 
 func BenchmarkMonteCarlo1k(b *testing.B) {

@@ -1,6 +1,8 @@
 package risk
 
 import (
+	"math/rand/v2"
+
 	"github.com/nchim/ai-compute-planning/engine/core"
 	"github.com/nchim/ai-compute-planning/engine/pb"
 )
@@ -49,11 +51,15 @@ func MonteCarlo(plan *pb.SitePlan) (*pb.MonteCarloResult, []*pb.Diagnostic) {
 	rng := newRNG(opts.GetSeed())
 	samples := make(map[string][]float64, len(metricKeys))
 	var invalid int32
+	var overrideErr error // first override failure; Validate makes this unreachable, so it is an internal inconsistency
 	for i := int32(0); i < opts.GetIterations(); i++ {
-		trial := clone(plan)
-		for _, dr := range draws {
-			// Validate resolved every path on this plan; a clone cannot fail differently.
-			_ = SetNumeric(trial, dr.path, clampToDomain(dr.path, dr.sampler.draw(rng)))
+		trial, err := drawPlan(plan, draws, rng)
+		if err != nil {
+			invalid++
+			if overrideErr == nil {
+				overrideErr = err
+			}
+			continue
 		}
 		res := core.Analyze(trial)
 		if res.GetStatus() == pb.Status_INVALID_INPUT {
@@ -65,9 +71,13 @@ func MonteCarlo(plan *pb.SitePlan) (*pb.MonteCarloResult, []*pb.Diagnostic) {
 		}
 	}
 	if invalid > 0 {
-		d.warnf(codeInvalidDraws, "risk.distributions", "every draw within the core's valid domain", itoa(invalid),
+		actual := itoa(invalid)
+		if overrideErr != nil {
+			actual += "; override failed: " + overrideErr.Error()
+		}
+		d.warnf(codeInvalidDraws, "risk.distributions", "every draw within the core's valid domain", actual,
 			"tighten the distributions (e.g. a positive lower bound on prices) so draws stay valid",
-			"%d of %d Monte Carlo iterations were rejected by validation and excluded from the statistics", invalid, opts.GetIterations())
+			"%d of %d Monte Carlo iterations were rejected and excluded from the statistics", invalid, opts.GetIterations())
 	}
 	out := &pb.MonteCarloResult{Iterations: opts.GetIterations(), Metrics: map[string]*pb.Distribution{}}
 	for _, key := range metricKeys {
@@ -76,4 +86,17 @@ func MonteCarlo(plan *pb.SitePlan) (*pb.MonteCarloResult, []*pb.Diagnostic) {
 		}
 	}
 	return out, d
+}
+
+// drawPlan clones plan and writes one fresh sample of every distribution into it. An override
+// failure is returned rather than dropped: Validate makes it unreachable, so it would mean an
+// internal inconsistency that must surface as a diagnostic.
+func drawPlan(plan *pb.SitePlan, draws []draw, rng *rand.Rand) (*pb.SitePlan, error) {
+	trial := clone(plan)
+	for _, dr := range draws {
+		if err := SetNumeric(trial, dr.path, clampToDomain(dr.path, dr.sampler.draw(rng))); err != nil {
+			return nil, err
+		}
+	}
+	return trial, nil
 }
