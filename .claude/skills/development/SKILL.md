@@ -112,3 +112,8 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   it (main blocks in `select{}`). Node ≥ 22 runs `wasm_exec.js` + `WebAssembly.instantiate` directly —
   no jsdom needed for the integration test. `js.CopyBytesToGo` panics on non-Uint8Array args: check
   `InstanceOf` first. Add build outputs in `web/public` to ESLint ignores.
+- 2026-09-15 (WS6) — `toJson()` from @bufbuild/protobuf emits lowerCamel keys by default; pass
+  `{ useProtoFieldName: true }` wherever the JSON must line up with dotted bus paths or diagnostics'
+  `proto_path` (snake_case). Validate bus paths against `SitePlanSchema.fields` (`fieldKind` +
+  `listKind`, match `name` or `jsonName`); int64 fields are `bigint` in generated types. Under
+  `vi.useFakeTimers()` never flush with `setTimeout` — drain microtasks with `await Promise.resolve()`.
