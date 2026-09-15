@@ -33,6 +33,11 @@ func TestValidateDiagnosticsPerCode(t *testing.T) {
 		{"run optimize", func(p *pb.SitePlan) { p.Run.Mode = pb.RunMode_RUN_OPTIMIZE }, codeUseOptimize, "run.mode"},
 		{"phasing unspecified", func(p *pb.SitePlan) { p.Phasing.Mode = pb.PhasingMode_PHASING_UNSPECIFIED }, codeMissingRequired, "phasing.mode"},
 		{"explicit without phases", func(p *pb.SitePlan) { p.Phasing.Mode = pb.PhasingMode_EXPLICIT }, codeMissingRequired, "phasing.phases"},
+		{"phase cooling override too weak", func(p *pb.SitePlan) {
+			*p = *explicitTwoPhase(p)
+			p.Compute.KwPerRack, p.Compute.Cooling, p.Site.FloorLoadPsf = 100, pb.CoolingMode_LIQUID_DTC, 300
+			p.Phasing.Phases[0].Cooling = pb.CoolingMode_AIR
+		}, codeDensityExceedsCooling, "phasing.phases[0].cooling"},
 		{"unknown power source", func(p *pb.SitePlan) {
 			*p = *explicitTwoPhase(p)
 			p.Phasing.Phases[0].PowerSourceId = "nope"

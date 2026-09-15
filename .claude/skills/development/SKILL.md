@@ -98,10 +98,6 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
-- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
-  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
-  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
-  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
 - 2026-09-15 (WS1) — Proto enum values share the *package* scope: two enums in one file cannot both
   define `OPTIMIZE`. `RunMode` values are therefore `RUN_ANALYZE`/`RUN_OPTIMIZE`. `buf lint` passes
   with `ENUM_VALUE_PREFIX`/`ENUM_ZERO_VALUE_SUFFIX` excepted; do not rename enum values to "fix" lint.
@@ -129,3 +125,21 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   enforce it itself. `phasing.policy.max_shortfall_mw` is applied to the hold-average shortfall
   (instantaneous is unsatisfiable whenever demand starts before any source is ready).
 - 2026-09-15 (WS9) — Vite dev rewrites non-static dynamic imports to `?import` and then refuses files from `public/`; import a public asset via an absolute `new URL(path, self.location.origin).href` instead (engine.worker.ts). The harness caught this — `make harness` is the quickest end-to-end check of dev-server + worker + wasm. Harness runs archive per-step plan/result/command-log/console-errors under `harness/runs/<ts>/`; read those before guessing.
+- 2026-09-15 (WS8) — Copilot/SDK gotchas: `betaZodTool` already installs a zod `parse` the tool runner
+  calls inside its try/catch, so a schema failure or a thrown `Error`/`ToolError` becomes an `is_error`
+  tool_result for free — throw `ToolError(message)` to control the exact content. `strict`/
+  `eager_input_streaming` are not `betaZodTool` options: spread them onto the returned tool. The most
+  faithful API mock is the real `Anthropic` client with an injected `fetch` that answers scripted SSE
+  (`web/src/copilot/testApi.ts`) — it exercises the SDK's stream parser, runner and validation and lets
+  tests assert on the actual request bodies (cache_control, tool schemas, message order). Under the
+  jsdom environment `import.meta.url` is `http:`, so fs-based fixture loaders (`loadAbilene`) fail —
+  import the fixture with `?raw` there. Files outside `web/` (docs, research) import fine at build time
+  but need `server.fs.allow` for the dev server.
+- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
+  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
+  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
+  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
+- 2026-09-15 (WS2) — **FMA gotcha:** Go fuses `a*b+c` on arm64 but not amd64, so doubles differ in the
+  last bits between a Mac and CI. Never compare golden Results with `proto.Equal`; use
+  `requireProtoClose` (engine/core/helpers_test.go — protoreflect walk, 1e-9 relative on floats, exact
+  otherwise, reports the first differing field path). Same for any WS3/WS4 golden.
