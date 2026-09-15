@@ -1,4 +1,4 @@
-import { fromJsonString, toJson } from "@bufbuild/protobuf";
+import { fromJsonString, toJson as protoToJson, type DescMessage, type MessageShape } from "@bufbuild/protobuf";
 
 import abileneJson from "../../../fixtures/abilene-1.json?raw";
 import { useStore, viewContext, type FieldValue, type Proposal } from "../bus";
@@ -12,6 +12,11 @@ import {
   type Diagnostic,
 } from "../gen/capplanner/v1/engine_pb";
 import { JsonTree } from "./JsonTree";
+
+// Proto field names (snake_case) everywhere on the canvas so keys match diagnostics' proto_path and bus paths.
+function json<D extends DescMessage>(schema: D, msg: MessageShape<D>) {
+  return protoToJson(schema, msg, { useProtoFieldName: true });
+}
 
 const dimensions = [
   ["Space", "var(--d-space)"],
@@ -73,7 +78,7 @@ export function Canvas() {
       {plan !== null && (
         <div className="grid">
           <Controls store={store} plan={plan} />
-          <Summary summary={ctx.resultSummary === null ? null : toJson(SummaryMetricsSchema, ctx.resultSummary)} />
+          <Summary summary={ctx.resultSummary === null ? null : json(SummaryMetricsSchema, ctx.resultSummary)} />
         </div>
       )}
 
@@ -103,11 +108,11 @@ export function Canvas() {
           <div className="empty">No result yet.</div>
         ) : (
           <>
-            <JsonTree label="summary" value={state.result.summary ? toJson(SummaryMetricsSchema, state.result.summary) : null} />
-            <JsonTree label="diagnostics" value={state.result.diagnostics.map((d) => toJson(DiagnosticSchema, d))} open={false} />
+            <JsonTree label="summary" value={state.result.summary ? json(SummaryMetricsSchema, state.result.summary) : null} />
+            <JsonTree label="diagnostics" value={state.result.diagnostics.map((d) => json(DiagnosticSchema, d))} open={false} />
             <JsonTree
               label="conservation"
-              value={state.result.conservation ? toJson(ConservationReportSchema, state.result.conservation) : null}
+              value={state.result.conservation ? json(ConservationReportSchema, state.result.conservation) : null}
               open={false}
             />
           </>
@@ -129,9 +134,9 @@ const controls: readonly { path: string; label: string; min: number; max: number
 
 function Controls(props: { store: Store; plan: NonNullable<ReturnType<typeof useStore>["state"]["plan"]> }) {
   const { store, plan } = props;
-  const json = toJson(SitePlanSchema, plan) as Record<string, unknown>;
+  const planJson = json(SitePlanSchema, plan) as Record<string, unknown>;
   const read = (path: string): number => {
-    const v = path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], json);
+    const v = path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], planJson);
     return typeof v === "number" ? v : 0;
   };
   const set = (path: string, value: FieldValue) => store.dispatch({ type: "setField", path, value });
@@ -163,7 +168,7 @@ function Controls(props: { store: Store; plan: NonNullable<ReturnType<typeof use
   );
 }
 
-function Summary(props: { summary: ReturnType<typeof toJson> | null }) {
+function Summary(props: { summary: ReturnType<typeof protoToJson> | null }) {
   const entries = props.summary !== null && typeof props.summary === "object" ? Object.entries(props.summary) : [];
   return (
     <section className="panel">
