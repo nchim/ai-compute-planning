@@ -105,3 +105,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   entry for buf.build is being sent; run `NETRC=/dev/null make gen`. Remote plugins need no login.
 - 2026-09-15 (WS1) — `@bufbuild/protobuf` v2 API: `fromJsonString(SitePlanSchema, s)`, `toBinary`,
   `fromBinary`, `equals(Schema, a, b)`; messages are plain objects, schemas are `*Schema` exports.
+- 2026-09-15 (WS5) — WASM gotchas: keep `syscall/js` code to a thin adapter; put the logic in a plain
+  package so it runs under `-race` (js/wasm can't). Vite module workers have no `importScripts`, so load
+  Go's `wasm_exec.js` with a dynamic `import()` of a *variable* URL (a literal path makes `tsc` try to
+  resolve it). `go.run(instance)` registers the exports synchronously before it awaits, so don't await
+  it (main blocks in `select{}`). Node ≥ 22 runs `wasm_exec.js` + `WebAssembly.instantiate` directly —
+  no jsdom needed for the integration test. `js.CopyBytesToGo` panics on non-Uint8Array args: check
+  `InstanceOf` first. Add build outputs in `web/public` to ESLint ignores.
