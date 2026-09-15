@@ -73,7 +73,7 @@ describe("harness api", () => {
     expect(byPath.get("costs.gpu.depreciation_years")).toEqual({ path: "costs.gpu.depreciation_years", type: "int32", value: 5 });
     expect(byPath.get("compute.cooling")).toMatchObject({ type: "CoolingMode", value: "AIR" });
     expect(byPath.get("compute.cooling")?.options).toContain("LIQUID_DTC");
-    expect(byPath.get("power.sources[0].capacity_mw")?.value).toBe(220);
+    expect(byPath.get("power.sources[0].capacity_mw")?.value).toBe(260);
     expect(byPath.get("costs.gpu.residual_curve[2]")?.value).toBe(0.5);
     expect(byPath.get("run.monte_carlo.seed")?.value).toBe(42);
     expect(byPath.get("run.sensitivity.delta_pct")).toBeDefined(); // unset sub-message: still settable
