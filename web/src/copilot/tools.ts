@@ -293,12 +293,34 @@ function optimizePatch(input: OptimizeInput): PatchOp[] {
 
 export function analysisJson(result: Result): Record<string, unknown> {
   const failed = result.conservation?.checks.filter((c) => !c.passed).map((c) => c.name) ?? [];
-  return {
+  const out: Record<string, unknown> = {
     status: Status[result.status],
     summary: result.summary === undefined ? null : toJson(SummaryMetricsSchema, result.summary, PROTOJSON),
     diagnostics: result.diagnostics.map((d) => toJson(DiagnosticSchema, d, PROTOJSON)),
     conservation: { all_passed: result.conservation?.allPassed ?? null, failed_checks: failed },
   };
+  // Risk outputs ride along when the engine produced them, so the model never has to guess at them.
+  const mc = result.monteCarlo;
+  if (mc !== undefined && Object.keys(mc.metrics).length > 0) {
+    out["monte_carlo"] = {
+      iterations: mc.iterations,
+      metrics: Object.fromEntries(
+        Object.entries(mc.metrics).map(([k, d]) => [k, { p10: d.p10, p50: d.p50, p90: d.p90, mean: d.mean, stddev: d.stddev }]),
+      ),
+    };
+  }
+  const vars = result.sensitivity?.vars ?? [];
+  if (vars.length > 0) {
+    out["sensitivity"] = vars.map((v) => ({
+      input_path: v.inputPath,
+      target_metric: v.targetMetric,
+      low: v.lowOutput,
+      base: v.baseOutput,
+      high: v.highOutput,
+      swing: Math.abs(v.highOutput - v.lowOutput),
+    }));
+  }
+  return out;
 }
 
 function optimizationJson(result: Result): Record<string, unknown> {

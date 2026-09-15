@@ -23,7 +23,7 @@ const inlinePaths = /^(revenue\.compute\.|power\.interconnection\.grid_energize_
 
 export function SiteFeasibilityView() {
   const { state } = useStore();
-  const { plan, result, error, baseline, compare } = state;
+  const { plan, result, baseline, compare } = state;
   // Errors always surface here (a path with no control on this canvas would otherwise be invisible);
   // warnings/infos on controlled paths render inline next to their control.
   const topDiagnostics = (result?.diagnostics ?? []).filter((d) => d.severity === Severity.ERROR || !inlinePaths.test(d.protoPath));

@@ -49,3 +49,10 @@
 @media (prefers-reduced-motion: reduce) { .copilot-dots i { animation: none; opacity: 0.7; } }
 
 .rail-hd .mini-btn { margin-left: auto; font-size: 11px; padding: 2px 8px; }
+
+/* Proposal cards: pending ones need a decision; settled ones shrink to a status line with the patch behind a toggle. */
+.proposal details { margin: 4px 0 0; }
+.proposal summary { cursor: pointer; font-size: 11px; color: var(--text-muted); }
+.proposal.settled { font-size: 12px; color: var(--text-muted); padding: 6px 10px; }
+.proposal.settled .status { font-weight: 600; color: var(--text-strong); }
+.proposal.settled.rejected .status { color: var(--text-faint); }

@@ -1,8 +1,8 @@
-import { clone, create } from "@bufbuild/protobuf";
+import { create } from "@bufbuild/protobuf";
 
 import type { Engine } from "../engine/client";
 import { EngineError } from "../engine/protocol";
-import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, SitePlanSchema, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { PhasingMode, PhasingPolicySchema, PhasingSchema, Severity, Status, type Result, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { applyPatch } from "./paths";
 import { planChanged, reduce } from "./reducer";
 import { initialState, type Command, type EngineActivity, type LogEntry, type PatchOp, type State } from "./types";

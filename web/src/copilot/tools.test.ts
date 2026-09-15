@@ -1,12 +1,12 @@
 import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool";
 import { ToolError } from "@anthropic-ai/sdk/lib/tools/ToolError";
-import { toBinary } from "@bufbuild/protobuf";
+import { create, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
 
 import { createStore } from "../bus";
 import { loadAbilene } from "../bus/testPlan";
 import { createFakeEngine } from "../engine";
-import { SitePlanSchema, type SitePlan } from "../gen/capplanner/v1/engine_pb";
+import { ResultSchema, SitePlanSchema, Status, type SitePlan } from "../gen/capplanner/v1/engine_pb";
 import { createAnalysisTracker } from "./analysis";
 import { researchPaths } from "./research";
 import { createTools, type ToolEvent } from "./tools";
@@ -127,6 +127,22 @@ describe("propose_change and run_optimize", () => {
     // The fake engine returns no OptimizationResult, which is reported — not hidden.
     expect(h.events.at(-1)).toMatchObject({ name: "run_optimize", status: "error" });
   });
+});
+
+describe("run_analyze output", () => {
+  test("includes Monte Carlo percentiles and the sensitivity tornado when the engine produced them", async () => {
+    const h = harness();
+    const rich = create(ResultSchema, {
+      status: Status.OK,
+      summary: { lcocPerGpuHour: 2.1 },
+      monteCarlo: { iterations: 1000, metrics: { lcoc_per_gpu_hour: { p10: 1.9, p50: 2.1, p90: 2.4, mean: 2.12, stddev: 0.2 } } },
+      sensitivity: { vars: [{ inputPath: "revenue.compute.utilization_pct", targetMetric: "npv", lowOutput: -1e8, highOutput: 3e8, baseOutput: 1e8 }] },
+    });
+    h.engine.analyze = () => Promise.resolve(rich);
+    h.store.dispatch({ type: "setField", path: "run.monte_carlo.enabled", value: true });
+    const out = JSON.parse(String(await h.run("run_analyze", {}))) as Record<string, unknown>;
+    expect(out["monte_carlo"]).toEqual({ iterations: 1000, metrics: { lcoc_per_gpu_hour: { p10: 1.9, p50: 2.1, p90: 2.4, mean: 2.12, stddev: 0.2 } } });
+    expect(out["sensitivity"]).toEqual([{ input_path: "revenue.compute.utilization_pct", target_metric: "npv", low: -1e8, base: 1e8, high: 3e8, swing: 4e8 }]);
   });
 });
 
