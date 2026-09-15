@@ -73,7 +73,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 /* Copilot rail */
 .rail {
-  flex: 0 0 320px; display: flex; flex-direction: column;
+  flex: 0 0 var(--rail-width, 320px); width: var(--rail-width, 320px); min-width: 0; display: flex; flex-direction: column;
   background: var(--surface); border-right: 1px solid var(--border);
 }
 .rail-hd {
@@ -167,3 +167,22 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 @keyframes engine-spin { to { transform: rotate(360deg); } }
 @keyframes engine-sweep { from { background-position: -40% 0; } to { background-position: 140% 0; } }
 @media (prefers-reduced-motion: reduce) { .engine-spinner, .engine-progress { animation: none; } .engine-progress { background: var(--accent); } }
+
+/* Drag handle between the Copilot rail and the canvas. */
+.rail-resizer { flex: 0 0 6px; cursor: col-resize; background: transparent; border-right: 1px solid var(--border-soft); touch-action: none; }
+.rail-resizer:hover, .rail-resizer:focus-visible { background: var(--accent-soft); outline: none; }
+body.rail-resizing { cursor: col-resize; user-select: none; }
+
+/* Markdown inside chat messages */
+.msg .md > :first-child { margin-top: 0; }
+.msg .md > :last-child { margin-bottom: 0; }
+.msg .md p, .msg .md ul, .msg .md ol { margin: 4px 0; }
+.msg .md h1, .msg .md h2, .msg .md h3, .msg .md h4 { font-size: 12.5px; margin: 8px 0 4px; }
+.msg .md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 3px; padding: 0 3px; }
+.msg .md pre { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 6px; padding: 8px; overflow-x: auto; }
+.msg .md pre code { border: none; padding: 0; background: none; }
+.msg .md .md-table { overflow-x: auto; margin: 6px 0; }
+.msg .md table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+.msg .md th, .msg .md td { border: 1px solid var(--border-soft); padding: 3px 6px; text-align: left; vertical-align: top; white-space: nowrap; }
+.msg .md th { background: var(--surface); font-weight: 600; }
+.msg .md blockquote { margin: 4px 0; padding-left: 8px; border-left: 3px solid var(--border); color: var(--text-muted); }

@@ -7,7 +7,7 @@ import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
 import { useRegisterCopilotSend } from "./handle";
 import { safeStorage, type Message } from "./history";
-import { renderMarkdownLite } from "./markdownLite";
+import { Markdown } from "./Markdown";
 import type { ToolEvent } from "./tools";
 import { RELAY_PLACEHOLDER_KEY, transport } from "./transport";
 import "./CopilotRail.css";
@@ -138,7 +138,7 @@ export function CopilotRail() {
         {snapshot.transcript.messages.map((m, i) => (
           <MessageView key={i} message={m} toolEvents={snapshot.toolEvents} />
         ))}
-        {snapshot.streamingText !== "" && <div className="msg bot">{renderMarkdownLite(snapshot.streamingText)}</div>}
+        {snapshot.streamingText !== "" && <div className="msg bot"><Markdown text={snapshot.streamingText} /></div>}
         {snapshot.running && snapshot.activity.kind !== "writing" && <ActivityIndicator activity={snapshot.activity} />}
         {state.proposals.map((p) => (
           <ProposalCard
@@ -294,7 +294,7 @@ function MessageView(props: { message: Message; toolEvents: readonly ToolEvent[]
   return (
     <div className="msg bot">
       {blocks.map((b, i) => {
-        if (b.type === "text") return <div key={i}>{renderMarkdownLite(b.text)}</div>;
+        if (b.type === "text") return <div key={i}><Markdown text={b.text} /></div>;
         if (b.type !== "tool_use") return null;
         const ev = props.toolEvents.find((e) => e.id === b.id);
         const status = ev?.status ?? "done";
