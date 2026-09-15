@@ -126,7 +126,7 @@ export function CopilotRail() {
         <form className="composer" onSubmit={submit}>
           <GrowingTextarea
             aria-label="Message Copilot"
-            placeholder="Bridge with gas so we energize by Q3-27…  (Enter to send, Shift+Enter for a new line)"
+            placeholder="Ask or instruct… (Shift+Enter for a new line)"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onComposerKey}
