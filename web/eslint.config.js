@@ -4,7 +4,8 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "src/gen"] },
+  // public/ holds build outputs (engine.wasm, Go's wasm_exec.js), not our code.
+  { ignores: ["dist", "public", "src/gen"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,

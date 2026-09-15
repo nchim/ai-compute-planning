@@ -97,3 +97,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
+- 2026-09-15 (WS5) — WASM gotchas: keep `syscall/js` code to a thin adapter; put the logic in a plain
+  package so it runs under `-race` (js/wasm can't). Vite module workers have no `importScripts`, so load
+  Go's `wasm_exec.js` with a dynamic `import()` of a *variable* URL (a literal path makes `tsc` try to
+  resolve it). `go.run(instance)` registers the exports synchronously before it awaits, so don't await
+  it (main blocks in `select{}`). Node ≥ 22 runs `wasm_exec.js` + `WebAssembly.instantiate` directly —
+  no jsdom needed for the integration test. `js.CopyBytesToGo` panics on non-Uint8Array args: check
+  `InstanceOf` first. Add build outputs in `web/public` to ESLint ignores.
