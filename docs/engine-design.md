@@ -123,9 +123,18 @@ sets `status=OK_WITH_WARNINGS` (or ERROR if it indicates invalid input) and emit
 - The agent reads these to correct the SitePlan; validation cases assert the loop converges.
 
 ## WASM boundary (`wasm/main.go`)
-- Build `GOOS=js GOARCH=wasm`. Export `Analyze(bytes) bytes` and `Optimize(bytes) bytes` via `syscall/js`
-  (or a thin JSON bridge). Binary proto in/out; the SPA marshals. Keep the exported surface tiny.
-- No panics escape: recover → `Result{status=INVALID_INPUT, diagnostic INTERNAL_ERROR}`.
+- Build `GOOS=js GOARCH=wasm`. `main.go` publishes `globalThis.capplanner = {analyze, optimize}`, each
+  `(Uint8Array) → Uint8Array` of binary proto (SitePlan in, Result out); the SPA marshals. Keep the
+  exported surface tiny.
+- The logic lives in `engine/bridge` (`Bridge.Call(op, bytes) bytes`, plain Go, tested under `-race`);
+  `main.go` only converts `Uint8Array` ↔ `[]byte`.
+- Nothing escapes. Every bridge-level failure is `Result{INVALID_INPUT}` with one ERROR diagnostic:
+  `MALFORMED_INPUT` (bytes are not a SitePlan / argument not a Uint8Array; decode error in `actual`),
+  `UNKNOWN_OP`, `INTERNAL_ERROR` (recovered panic or nil Result; panic text in `actual`, hint to report).
+- SPA side (`web/src/engine`): a module Web Worker loads `wasm_exec.js` + `engine.wasm` once and serves
+  `{id, op, bytes}` → `{id, ok, bytes | error}`; `createEngine()` gives `analyze/optimize(plan): Promise<Result>`
+  with per-request ids (stale replies dropped), a timeout, and a typed `EngineError` (`load | encode |
+  decode | worker | timeout`) on every failure path.
 
 ## TDD approach
 - **Table-driven unit tests** per core module (sizing, capex, schedule, revenue, metrics).
