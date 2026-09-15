@@ -167,10 +167,8 @@ const (
 )
 
 // TestEpochReconciliation: capex reproduces Epoch's stack line by line; non-energy opex reproduces
-// Epoch's lines; energy differs structurally — the engine bills the full facility load every hour
-// (opex.go energyCost) while Epoch's energy line is at 71% utilization — so the unadjusted total
-// sits ~20% above $92.3M and the restated total (energy × utilization) is within 10%. The
-// energy-at-utilization change is filed as a follow-up (PR); when it lands, tighten the total to ±10%.
+// Epoch's lines; energy is billed at the utilized IT load × PUE (opex.go), the same basis as Epoch's
+// $59.4M line at 71% utilization, so the total reconciles unadjusted within ±10%.
 func TestEpochReconciliation(t *testing.T) {
 	res := requireOK(t, Analyze(loadFixtureNamed(t, "epoch-100mw")))
 	s := res.GetSummary()
@@ -194,11 +192,8 @@ func TestEpochReconciliation(t *testing.T) {
 		year := firstFullYearOnline(int(s.GetTimeToEnergizeMonths()))
 		opex, power := annualOpex(t, res, year)
 		requireWithin(t, "non-energy opex", opex, epochOpexOther, 0.10)
-		requireWithin(t, "energy × utilization vs Epoch energy", power*epochUtilization, epochOpexEnergy, 0.10)
-		requireWithin(t, "total opex with energy restated at utilization", opex+power*epochUtilization, epochOpexTotal, 0.10)
-		if gap := (opex+power)/epochOpexTotal - 1; gap < 0.10 || gap > 0.30 {
-			t.Errorf("unadjusted total opex %.1fM is %+.1f%% vs Epoch: expected +10..+30%% while energy is billed at nameplate; if energy now scales with utilization, compare within ±10%% instead", (opex+power)/1e6, gap*100)
-		}
+		requireWithin(t, "energy vs Epoch energy (both at 71% utilization)", power, epochOpexEnergy, 0.10)
+		requireWithin(t, "total opex", opex+power, epochOpexTotal, 0.10)
 	})
 }
 

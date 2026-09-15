@@ -59,7 +59,7 @@ func build(plan *pb.SitePlan, d *diags) *model {
 	m.terminal = terminalValue(plan, m.capex, m.phases, m.months)
 	m.cf = buildCashflow(m.capex, m.opex, m.rev, m.terminal, m.months)
 	m.capture = computeCapture(plan.GetDemand().GetPoints(), m.phases, m.months)
-	m.pv = discount(plan, m.cf, m.rev)
+	m.pv = discount(plan, m.cf, m.opex, m.rev)
 	buildSummary(m, d)
 	m.schematic = layoutSchematic(m)
 	return m

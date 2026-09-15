@@ -134,11 +134,11 @@ insurance/mgmt-fee lines, a stranded-vs-shortfall ramp and GPU-heavy capex.
 Reconciliation (`TestEpochReconciliation`): total capex $3.7878B vs $3.788B (**−0.00%**, tolerance 5%),
 $37.86M per facility MW; each component line within 1% (utility works +1.0%). Note
 `summary.capex_per_mw` is per *IT* MW ($43.2M) — Epoch quotes per gross MW. Stabilized year (year 4):
-non-energy opex $32.9M vs $32.9M (**0.0%**); energy $78.96M vs $59.4M (+33%) because the engine bills
-the full facility load every hour while Epoch's line is at 71% utilization (#28). Restated at 71%,
-energy is −5.6% and total opex $89.0M vs $92.3M (**−3.6%**, tolerance 10%); the unadjusted total is
-+21% and the test pins that band so it flips when #28 lands. Cross-check: our yield-on-cost 21.9% vs
-the reconstruction's 19.7% EBITDA yield (which adds ~10% of revenue for bandwidth/support/G&A).
+non-energy opex $32.9M vs $32.9M (**0.0%**); energy $54.8M vs $59.4M (−7.7%) — both at 71%
+utilization, since COMPUTE_SALES bills energy on IT × utilization × PUE (`engine/core/doc.go` §Energy;
+the residual is Epoch's higher implied $/MWh) — and total opex $87.7M vs $92.3M (**−5.0%**, tolerance
+10%). Cross-check: our yield-on-cost 22.6% vs the reconstruction's 19.7% EBITDA yield (which adds
+~10% of revenue for bandwidth/support/G&A).
 
 ## Docs
 - Process: `.claude/skills/development/SKILL.md` (read first)

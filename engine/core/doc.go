@@ -26,13 +26,33 @@
 //	Facility capex (shell+electrical+cooling+network) $10M/MW × 200 = $2.0B at m0; grid capex $104M;
 //	land $20M; GPUs 110,000 × $40k = $4.4B at energize (m30, when the grid arrives). Total $6.52B.
 //	Delivered GPU-hours: 110,000 × 80% × 730 h × 54 months online ≈ 3.47B GPU-h; PV ≈ 2.23B.
-//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.43B power − $3.07B terminal (GPUs at 35% residual
-//	after 4 full years, shell 82% undepreciated, land at cost) → PV ≈ $4.88B.
-//	LCOC = 4.88B / 2.23B ≈ $2.19 per GPU-hour, against a $3.25 GB300-class opening price decaying
-//	8%/yr; breakeven utilization 78% vs. 80% assumed — thin, because an air-cooled 22-GPU rack carries
+//	Lifecycle cost: $6.52B capex + $0.87B opex + $0.34B power − $3.07B terminal (GPUs at 35% residual
+//	after 4 full years, shell 82% undepreciated, land at cost) → PV ≈ $4.83B.
+//	LCOC = 4.83B / 2.23B ≈ $2.16 per GPU-hour, against a $3.25 GB300-class opening price decaying
+//	8%/yr; breakeven utilization 77% vs. 80% assumed — thin, because an air-cooled 22-GPU rack carries
 //	the same shell and power as a dense one. T2's move to NVL72 racks is the fix the session finds.
 //
 // The exact figures are in testdata/abilene-1.result.json (summary.lcoc_per_gpu_hour, summary.extra).
+//
+// # Energy
+//
+// Energy is dispatched cheapest-first across the firm sources that are ready, on the billed load:
+//
+//	COMPUTE_SALES  load = IT online × utilization × PUE   (the operator pays for what its GPUs draw)
+//	COLO_LEASE     load = IT online × PUE                  (the tenant is billed on the leased load)
+//
+// STUB: no idle draw — a compute hall at 0% utilization bills zero energy. Real idle servers draw a
+// material fraction of TDP and cooling has a fixed component, but the research corpus gives no idle
+// fraction to anchor one on, and Epoch's TCO energy line (the reconciliation source) is itself linear
+// in utilization. Under COLO_LEASE utilities are a pass-through on IT × PUE regardless of occupancy,
+// which is how A.CRE bills them (Underwriting F153) and why nova-colo's NOI reconciles exactly.
+//
+// utilization_breakeven_pct accounts for the cost lines that move with utilization (energy under
+// COMPUTE_SALES and the management fee, which is a share of revenue):
+//
+//	breakeven = assumed × (PV(cost) − PV(variable)) / (PV(revenue) − PV(variable))
+//
+// exact up to the kinks cheapest-first dispatch puts in energy where the load crosses a source's capacity.
 //
 // # Other metrics
 //

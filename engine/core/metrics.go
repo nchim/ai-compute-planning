@@ -21,9 +21,10 @@ type riskComponent struct {
 	score float64
 }
 
-// presentValues are the discounted totals LCOC and breakeven are built from.
+// presentValues are the discounted totals LCOC and breakeven are built from. variable is the part of
+// cost that scales with utilization (opexSeries.variable).
 type presentValues struct {
-	cost, gpuHours, revenue float64
+	cost, variable, gpuHours, revenue float64
 }
 
 // terminalValue is what the assets are worth at the end of the hold: GPUs at their residual-curve
@@ -63,13 +64,13 @@ func gpuResidualFraction(g *pb.GpuCost, years int) float64 {
 
 // discount computes the present values behind LCOC: lifecycle cost net of terminal value, delivered
 // GPU-hours and revenue, all at the monthly equivalent of finance.discount_rate.
-func discount(plan *pb.SitePlan, cf cashflow, rev revenueSeries) presentValues {
+func discount(plan *pb.SitePlan, cf cashflow, opex opexSeries, rev revenueSeries) presentValues {
 	r := monthlyRate(plan.GetFinance().GetDiscountRate())
 	cost := make([]float64, cf.months)
 	for t := range cost {
 		cost[t] = cf.capex[t] + cf.opex[t] + cf.power[t] - cf.terminal[t]
 	}
-	return presentValues{cost: npv(r, cost), gpuHours: npv(r, rev.gpuHours), revenue: npv(r, cf.revenue)}
+	return presentValues{cost: npv(r, cost), variable: npv(r, opex.variable), gpuHours: npv(r, rev.gpuHours), revenue: npv(r, cf.revenue)}
 }
 
 // lcoc is PV(lifecycle cost) / PV(delivered GPU-hours); see doc.go for the formula and worked example.
@@ -81,9 +82,11 @@ func lcoc(pv presentValues) float64 {
 }
 
 // utilizationBreakeven is the utilization (occupancy for colo) at which PV(revenue) = PV(cost).
-// Revenue is linear in utilization, so breakeven = assumed × PV(cost)/PV(revenue).
+// Revenue and the variable cost (management fee, compute-sales energy) are linear in utilization and
+// the rest of cost is fixed, so breakeven = assumed × (PV(cost) − PV(variable)) / (PV(revenue) − PV(variable)).
 func utilizationBreakeven(plan *pb.SitePlan, pv presentValues) float64 {
-	if pv.revenue <= 0 {
+	margin := pv.revenue - pv.variable
+	if margin <= 0 {
 		return 0
 	}
 	rev := plan.GetRevenue()
@@ -91,7 +94,7 @@ func utilizationBreakeven(plan *pb.SitePlan, pv presentValues) float64 {
 	if rev.GetMode() == pb.RevenueMode_COLO_LEASE {
 		assumed = 100 - rev.GetColo().GetVacancyPct()
 	}
-	return assumed * pv.cost / pv.revenue
+	return assumed * (pv.cost - pv.variable) / margin
 }
 
 // stabilizedNoi annualizes net operating income over the 12 months after the last phase energizes
