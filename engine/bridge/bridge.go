@@ -86,11 +86,12 @@ func Failure(code, message, actual, hint string) *pb.Result {
 	}
 }
 
-// Encode marshals a Result. Marshalling a generated message only fails on invalid UTF-8 or
-// oversized payloads; that is a model bug, so it is reported as an INTERNAL_ERROR Result (which,
-// being all-ASCII, always marshals).
+// Encode marshals a Result deterministically: Result carries maps (chart meta, summary.extra), and
+// the same plan must always yield the same bytes. Marshalling a generated message only fails on
+// invalid UTF-8 or oversized payloads; that is a model bug, so it is reported as an INTERNAL_ERROR
+// Result (which, being all-ASCII, always marshals).
 func Encode(res *pb.Result) []byte {
-	out, err := proto.Marshal(res)
+	out, err := proto.MarshalOptions{Deterministic: true}.Marshal(res)
 	if err != nil {
 		return Encode(Failure("INTERNAL_ERROR", "the engine produced a Result that cannot be encoded",
 			err.Error(), "This is an engine bug: report it with the SitePlan that triggered it."))

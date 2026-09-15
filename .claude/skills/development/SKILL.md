@@ -98,10 +98,6 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   keep the engine core pure so Monte Carlo (1k iters) and the optimizer stay fast in WASM.
 - 2026-09-15 (orchestrator) — Added the code-quality bar (concise/maintainable, fail early, all errors
   bubble to the agent, no data races) and the worktree→PR workflow. Engine has no goroutines by rule.
-- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
-  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
-  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
-  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
 - 2026-09-15 (WS3) — Risk composes over the core without hooks: `risk.SetNumeric` writes dotted
   `input_path`s via protoreflect (`Mutable` creates unset parents; int fields are rounded). Draw from
   `(0,1)` open (`uniform01`) so `math.Erfinv` never returns ±Inf. 1k Monte Carlo iterations cost ~125 ms
@@ -139,3 +135,11 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   jsdom environment `import.meta.url` is `http:`, so fs-based fixture loaders (`loadAbilene`) fail —
   import the fixture with `?raw` there. Files outside `web/` (docs, research) import fine at build time
   but need `server.fs.allow` for the dev server.
+- 2026-09-15 (WS2) — `Result` carries maps (chart `meta`, `summary.extra`), so byte-identical output needs
+  `proto.MarshalOptions{Deterministic: true}` — the WASM bridge and any golden/determinism test must use it.
+  Power supply is checked against *facility* MW (IT × PUE), not IT MW; size fixture sources accordingly.
+  Golden `Result` regenerates with `go test ./engine/core -run TestAbileneGolden -update`; review the diff.
+- 2026-09-15 (WS2) — **FMA gotcha:** Go fuses `a*b+c` on arm64 but not amd64, so doubles differ in the
+  last bits between a Mac and CI. Never compare golden Results with `proto.Equal`; use
+  `requireProtoClose` (engine/core/helpers_test.go — protoreflect walk, 1e-9 relative on floats, exact
+  otherwise, reports the first differing field path). Same for any WS3/WS4 golden.

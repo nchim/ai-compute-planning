@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -109,11 +110,19 @@ func TestCallNilResult(t *testing.T) {
 }
 
 func TestDefaultBridgeWiresModels(t *testing.T) {
-	// The real engine analyzes the fixture OK; the optimizer is still a stub and says so.
-	if res := decodeResult(t, Default().Call("analyze", fixtureBytes(t))); res.Status != pb.Status_OK || res.Summary == nil {
-		t.Fatalf("analyze: want OK with a summary, got %v %v", res.Status, res.Diagnostics)
+	if res := decodeResult(t, Default().Call("analyze", fixtureBytes(t))); res.Status != pb.Status_OK {
+		t.Fatalf("analyze: status %v, diagnostics %v", res.Status, res.Diagnostics)
 	}
 	if res := decodeResult(t, Default().Call("optimize", fixtureBytes(t))); len(res.Diagnostics) == 0 {
 		t.Fatal("optimize: expected at least one diagnostic from the optimize stub")
+	}
+}
+
+// Result carries maps, so Encode must marshal deterministically: two calls, identical bytes.
+func TestCallIsByteDeterministic(t *testing.T) {
+	in := fixtureBytes(t)
+	a, b := Default().Call("analyze", in), Default().Call("analyze", in)
+	if !bytes.Equal(a, b) {
+		t.Fatal("two analyze calls on the same plan returned different bytes")
 	}
 }

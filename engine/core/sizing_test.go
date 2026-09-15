@@ -14,7 +14,7 @@ func TestSizePhase(t *testing.T) {
 		racks                int
 		wantIt, wantFacility float64
 	}{
-		{"fixture air", 200, 40, 72, 1.2, pb.CoolingMode_AIR, 5000, 200, 240},
+		{"fixture air", 200, 40, 22, 1.2, pb.CoolingMode_AIR, 5000, 200, 240},
 		{"liquid rounds up to whole racks", 10, 130, 72, 1.1, pb.CoolingMode_LIQUID_DTC, 77, 10.01, 11.011},
 		{"one rack", 0.05, 100, 8, 1.3, pb.CoolingMode_LIQUID_DTC, 1, 0.1, 0.13},
 	}
