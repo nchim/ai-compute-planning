@@ -72,7 +72,7 @@ func powerTable(m *model) *pb.Table {
 	var rows [][]any
 	for t := 0; t < m.months; t++ {
 		supply, load := firmSupplyAt(m.srcs, t), onlineItMw(m.phases, t)*pue
-		rows = append(rows, []any{float64(t), supply, load, supply - load, onlineItMw(m.phases, t), demandAt(m.plan.GetDemand().GetPoints(), t), m.cf.power[t]})
+		rows = append(rows, []any{float64(t), supply, load, supply - load, onlineItMw(m.phases, t), DemandAt(m.plan.GetDemand().GetPoints(), t), m.cf.power[t]})
 	}
 	return table(tablePower, "Power schedule", []string{"month", "firm_supply_mw", "facility_load_mw", "headroom_mw", "online_it_mw", "demand_mw", "energy_cost_usd"}, rows)
 }
@@ -93,7 +93,7 @@ func demandChart(m *model) *pb.Chart {
 	pts := m.plan.GetDemand().GetPoints()
 	demand, capacity, short, stranded := series("demand"), series("capacity"), series("shortfall"), series("stranded")
 	for t := 0; t < m.months; t++ {
-		dem, cap := demandAt(pts, t), onlineItMw(m.phases, t)
+		dem, cap := DemandAt(pts, t), onlineItMw(m.phases, t)
 		point(demand, t, dem)
 		point(capacity, t, cap)
 		point(short, t, maxf(dem-cap, 0))

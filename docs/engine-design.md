@@ -105,7 +105,12 @@ sets `status=OK_WITH_WARNINGS` (or ERROR if it indicates invalid input) and emit
 - **Decision variables:** phase count, per-phase MW, per-phase start/energize month, power source per
   phase, density/cooling — bounded by `PhasingPolicy` + `DecisionVar` specs.
 - **Constraints:** hard constraints (capital ≤ cap, energize ≤ date, max_shortfall) filter infeasible
-  candidates; the objective ranks feasible ones.
+  candidates; the objective ranks feasible ones. `phasing.policy.max_shortfall_mw` is applied to the
+  hold-average shortfall: shortfall_mw_months / hold_period_months ≤ this; an instantaneous cap is
+  unsatisfiable when demand precedes the earliest power source.
+- **Core hooks:** the core exports `DemandAt` (the demand interpolation it scores against) and
+  `ConstructionLeadMonths`, and validates per-source load in EXPLICIT mode (`SOURCE_OVERLOADED`), so
+  the optimizer's own per-source check is only a cheap pre-filter.
 - **Algorithm (v1):** because the core is a fast pure function, use **staged search**: (1) enumerate
   phase-count and power-source (small categorical space); (2) for each, optimize continuous vars (phase
   sizes/timing) with a deterministic method (coordinate descent / bounded Nelder-Mead) seeded from a

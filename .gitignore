@@ -16,6 +16,9 @@ dist/
 web/public/engine.wasm
 web/public/wasm_exec.js
 
+# Staged by `make deploy` for the Cloud Build upload; deploy/Dockerfile is the source of truth
+/Dockerfile
+
 # OS / editor cruft
 .DS_Store
 *.swp

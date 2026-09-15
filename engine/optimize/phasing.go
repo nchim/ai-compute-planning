@@ -17,8 +17,6 @@ const (
 	evalBudget     = 400 // core.Analyze calls per Optimize, including the baseline
 	maxAssignments = 64  // cap on (phase count, source assignment) combinations enumerated
 	descentSeeds   = 3   // seeds refined by coordinate descent, best first
-	// constructionLeadMonths mirrors core's construction lead so start_month = energize − lead.
-	constructionLeadMonths = 18
 )
 
 // energizeDeltas are the timing moves tried per phase, coarse to fine.
@@ -123,22 +121,6 @@ func (s *search) firmSupplyAt(t int) float64 {
 		}
 	}
 	return mw
-}
-
-// demandAt interpolates the ramp linearly (as core does): zero before the first point, flat after.
-func (s *search) demandAt(t int) float64 {
-	pts := s.plan.GetDemand().GetPoints()
-	if len(pts) == 0 || t < int(pts[0].GetMonth()) {
-		return 0
-	}
-	for i := 1; i < len(pts); i++ {
-		a, b := pts[i-1], pts[i]
-		if t <= int(b.GetMonth()) {
-			frac := float64(t-int(a.GetMonth())) / float64(b.GetMonth()-a.GetMonth())
-			return a.GetDemandMw() + frac*(b.GetDemandMw()-a.GetDemandMw())
-		}
-	}
-	return pts[len(pts)-1].GetDemandMw()
 }
 
 // --- evaluation -----------------------------------------------------------------------------------
@@ -328,15 +310,15 @@ func (s *search) fit(e0 int, cumIt, lo, hi, own float64) (int, float64, bool) {
 		if allowed < lo-1e-9 {
 			continue
 		}
-		want := clamp(math.Floor(s.demandAt(e)-cumIt), lo, hi)
+		want := clamp(math.Floor(core.DemandAt(s.plan.GetDemand().GetPoints(), e)-cumIt), lo, hi)
 		return e, math.Min(want, allowed), true
 	}
 	return 0, 0, false
 }
 
 // valid is the cheap pre-check for descent moves: policy bounds, source readiness and capacity,
-// spacing, the hold and pooled supply. Moves failing it are not worth an evaluation. Core only
-// checks pooled supply, so per-source capacity is the optimizer's own rule.
+// spacing, the hold and pooled supply. Moves failing it are not worth an evaluation. Core enforces
+// per-source capacity too (SOURCE_OVERLOADED); repeating it here just saves the Analyze call.
 func (s *search) valid(c candidate) bool {
 	var cumFac float64
 	used := make([]float64, len(s.srcs))

@@ -2,7 +2,7 @@
 
 **Status:** v0.1 — 2026-09-15. **This is the overall acceptance criterion for the POC.** One continuous,
 hypothetical planning session in the app — human + Copilot + engine, over multiple iterations — that
-exercises every key feature end-to-end. It subsumes the three cases in `validation-cases.md` (which
+exercises every key feature end-to-end, including open-ended explanation and advice (T7, T8). It subsumes the three cases in `validation-cases.md` (which
 remain as unit-level assertions) and adds the connective arc a real planner would follow.
 
 It runs through the remote-control harness (`harness/`) in two modes:
@@ -99,6 +99,21 @@ ramp 40 → 200 MW over months 6–42, 7-year hold. Internally consistent so the
 - **Assert (live):** narration mentions all four dimensions; ≥1 `query_research` call; number-trace
   check passes; conversation persisted to localStorage and restored after a page reload with the
   same plan/Result.
+
+### T8 — Open-ended advice (resourcefulness)
+- H: *"Different idea: a colo operator has offered us 100 MW in Phoenix from Q1-2027 at a fixed
+  $/kW-month for five years. Should we take that instead of building Abilene-1? What would you need
+  to know to be sure?"*
+- No tool maps directly to this. C is expected to: pull the build-vs-buy / speed-to-market /
+  demand-credit framing from the corpus (`query_research`), restate the current Abilene-1 numbers
+  from the Result (time to energize, LCOC, capture), set up a comparable colo scenario itself
+  (`propose_change` or a scratch plan with `revenue.mode=COLO_LEASE` or the `nova-colo` fixture's
+  lens) or explain why it can't be compared like-for-like yet, and give a **recommendation with stated
+  assumptions and the two or three facts it would need to firm up**.
+- **Assert (live):** ≥1 `query_research` call; every number cited traces to a Result; the answer
+  contains an explicit recommendation and an explicit list of unknowns; no fabricated colo economics
+  (any $/kW figure it uses must be the human's or a Result's); it names the timing/optionality
+  argument (colo buys time; building keeps the option value and the moat).
 
 ## Cross-cutting assertions
 - **Determinism:** every `Analyze` on identical bytes is byte-identical; the whole scripted session

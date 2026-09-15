@@ -9,12 +9,14 @@ import { viewContextBlock } from "./context";
 import { emptyTranscript, loadTranscript, safeStorage, saveTranscript, type Message, type Transcript } from "./history";
 import { SYSTEM_PROMPT } from "./prompt";
 import { createTools, type ToolEvent } from "./tools";
+import { createClient, transport } from "./transport";
 
 export type Usage = Anthropic.Beta.BetaUsage;
 
 export interface CopilotOptions {
   readonly store: Store;
   readonly engine: Engine;
+  /** The pasted key in BYO-key mode; ignored in relay mode (see transport.ts). */
   readonly apiKey: string;
   readonly model?: string;
   /** Called with every assistant message's usage; the dev UI shows cache_read_input_tokens. */
@@ -67,24 +69,9 @@ export const emptySnapshot: CopilotSnapshot = {
   lastUsage: null,
 };
 
-/**
- * Builds a browser client that calls Anthropic directly with the developer's own key.
- *
- * ⚠️ DEV ONLY — NEVER SHIP THIS. `dangerouslyAllowBrowser` plus the direct-browser-access header
- * put the API key in the page. Before any deployment, replace this with a thin serverless relay that
- * holds the key (set `baseURL` to the relay, drop both flags). See docs/agent-integration.md.
- */
-function browserClient(apiKey: string): Anthropic {
-  return new Anthropic({
-    apiKey,
-    dangerouslyAllowBrowser: true,
-    defaultHeaders: { "anthropic-dangerous-direct-browser-access": "true" },
-  });
-}
-
 export function createCopilot(options: CopilotOptions): Copilot {
   const { store, engine, model = DEFAULT_MODEL, maxIterations = 16 } = options;
-  const client = options.client ?? browserClient(options.apiKey);
+  const client = options.client ?? createClient(transport, options.apiKey);
   const storage = options.storage === undefined ? safeStorage("local") : options.storage;
   const tracker = createAnalysisTracker(store, engine);
   const listeners = new Set<(event: CopilotEvent | null, snapshot: CopilotSnapshot) => void>();
@@ -233,8 +220,13 @@ function dropDangling(messages: readonly Message[]): readonly Message[] {
 }
 
 function describe(err: unknown): string {
-  if (err instanceof Anthropic.AuthenticationError) return "Anthropic rejected the API key (401).";
-  if (err instanceof Anthropic.RateLimitError) return "Rate limited by Anthropic (429); try again shortly.";
+  if (err instanceof Anthropic.AuthenticationError) {
+    return transport.mode === "relay" ? "The relay rejected this session (401); reload and sign in again." : "Anthropic rejected the API key (401).";
+  }
+  if (err instanceof Anthropic.RateLimitError) {
+    // The relay's daily cap answers in the same envelope, with the reason in the message.
+    return `Rate limited (429): ${err.message}`;
+  }
   if (err instanceof Anthropic.APIError) return `Anthropic API error ${err.status ?? ""}: ${err.message}`;
   return err instanceof Error ? err.message : String(err);
 }

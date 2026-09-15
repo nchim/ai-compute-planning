@@ -161,6 +161,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   nodes (Canvas banner + site view), so query with `getAllByRole`. `client.test.ts` pins the full Copilot
   tool-name list — extend it when adding a tool. Cross-Result overlays: keep one `useCompareBaseline()`
   hook (null when compare is off) so every chart's baseline prop is simply omitted, never branched on.
+- 2026-09-15 (#23) — Core now exports `core.DemandAt` and `core.ConstructionLeadMonths` and enforces
+  per-source load in EXPLICIT mode (`SOURCE_OVERLOADED` on `phasing.phases[i].power_source_id`); the
+  optimizer's `valid` per-source check is only a pre-filter. When asserting "numerically unchanged",
+  diff the `t.Logf` lines rather than raw output: protobuf's text formatter randomizes spacing.
 - 2026-09-15 (WS12) — Grounding against an external model: mirror its *inputs* field by field in a table
   (source cell → our field → value → note) and compare outputs on the basis the source itself
   computes (A.CRE's untrended column, Epoch's per-gross-MW), restating each structural difference
