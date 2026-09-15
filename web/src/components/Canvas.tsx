@@ -1,7 +1,7 @@
 import { fromJsonString, toJson as protoToJson, type DescMessage, type MessageShape } from "@bufbuild/protobuf";
 
 import abileneJson from "../../../fixtures/abilene-1.json?raw";
-import { useStore, viewContext, type Proposal } from "../bus";
+import { defaultBaselineLabel, useStore, viewContext, type Proposal } from "../bus";
 import type { Store } from "../bus";
 import {
   ConservationReportSchema,
@@ -12,6 +12,7 @@ import {
   type Diagnostic,
 } from "../gen/capplanner/v1/engine_pb";
 import { SiteFeasibilityView } from "../views/site";
+import { Explainer } from "../views/site/Explainer";
 import { JsonTree } from "./JsonTree";
 
 // Proto field names (snake_case) everywhere on the canvas so keys match diagnostics' proto_path and bus paths.
@@ -49,6 +50,7 @@ export function Canvas() {
         <button className="btn" disabled={state.history.future.length === 0} onClick={() => store.dispatch({ type: "redo" })}>
           Redo
         </button>
+        <BaselineControls store={store} />
         <span className="dim" data-engine={engineName}>
           engine: {engineName}
         </span>
@@ -97,6 +99,38 @@ export function Canvas() {
         )}
       </details>
     </main>
+  );
+}
+
+/** "Set as baseline" (label from the scenario name), the pinned label with a clear ×, and the Compare toggle. */
+function BaselineControls(props: { store: Store }) {
+  const { state, store } = useStore();
+  const pin = () => store.dispatch({ type: "setBaseline", label: defaultBaselineLabel(state, props.store.getLog()) });
+  return (
+    <>
+      <button className="btn" data-action="set-baseline" disabled={state.result === null} onClick={pin}>
+        Set as baseline
+      </button>
+      <Explainer term="toolbar.set_baseline" />
+      {state.baseline !== null && (
+        <span className="baseline-chip" data-baseline-label={state.baseline.label}>
+          baseline: <b>{state.baseline.label}</b>
+          <button className="x" aria-label="clear baseline" onClick={() => store.dispatch({ type: "clearBaseline" })}>
+            ×
+          </button>
+        </span>
+      )}
+      <button
+        className="btn toggle"
+        data-action="compare"
+        aria-pressed={state.compare}
+        disabled={state.baseline === null}
+        onClick={() => store.dispatch({ type: "toggleCompare" })}
+      >
+        Compare
+      </button>
+      <Explainer term="toolbar.compare" />
+    </>
   );
 }
 

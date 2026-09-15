@@ -1,7 +1,7 @@
 import { useStore, type PatchOp } from "../../bus";
 import { PhasingModeSchema } from "../../gen/capplanner/v1/engine_pb";
 import { StepChart } from "./charts/StepChart";
-import { MetricTile, NotComputed, Region } from "./chrome";
+import { MetricTile, NotComputed, Region, useCompareBaseline } from "./chrome";
 import { NumberField, SelectField, TextField } from "./controls";
 import { Explainer } from "./Explainer";
 import { num, pct } from "./fmt";
@@ -23,8 +23,10 @@ export function PhasingLever() {
   const { state, store } = useStore();
   const phases = state.plan?.phasing?.phases ?? [];
   const chart = chartById(state.result, "demand_vs_capacity");
+  const baselineChart = chartById(useCompareBaseline()?.result ?? null, "demand_vs_capacity");
   // Engine encoding (render.go demandChart): per-month series demand / capacity / shortfall / stranded.
-  const series = (name: string) => chart?.series.find((s) => s.name === name)?.points ?? [];
+  const series = (name: string, from = chart) => from?.series.find((s) => s.name === name)?.points ?? [];
+  const baseline = baselineChart === undefined ? undefined : { demand: series("demand", baselineChart), capacity: series("capacity", baselineChart) };
   const summary = state.result?.summary;
   const lastEnergize = Math.max(0, ...phases.map((p) => p.energizeMonth));
 
@@ -68,19 +70,20 @@ export function PhasingLever() {
           {chart === undefined ? (
             <NotComputed what="Demand vs capacity chart" />
           ) : (
-            <StepChart demand={series("demand")} capacity={series("capacity")} shortfall={series("shortfall")} stranded={series("stranded")} xLabel={chart.meta["x"] ?? "month"} yLabel={chart.meta["y"] ?? "MW"} />
+            <StepChart demand={series("demand")} capacity={series("capacity")} shortfall={series("shortfall")} stranded={series("stranded")} xLabel={chart.meta["x"] ?? "month"} yLabel={chart.meta["y"] ?? "MW"} {...(baseline === undefined ? {} : { baseline })} />
           )}
           <ul className="legend">
             <li><span className="swatch demand" /> demand</li>
             <li><span className="swatch capacity" /> phased capacity</li>
             <li><span className="swatch shortfall" /> shortfall</li>
             <li><span className="swatch stranded" /> stranded</li>
+            {baseline !== undefined && <li><span className="swatch baseline" /> baseline</li>}
           </ul>
           {summary !== undefined && (
             <div className="tiles">
-              <MetricTile metricKey="demand_capture_pct" label="demand captured" value={pct(summary.demandCapturePct)} />
-              <MetricTile metricKey="shortfall_mw_months" label="shortfall MW·mo" value={num(summary.shortfallMwMonths)} />
-              <MetricTile metricKey="stranded_capacity_mw_months" label="stranded MW·mo" value={num(summary.strandedCapacityMwMonths)} />
+              <MetricTile metricKey="demand_capture_pct" label="demand captured" value={pct(summary.demandCapturePct)} format={pct} />
+              <MetricTile metricKey="shortfall_mw_months" label="shortfall MW·mo" value={num(summary.shortfallMwMonths)} format={num} />
+              <MetricTile metricKey="stranded_capacity_mw_months" label="stranded MW·mo" value={num(summary.strandedCapacityMwMonths)} format={num} />
             </div>
           )}
         </div>

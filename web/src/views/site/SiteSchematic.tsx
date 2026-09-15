@@ -1,7 +1,7 @@
 import { useStore } from "../../bus";
 import { BlockKind, type Block, type Schematic } from "../../gen/capplanner/v1/engine_pb";
 import { quarterLabel } from "./fmt";
-import { NotComputed, Region } from "./chrome";
+import { NotComputed, Region, useCompareBaseline } from "./chrome";
 
 const kindClass: Record<BlockKind, string> = {
   [BlockKind.BLOCK_UNSPECIFIED]: "unspecified",
@@ -32,6 +32,7 @@ function lastEnergizeMonth(schematic: Schematic): number {
 export function SiteSchematic() {
   const { state, store } = useStore();
   const schematic = state.result?.schematic;
+  const baseline = useCompareBaseline()?.result.schematic;
   if (schematic === undefined) {
     return (
       <Region id="site_schematic" title="Site schematic · phase reveal" dimensions={["space", "time"]}>
@@ -50,7 +51,12 @@ export function SiteSchematic() {
       id="site_schematic"
       title="Site schematic · phase reveal"
       dimensions={["space", "time"]}
-      actions={<span className="chip" data-metric="footprint_used_pct">footprint {schematic.footprintUsedPct.toFixed(0)}% used</span>}
+      actions={
+        <>
+          <span className="chip" data-metric="footprint_used_pct">footprint {schematic.footprintUsedPct.toFixed(0)}% used</span>
+          {baseline !== undefined && <span className="chip" data-metric="baseline_footprint_used_pct">baseline {baseline.footprintUsedPct.toFixed(0)}%</span>}
+        </>
+      }
     >
       <svg className="schematic" viewBox={`0 0 ${schematic.parcelWM} ${schematic.parcelHM}`} role="img" aria-label="site schematic">
         <rect className="parcel" x={0} y={0} width={schematic.parcelWM} height={schematic.parcelHM} />
@@ -60,6 +66,11 @@ export function SiteSchematic() {
             <text x={b.xM + 8} y={b.yM + 22}>{b.id}</text>
           </g>
         ))}
+        {baseline !== undefined && (
+          <g className="baseline" aria-label="baseline footprint">
+            {baseline.blocks.map((b) => <rect key={b.id} x={b.xM} y={b.yM} width={b.wM} height={b.hM} data-block={b.id} />)}
+          </g>
+        )}
       </svg>
       <div className="scrubber">
         <input
@@ -77,6 +88,7 @@ export function SiteSchematic() {
         {[...phases].map(([id, i]) => (
           <li key={id}><span className={`swatch phase-${i}`} /> {id}</li>
         ))}
+        {baseline !== undefined && <li><span className="swatch baseline" /> baseline footprint</li>}
       </ul>
     </Region>
   );

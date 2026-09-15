@@ -27,11 +27,11 @@
 .site-view .app-error { color: #fff; background: #9c6b6b; border-radius: 4px; padding: 6px 10px; }
 
 .site-view .q { width: 14px; height: 14px; border-radius: 50%; border: 1px solid #c4c4c8; color: #a1a1aa; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: help; }
-.site-view .explainer { position: relative; display: inline-flex; align-items: center; gap: 4px; cursor: help; outline: none; }
-.site-view .explainer .pop { display: none; position: absolute; z-index: 5; left: 0; bottom: calc(100% + 8px); width: 240px; background: #1f2937; color: #e5e7eb; border-radius: 7px; padding: 9px 11px; font-size: 11px; line-height: 1.4; box-shadow: 0 6px 20px rgba(0,0,0,.18); font-weight: 400; text-transform: none; letter-spacing: 0; }
-.site-view .explainer:hover .pop, .site-view .explainer:focus-within .pop { display: block; }
-.site-view .pop b { color: #fff; display: block; margin-bottom: 4px; }
-.site-view .pop-row { display: block; }
+.explainer { position: relative; display: inline-flex; align-items: center; gap: 4px; cursor: help; outline: none; }
+.explainer .pop { display: none; position: absolute; z-index: 5; left: 0; bottom: calc(100% + 8px); width: 240px; background: #1f2937; color: #e5e7eb; border-radius: 7px; padding: 9px 11px; font-size: 11px; line-height: 1.4; box-shadow: 0 6px 20px rgba(0,0,0,.18); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.explainer:hover .pop, .explainer:focus-within .pop { display: block; }
+.pop b { color: #fff; display: block; margin-bottom: 4px; }
+.pop-row { display: block; }
 .site-view .pop-src { color: #9ca3af; }
 
 .site-view .tiles { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0; }
@@ -128,3 +128,16 @@
 .site-view .swatch.phase-0 { background: var(--p0); } .swatch.phase-1 { background: var(--p1); } .swatch.phase-2 { background: var(--p2); } .swatch.phase-3 { background: var(--p3); } .swatch.phase-4 { background: var(--p4); }
 .site-view .scrubber { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .site-view .scrubber input { flex: 1; accent-color: var(--accent); }
+
+/* Compare mode: deltas on tiles, ghosted baseline series/outlines */
+.site-view .delta { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.site-view .delta.better { color: #2e7d4f; } .site-view .delta.worse { color: #9c3b3b; }
+.site-view .h-sub[data-baseline] { font-weight: 600; color: var(--ink); }
+.site-view .chart .line.baseline { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: .5; }
+.site-view .chart .line.zero { stroke: var(--line); stroke-width: 1; }
+.site-view .swatch.baseline { background: transparent; border: 1px dashed var(--ink); opacity: .6; }
+.site-view .swatch.net { background: var(--capital); }
+.site-view .stackbar.with-baseline svg { height: 48px; }
+.site-view .stackbar .baseline rect { opacity: .45; }
+.site-view .bands .baseline { opacity: .5; } .site-view .bands .baseline line { stroke: var(--ink); stroke-dasharray: 3 2; }
+.site-view .schematic .baseline rect { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 8; opacity: .5; }
