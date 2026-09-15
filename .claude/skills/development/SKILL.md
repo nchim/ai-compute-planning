@@ -111,7 +111,7 @@ task. **This file is living: improve it as you learn (see "Improve this skill").
 - Web: `cd web && npm run typecheck && npm run lint && npm test && npm run dev` (`VITE_ENGINE=wasm` after `make wasm`, else the fake engine; `VITE_HARNESS=1` installs `window.__harness`).
 - Harness: `make harness` (typecheck + every Playwright spec; `make wasm` first for the real engine; see `harness/README.md`) · smoke only: `cd harness && npm run smoke`.
 - Acceptance (WS10 branch, until merged): `cd harness && npm run acceptance` (scripted, the CI gate) · `npm run acceptance:live` (real Copilot, needs `ANTHROPIC_API_KEY`); the branch adds `make acceptance`.
-- Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`).
+- Deploy: `make serve` (relay build + Go server locally; `ANTHROPIC_API_KEY`, `APP_PASSWORD` in the env) · `make deploy` (Cloud Build from source → Cloud Run; see `deploy/cloudrun.md`) · `make sessions` (`HOURS=24`) prints shared tester sessions from Cloud Logging as transcripts.
 
 ## Improve this skill (living doc)
 When you learn something reusable — a gotcha, a better pattern, a command that works — **append a dated
@@ -237,3 +237,10 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   under jsdom has no layout, so component tests `vi.mock("leaflet")` with the recording fake in
   `web/src/views/site/testdata/fakeLeaflet.ts` and assert on layers/controls/events, and a
   `tileerror` fired from the fake must be wrapped in `act()` because it sets React state.
+- 2026-09-15 (ux-share) — Cloud Logging parses a stdout line into `jsonPayload` only when the *whole*
+  line is JSON, so a structured event sink needs its own `log.New(os.Stdout, "", 0)` — the request
+  logger's timestamp prefix would turn it into `textPayload`. Client side, drain the command log at
+  flush time (not per store notification) or a burst of edits becomes one event per dispatch; `toJson`
+  with default options gives `planId` (lowerCamel) while `useProtoFieldName` gives `plan_id` — a reader
+  that mixes the two (bus log vs. Result summary) must know which it is looking at. `findLast` is
+  ES2023 and the web tsconfig lib is ES2022.

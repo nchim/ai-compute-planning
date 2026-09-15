@@ -11,7 +11,7 @@ between all three is one protobuf: `SitePlan → Result`.
 | `engine/` | Go engine: `pb/` (generated), `core/` (pure model + conservation), `risk/` (Monte Carlo + sensitivity), `optimize/` (phasing search), `bridge/` + `wasm/` (JS boundary); `engine.go` composes them |
 | `web/` | Vite + React 18 + TypeScript SPA: `src/bus` (command bus), `src/engine` (worker client), `src/views/site` (Site Feasibility), `src/copilot`, `src/harness`; `src/gen/` is generated |
 | `harness/` | Playwright remote-control harness: `src/session.ts` + `tests/smoke.spec.ts`; `acceptance/` (the T1–T8 session) arrives with the WS10 PR |
-| `deploy/` | Cloud Run host: Go static server + Basic Auth + Anthropic relay (`server/`), `Dockerfile`, `cloudrun.md` runbook |
+| `deploy/` | Cloud Run host: Go static server + Basic Auth + Anthropic relay + session-event sink (`server/`), `Dockerfile`, `sessions.py` transcript printer, `cloudrun.md` runbook |
 | `fixtures/` | Shared protojson `SitePlan`s: three grounding scenarios — `abilene-1.json` (acceptance reference), `nova-colo.json` (A.CRE colo development), `epoch-100mw.json` (Epoch AI 100 MW campus) |
 | `docs/`, `research/` | Design docs (start at `docs/README.md`) and the research corpus the Copilot is grounded in |
 | `.claude/skills/development/` | The shared dev process every worker follows |
@@ -55,6 +55,11 @@ make deploy
 `make serve` runs the same configuration locally (`ANTHROPIC_API_KEY` and `APP_PASSWORD` in the env,
 http://localhost:8080). Relay mode is selected at build time by `VITE_COPILOT_RELAY=/api/anthropic`;
 a plain `npm run build` produces the BYO-key dev build, which must never be deployed.
+
+**Observing testers.** The rail's "Share session with developer" toggle (on by default in the relay
+build, persisted per browser) posts command batches, Copilot turn summaries, Result summaries and errors
+to `POST /api/session`, which the server logs as JSON lines into Cloud Logging. `make sessions`
+(`HOURS=24` to look further back) prints them as per-session transcripts; see `deploy/cloudrun.md`.
 
 ## Fixtures
 `fixtures/*.json` are protojson `SitePlan`s; every file is listed in the Canvas "Load fixture"
