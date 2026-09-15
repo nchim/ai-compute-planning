@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { fromJsonString } from "@bufbuild/protobuf";
+import { create, fromJsonString } from "@bufbuild/protobuf";
 import { useEffect } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -8,9 +8,11 @@ import { CopilotHandleProvider, useRegisterCopilotSend } from "../../copilot/han
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
-import { PhasingMode, ResultSchema, type Result } from "../../gen/capplanner/v1/engine_pb";
+import { CellSchema, PhasingMode, ResultSchema, type Result } from "../../gen/capplanner/v1/engine_pb";
 import { ContextMap } from "./ContextMap";
 import { CriticalPath } from "./CriticalPath";
+import { layoutMarkers } from "./charts/Gantt";
+import { columnLabel, formatCell } from "./resultAccess";
 import { OptimizationPanel, patchFromBestPlan } from "./OptimizationPanel";
 import { PhasingLever } from "./PhasingLever";
 import { ProForma } from "./ProForma";
@@ -160,12 +162,39 @@ describe("regions render from the golden Result", () => {
     expect(sent[0]).toMatch(/Explain the ".*" block on the site schematic/);
   });
 
+  test("gantt markers never overlap: same month merges into one label, near months stack on two lines", () => {
+    const x = (m: number) => 150 + m * 10;
+    const same = layoutMarkers([{ month: 30, cls: "grid", text: "grid m30 · Q3-28" }, { month: 30, cls: "energize", text: "energize m30 · Q3-28" }], x, 700);
+    expect(same).toHaveLength(1);
+    expect(same[0]!.text).toBe("grid · energize m30 · Q3-28");
+    expect(same[0]!.cls).toBe("grid energize");
+    const near = layoutMarkers([{ month: 30, cls: "grid", text: "grid m30" }, { month: 33, cls: "energize", text: "energize m33" }], x, 700);
+    expect(near.map((m) => m.line)).toEqual([0, 1]);
+    const far = layoutMarkers([{ month: 12, cls: "energize", text: "energize m12" }, { month: 30, cls: "grid", text: "grid m30" }], x, 700);
+    expect(far.map((m) => m.line)).toEqual([0, 0]);
+    expect(layoutMarkers([{ month: 54, cls: "grid", text: "grid m54" }], x, 700)[0]!.anchorEnd).toBe(true);
+  });
+
+  test("engine table cells format by column unit and headers are humanized", () => {
+    const fmt = { money: (n: number) => `$${n}`, pct: (n: number) => `${n.toFixed(1)}%`, num: (n: number) => String(n) };
+    const n = (v: number) => create(CellSchema, { v: { case: "n", value: v } });
+    expect(formatCell("share_pct", n(9.196811771919068), fmt)).toBe("9.2%");
+    expect(formatCell("amount_usd", n(600e6), fmt)).toBe("$600000000");
+    expect(formatCell("it_mw", n(200), fmt)).toBe("200 MW");
+    expect(formatCell("energize_month", n(30), fmt)).toBe("m30");
+    expect(formatCell("component", create(CellSchema, { v: { case: "s", value: "shell" } }), fmt)).toBe("shell");
+    expect(["component", "amount_usd", "per_mw_usd", "share_pct"].map(columnLabel)).toEqual(["component", "amount", "per MW", "share"]);
+  });
+
   test("critical path renders each task and the energize + grid markers", () => {
     const { container } = mount(harness(), <CriticalPath />);
     expect(container.querySelectorAll(".task")).toHaveLength(4);
     expect(container.querySelectorAll('.task[data-kind="grid"]')).toHaveLength(2);
-    expect(screen.getByText("energize Q3-28")).toBeTruthy();
-    expect(screen.getByText("grid Q3-28")).toBeTruthy();
+    // Energize and grid coincide at m30 on the golden plan: one merged marker, never two overlapping labels.
+    const markers = container.querySelectorAll(".marker");
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.classList.contains("grid") && markers[0]!.classList.contains("energize")).toBe(true);
+    expect(screen.getByText("grid · energize m30 · Q3-28")).toBeTruthy();
   });
 
   test("pro forma renders the KPI tiles, the capex stack and the table", () => {

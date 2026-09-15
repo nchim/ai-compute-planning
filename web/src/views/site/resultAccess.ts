@@ -47,3 +47,28 @@ export function readPlanValue(plan: SitePlan | null, path: string): FieldValue |
   if (typeof node === "bigint") return Number(node);
   return typeof node === "string" || typeof node === "number" || typeof node === "boolean" ? node : undefined;
 }
+
+/** Human header for an engine table column: `per_mw_usd` → "per MW", `share_pct` → "share", `amount_usd` → "amount". */
+export function columnLabel(column: string): string {
+  return column
+    .replace(/_usd$/, "")
+    .replace(/_pct$/, "")
+    .replace(/_mw\b/g, " MW")
+    .replace(/_/g, " ")
+    .replace(/\bmw\b/g, "MW")
+    .trim();
+}
+
+/**
+ * Formats a cell by its column's unit suffix: `_usd` as money, `_pct` as a percentage (1 decimal),
+ * `_mw` as megawatts, `_month`/`_months` as month indices; other numbers with thousands separators.
+ */
+export function formatCell(column: string, cell: Cell | undefined, fmt: { money: (n: number) => string; pct: (n: number) => string; num: (n: number) => string }): string {
+  const n = cellNumber(cell);
+  if (n === undefined) return cellText(cell);
+  if (column.endsWith("_usd")) return fmt.money(n);
+  if (column.endsWith("_pct")) return fmt.pct(n);
+  if (column.endsWith("_mw")) return `${fmt.num(n)} MW`;
+  if (/_months?$/.test(column)) return `m${fmt.num(n)}`;
+  return fmt.num(n);
+}
