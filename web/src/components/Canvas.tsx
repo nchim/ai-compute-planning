@@ -62,10 +62,9 @@ export function Canvas() {
           Redo
         </button>
         <BaselineControls store={store} />
-        <span className="dim" data-engine={engineName}>
-          engine: {engineName}
-        </span>
+        <EngineStatus />
       </div>
+      {(state.engine.analyzing || state.engine.optimizing) && <div className="engine-progress" aria-hidden="true" />}
 
       {state.error !== null && (
         <div className="banner" role="alert">
@@ -110,6 +109,24 @@ export function Canvas() {
         )}
       </details>
     </main>
+  );
+}
+
+/**
+ * The engine badge doubles as the global activity indicator: any driver (a control, the Copilot's tools,
+ * the optimize button) that puts the engine to work shows here, so the user always knows a result is coming.
+ */
+function EngineStatus() {
+  const { state } = useStore();
+  const { analyzing, optimizing } = state.engine;
+  const activity = optimizing ? "optimizing" : analyzing ? "analyzing" : "idle";
+  return (
+    <span className={`dim engine-status engine-${activity}`} data-engine={engineName} data-activity={activity} role="status" aria-live="polite">
+      {activity !== "idle" && <span className="engine-spinner" aria-hidden="true" />}
+      engine: {engineName}
+      {activity === "optimizing" && " · optimizing…"}
+      {activity === "analyzing" && " · analyzing…"}
+    </span>
   );
 }
 

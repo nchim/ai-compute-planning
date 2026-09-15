@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { fromJsonString } from "@bufbuild/protobuf";
-import { afterEach, describe, expect, test } from "vitest";
+import { useEffect } from "react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import { CopilotHandleProvider, useRegisterCopilotSend } from "../../copilot/handle";
 
 import { StoreProvider, createStore, type Command, type Store } from "../../bus";
 import type { Engine } from "../../engine/client";
@@ -16,6 +19,10 @@ import { SiteFeasibilityView } from "./SiteFeasibilityView";
 import { SiteSchematic } from "./SiteSchematic";
 import { loadGoldenPlan, loadGoldenResult } from "./testdata";
 import novaResultJson from "../../../../engine/core/testdata/nova-colo.result.json?raw";
+
+// jsdom cannot lay out a Leaflet map; the fake records layers instead (see ContextMap.test.tsx).
+vi.mock("leaflet", async () => (await import("./testdata/fakeLeaflet")).fakeLeafletModule);
+vi.mock("leaflet/dist/leaflet.css", () => ({}));
 
 interface Harness {
   readonly store: Store;
@@ -74,12 +81,13 @@ describe("regions render from the golden Result", () => {
     expect(screen.getByText("Schematic not computed yet")).toBeTruthy();
   });
 
-  test("context map draws the site and toggles overlays", () => {
+  test("context map mounts the Leaflet provider and toggles overlays with their legend", () => {
     const { container } = mount(harness(), <ContextMap />);
-    expect(container.querySelector(".ov-power")).not.toBeNull();
-    expect(container.querySelector(".ov-water")).toBeNull();
+    expect(container.querySelector(".leaflet-map")).not.toBeNull();
+    expect(screen.getByText(/Overlay: power · provider: leaflet/)).toBeTruthy();
+    expect(screen.queryByText(/water stress/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /water/ }));
-    expect(container.querySelector(".ov-water")).not.toBeNull();
+    expect(screen.getByText(/Overlay: power · water/)).toBeTruthy();
     expect(screen.getByText(/water stress 0.60/)).toBeTruthy();
   });
 
@@ -95,6 +103,61 @@ describe("regions render from the golden Result", () => {
     expect(container.querySelector(".shade.shortfall")).not.toBeNull();
     expect(container.querySelector(".shade.stranded")).not.toBeNull();
     expect(screen.getByText("82.1%")).toBeTruthy();
+  });
+
+  test("phasing: OPTIMIZE is not a selectable mode, and a blank state explains the two ways to get phases", () => {
+    const h = harness(null);
+    const { container } = mount(h, <PhasingLever />);
+    const options = Array.from(container.querySelectorAll("select option")).map((o) => o.getAttribute("value"));
+    expect(options).toContain("EXPLICIT");
+    expect(options).not.toContain("OPTIMIZE");
+    const blank = container.querySelector("[data-blank='phasing']");
+    expect(blank).not.toBeNull();
+    fireEvent.click(within(blank as HTMLElement).getByRole("button", { name: /optimize phasing/i }));
+    expect(h.optimizeCalls).toHaveLength(1);
+  });
+
+  test("phasing shows a running panel and disables the trigger while the optimizer is in flight", () => {
+    const h = harness();
+    const { container } = mount(h, <PhasingLever />);
+    fireEvent.click(screen.getByRole("button", { name: /optimize phasing/i }));
+    expect(h.store.getState().engine.optimizing).toBe(true);
+    expect(container.querySelector("[data-running='optimize']")).not.toBeNull();
+    expect((screen.getByRole("button", { name: /optimizing/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector(".shade.shortfall")).toBeNull(); // the chart yields to the running panel
+  });
+
+  test("hovering a schematic block shows its card; Explain hands the selection to the Copilot", () => {
+    const h = harness();
+    const sent: string[] = [];
+    function Registrar() {
+      const register = useRegisterCopilotSend();
+      useEffect(() => register(async (t) => void sent.push(t)), [register]);
+      return null;
+    }
+    const { container } = render(
+      <StoreProvider store={h.store}>
+        <CopilotHandleProvider>
+          <Registrar />
+          <SiteSchematic />
+        </CopilotHandleProvider>
+      </StoreProvider>,
+    );
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+    const hall = container.querySelector("[data-block^='hall']") as SVGGElement;
+    fireEvent.mouseEnter(hall);
+    const card = container.querySelector("[data-block-card]") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toMatch(/data hall/);
+    expect(card.textContent).toMatch(/energizes/);
+    expect(card.textContent).toMatch(/acres/);
+    fireEvent.mouseLeave(hall);
+    expect(container.querySelector("[data-block-card]")).toBeNull();
+
+    fireEvent.click(hall); // pin
+    fireEvent.click(within(container.querySelector("[data-block-card]") as HTMLElement).getByRole("button", { name: /explain/i }));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(/Explain the ".*" block on the site schematic/);
   });
 
   test("critical path renders each task and the energize + grid markers", () => {
@@ -213,7 +276,7 @@ describe("controls dispatch through the bus", () => {
     expect(h.dispatched).toHaveLength(1);
     expect(h.dispatched[0]).toMatchObject({ type: "applyPatch" });
     const policy = h.store.getState().plan?.phasing?.policy;
-    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 20]);
+    expect([policy?.maxPhases, policy?.minPhaseMw, policy?.maxPhaseMw, policy?.minMonthsBetweenPhases, policy?.maxShortfallMw]).toEqual([4, 25, 100, 6, 200]); // shortfall cap defaults to the target MW (uncapped)
     fireEvent.change(container.querySelector('[data-path="phasing.policy.max_shortfall_mw"] input')!, { target: { value: "15" } });
     expect(h.dispatched[1]).toEqual({ type: "setField", path: "phasing.policy.max_shortfall_mw", value: 15 });
   });

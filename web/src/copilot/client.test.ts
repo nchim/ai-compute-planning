@@ -127,6 +127,29 @@ describe("copilot tool loop (scripted API, real SDK)", () => {
     expect(snap.error).toBeNull();
   });
 
+  test("activity reports thinking → tool → writing → idle so the UI can show progress before text arrives", async () => {
+    const turns: ScriptedTurn[] = [
+      { content: [{ type: "tool_use", id: "toolu_1", name: "run_analyze", input: {} }] },
+      { content: [{ type: "text", text: "Done." }] },
+    ];
+    const api = scriptedApi(turns);
+    const copilot = createCopilot({ store: loadedStore(t2Engine()), engine: t2Engine(), apiKey: "sk-test", client: api.client, storage: null });
+    const seen: string[] = [];
+    copilot.subscribe((_event, snap) => {
+      const kind = snap.activity.kind === "tool" ? `tool:${snap.activity.name}` : snap.activity.kind;
+      if (seen[seen.length - 1] !== kind) seen.push(kind);
+    });
+
+    expect(copilot.getSnapshot().activity.kind).toBe("idle");
+    await copilot.send("Analyze this.");
+
+    expect(seen[0]).toBe("thinking");
+    expect(seen).toContain("tool:run_analyze");
+    expect(seen.indexOf("tool:run_analyze")).toBeLessThan(seen.indexOf("writing"));
+    expect(seen[seen.length - 1]).toBe("idle");
+    expect(copilot.getSnapshot().running).toBe(false);
+  });
+
   test("an unknown path is refused before dispatch and returned as an is_error tool_result", async () => {
     const api = scriptedApi([
       { content: [{ type: "tool_use", id: "toolu_1", name: "set_control", input: { path: "compute.nope", value: 1 } }] },

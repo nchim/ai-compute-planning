@@ -11,7 +11,7 @@ the source of truth. Read `product-brief.md` for the product framing and
 | Flagship optimization | **Phasing-to-demand-ramp** (minimize stranded-capacity carry + LCOC) |
 | v1 engine scope | **Single site** (feasibility + phasing + optimizer). Portfolio deferred. |
 | Fidelity | **Deterministic + sensitivity + Monte Carlo** risk (P10/P50/P90) |
-| Map | Schematic provider behind a `MapProvider` seam; real tiles deferred |
+| Map | Real tiles: Esri Gray Canvas (key-free; CARTO Positron now needs a key) via Leaflet behind the `MapProvider` seam; schematic provider kept as the tile-free fallback |
 | POC surface | **Site Feasibility** view (where the engine POC lands) |
 | Deployment | One Cloud Run container: static SPA + Basic Auth + Anthropic relay (`deploy/`) |
 
@@ -137,13 +137,19 @@ same configuration locally.
    and the Copilot narrates `current − baseline` from the two summaries in ViewContext.
 
 ## Non-goals for v1
-Portfolio roll-up; real financing waterfall; real map tiles; server-side compute; multi-user live
+Portfolio roll-up; real financing waterfall; surveyed power-source coordinates (the map places
+sources at a schematic offset); server-side compute; multi-user live
 co-editing; persistence beyond the browser (transcripts live in localStorage; the relay stores nothing).
 
 ## Tech choices
 - **Engine:** Go 1.25, `google.golang.org/protobuf`, compiled with `GOOS=js GOARCH=wasm`; no goroutines.
 - **Proto:** proto3, `buf` for lint/generate; generated code committed (`engine/pb`, `web/src/gen`).
 - **SPA:** Vite + React 18 + TypeScript strict, `@bufbuild/protobuf` v2, plain SVG charts, Vitest.
+- **Map:** Leaflet 1.9 with Esri World Light/Dark Gray Canvas raster tiles
+  (`server.arcgisonline.com`, key-free, Esri + OSM attribution; CARTO Positron was dropped because
+  keyless tiles are now watermarked). The tiles are the one third-party asset the browser loads cross-origin;
+  the container serves nothing for them and sets no CSP, so no deploy change is needed. A tile
+  failure degrades to the vector overlays on a blank map with a notice.
 - **Copilot:** `@anthropic-ai/sdk` beta tool runner, `claude-sonnet-5`; see `agent-integration.md`.
 - **Harness:** Playwright (`@playwright/test`) + `window.__harness`; see `harness/README.md`.
 - **Deploy:** Cloud Run from source (Cloud Build), secrets in Secret Manager; see `deploy/cloudrun.md`.

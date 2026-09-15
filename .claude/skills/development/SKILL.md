@@ -229,3 +229,11 @@ If a rule here is wrong or outdated, say so in your PR rather than silently chan
   screenshots the region per fixture; look at the PNGs (Read tool) — a passing geometry assertion
   did not catch white-on-hatch labels, a CSS specificity slip (`.schematic .x text` loses to
   `.site-view .schematic .block text`).
+- 2026-09-15 (ux-map) — **CARTO basemaps are no longer key-free:** every keyless
+  `basemaps.cartocdn.com` tile is rendered with an "API KEY REQUIRED" watermark regardless of
+  Referer (localhost included); fetch one tile with curl and *look at it* before trusting a "no key"
+  claim. Esri's `Canvas/World_{Light,Dark}_Gray_{Base,Reference}` services are a key-free
+  Positron-like substitute (labels live in the separate `Reference` layer; max zoom 16). Leaflet
+  under jsdom has no layout, so component tests `vi.mock("leaflet")` with the recording fake in
+  `web/src/views/site/testdata/fakeLeaflet.ts` and assert on layers/controls/events, and a
+  `tileerror` fired from the fake must be wrapped in `act()` because it sets React state.

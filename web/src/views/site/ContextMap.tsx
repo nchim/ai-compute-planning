@@ -3,19 +3,15 @@ import { useState } from "react";
 import { useStore } from "../../bus";
 import { LatencyClass, type Site } from "../../gen/capplanner/v1/engine_pb";
 import { Explainer } from "./Explainer";
+import { leafletMapProvider } from "./LeafletMap";
 import { NotComputed, Region } from "./chrome";
-import type { MapProvider, Overlay } from "./mapProvider";
+import { latencyLabel, type MapProvider, type Overlay } from "./mapProvider";
+
+export { leafletMapProvider };
 
 const overlays: readonly Overlay[] = ["power", "water", "latency"];
 
-const latencyLabel: Record<LatencyClass, string> = {
-  [LatencyClass.LATENCY_UNSPECIFIED]: "latency tier unset",
-  [LatencyClass.TRAINING_REMOTE]: "training (remote)",
-  [LatencyClass.INFERENCE_REGIONAL]: "inference (regional)",
-  [LatencyClass.INFERENCE_METRO]: "inference (metro)",
-};
-
-// STUB: schematic map — no real tiles in the POC. A tile-based MapProvider drops in here.
+/** Tile-free fallback: the same overlays as a schematic, for environments with no basemap access. */
 export const schematicMapProvider: MapProvider = {
   name: "schematic",
   render(site, active) {
@@ -57,7 +53,7 @@ export const schematicMapProvider: MapProvider = {
 
 export function ContextMap(props: { provider?: MapProvider }) {
   const { state } = useStore();
-  const provider = props.provider ?? schematicMapProvider;
+  const provider = props.provider ?? leafletMapProvider;
   const [active, setActive] = useState<ReadonlySet<Overlay>>(() => new Set<Overlay>(["power"]));
   const toggle = (o: Overlay) =>
     setActive((prev) => {

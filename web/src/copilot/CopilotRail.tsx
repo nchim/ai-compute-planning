@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type FormEvent, type KeyboardEvent } from "react";
 
 import { useStore, viewContext, type Proposal } from "../bus";
-import { createCopilot, emptySnapshot, type Copilot } from "./client";
+import { createCopilot, emptySnapshot, type Activity, type Copilot } from "./client";
 import { VIEW_CONTEXT_PREFIX } from "./context";
 import { useEngine } from "./engineContext";
+import { useRegisterCopilotSend } from "./handle";
 import { safeStorage, type Message } from "./history";
 import { renderMarkdownLite } from "./markdownLite";
 import type { ToolEvent } from "./tools";
@@ -31,15 +32,18 @@ export function CopilotRail() {
     () => (apiKey === "" ? null : createCopilot({ store, engine, apiKey })),
     [store, engine, apiKey],
   );
+  const registerSend = useRegisterCopilotSend();
   useEffect(() => {
-    const register = (fn: ((text: string) => Promise<void>) | null) =>
+    const register = (fn: ((text: string) => Promise<void>) | null) => {
+      registerSend(fn); // in-app readers ("Explain" links)
       window.__harness?.setCopilot(fn).catch((err: unknown) => console.error("harness.setCopilot failed", err));
+    };
     register(copilot === null ? null : copilot.send);
     return () => {
       register(null);
       copilot?.dispose();
     };
-  }, [copilot]);
+  }, [copilot, registerSend]);
 
   const snapshot = useSyncExternalStore(copilot?.subscribe ?? noSubscribe, copilot?.getSnapshot ?? emptyGetter);
 
@@ -57,6 +61,13 @@ export function CopilotRail() {
     setDraft("");
     // The rejection is already shown in the snapshot's error banner; here it only needs observing.
     copilot.send(text).catch(() => undefined);
+  };
+  // Enter sends; Shift+Enter inserts a newline (the textarea grows to fit).
+  const onComposerKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
   };
 
   return (
@@ -101,6 +112,7 @@ export function CopilotRail() {
           <MessageView key={i} message={m} toolEvents={snapshot.toolEvents} />
         ))}
         {snapshot.streamingText !== "" && <div className="msg bot">{renderMarkdownLite(snapshot.streamingText)}</div>}
+        {snapshot.running && snapshot.activity.kind !== "writing" && <ActivityIndicator activity={snapshot.activity} />}
         {state.proposals.map((p) => (
           <ProposalCard
             key={p.id}
@@ -116,11 +128,12 @@ export function CopilotRail() {
         <div className="copilot-disabled">Load a plan to start a conversation.</div>
       ) : (
         <form className="composer" onSubmit={submit}>
-          <input
+          <GrowingTextarea
             aria-label="Message Copilot"
-            placeholder="Bridge with gas so we energize by Q3-27…"
+            placeholder="Ask or instruct… (Shift+Enter for a new line)"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onComposerKey}
             disabled={snapshot.running}
           />
           {snapshot.running ? (
@@ -135,6 +148,43 @@ export function CopilotRail() {
         </form>
       )}
     </aside>
+  );
+}
+
+/** A single-line textarea that grows with its content up to `maxRows`, then scrolls. */
+function GrowingTextarea(props: ComponentProps<"textarea"> & { maxRows?: number }) {
+  const { maxRows = 8, ...rest } = props;
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 18;
+    el.style.height = "auto"; // shrink first so deleting lines also shrinks the box
+    el.style.height = `${Math.min(el.scrollHeight, lineHeight * maxRows + 16)}px`;
+  }, [props.value, maxRows]);
+  return <textarea ref={ref} rows={1} {...rest} />;
+}
+
+/** Progress feedback for the wait before any text streams: thinking, or a named tool running. */
+function ActivityIndicator(props: { activity: Activity }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [props.activity]);
+  const label =
+    props.activity.kind === "tool" ? `Running ${props.activity.name}` : props.activity.kind === "thinking" ? "Thinking" : "Working";
+  return (
+    <div className="msg bot copilot-activity" role="status" aria-live="polite" data-activity={props.activity.kind}>
+      <span className="copilot-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      {label}
+      {seconds >= 3 && <span className="copilot-elapsed"> · {seconds}s</span>}
+    </div>
   );
 }
 
